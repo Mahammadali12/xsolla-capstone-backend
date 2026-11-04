@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
@@ -50,15 +51,19 @@ func NewAuthService(userStore UserStore, refreshTokenStore RefreshTokenStore) *A
 	}
 }
 
-// Signup creates a new user. The first registered user becomes admin.
+// Signup creates a new user.
+// First user becomes admin, @xsolla.com emails become teacher, rest are student.
 func (s *AuthService) Signup(ctx context.Context, email string, name string, password string) (int64, string, error) {
 	count, err := s.userStore.CountUsers(ctx)
 	if err != nil {
 		return 0, "", err
 	}
+
 	role := "student"
 	if count == 0 {
 		role = "admin"
+	} else if strings.HasSuffix(email, "@xsolla.com") {
+		role = "teacher"
 	}
 
 	hash, err := auth.Hash(password)
