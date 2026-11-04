@@ -1,0 +1,18 @@
+info:
+  name: Sign up
+  type: http
+  seq: 1
+http:
+  method: POST
+  url: http://localhost:8080/auth/signup
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "email": "alice@xsolla.com",
+        "name": "Alice",
+        "password": "secret123"
+      }

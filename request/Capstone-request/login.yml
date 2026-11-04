@@ -1,0 +1,17 @@
+info:
+  name: Log in
+  type: http
+  seq: 2
+http:
+  method: POST
+  url: http://localhost:8080/auth/login
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "login": "alice@xsolla.com",
+        "password": "secret123"
+      }

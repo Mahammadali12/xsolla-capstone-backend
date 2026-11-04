@@ -1,0 +1,16 @@
+info:
+  name: Log out
+  type: http
+  seq: 4
+http:
+  method: POST
+  url: http://localhost:8080/auth/logout
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "refresh_token": ""
+      }
