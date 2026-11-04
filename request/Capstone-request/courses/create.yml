@@ -16,14 +16,14 @@ http:
     data: |-
       {
         "title": "CS50",
-        "description": "Intermediate to Computer Science"
+        "description": "Introduction to Computer Science"
       }
   auth: inherit
 
 runtime:
   variables:
     - name: accessToken
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzkzNzk2MDI1fQ.Nrq5CGt5lPrrjybcjFTvVUqUrhYps2olOKwOSuF0gho
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ0ZWFjaGVyIiwiZXhwIjoxNzkzODI4MDI1fQ.QRglI_qqm6laHLLSayIYaQhAZ_jiPEjM7bJr1JZR7a8
 
 settings:
   encodeUrl: true

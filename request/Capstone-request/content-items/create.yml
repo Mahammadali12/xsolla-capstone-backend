@@ -1,0 +1,35 @@
+info:
+  name: Create content item
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8080/courses/2/content-items
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "type": "file",
+        "title": "file-in-section",
+        "position": 1,
+        "is_visible": true,
+        "parent_id": null
+      }
+  auth: inherit
+
+runtime:
+  variables:
+    - name: accessToken
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ0ZWFjaGVyIiwiZXhwIjoxNzkzODI3NTIyfQ.raHNa9wfBgLsmYO9GiJK9gtDnc3pTxsGhZ9X4wslXLE
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

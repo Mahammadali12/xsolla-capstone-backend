@@ -2,6 +2,7 @@ info:
   name: Log in
   type: http
   seq: 2
+
 http:
   method: POST
   url: http://localhost:8080/auth/login
@@ -12,6 +13,12 @@ http:
     type: json
     data: |-
       {
-        "login": "alice@xsolla.com",
+        "login": "teacher@xsolla.com",
         "password": "secret123"
       }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

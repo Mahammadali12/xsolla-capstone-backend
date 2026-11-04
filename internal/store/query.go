@@ -178,3 +178,117 @@ func (q *Query) IsUserTeacherOfCourse(ctx context.Context, courseID int64, userI
 	)
 }
 
+// Content item queries
+
+func (q *Query) CreateContentItem(ctx context.Context, courseID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO content_items (course_id, parent_id, type, title, description, position, is_visible, file_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
+		courseID, parentID, itemType, title, description, position, isVisible, fileID,
+	)
+}
+
+func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+		 FROM content_items WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+func (q *Query) GetContentItemsForCourse(ctx context.Context, courseID int64, visibleOnly bool) (*sql.Rows, error) {
+	if visibleOnly {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+			 FROM content_items
+			 WHERE course_id = $1 AND is_visible = true AND deleted_at IS NULL
+			 ORDER BY position`,
+			courseID,
+		)
+	}
+	return q.DBTX.QueryContext(ctx,
+		`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+		 FROM content_items
+			 WHERE course_id = $1 AND deleted_at IS NULL
+		 ORDER BY position`,
+		courseID,
+	)
+}
+
+func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visibleOnly bool) (*sql.Rows, error) {
+	if visibleOnly {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+			 FROM content_items
+			 WHERE parent_id = $1 AND is_visible = true AND deleted_at IS NULL
+			 ORDER BY position`,
+			parentID,
+		)
+	}
+	return q.DBTX.QueryContext(ctx,
+		`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+			 FROM content_items
+			 WHERE parent_id = $1 AND deleted_at IS NULL
+		 ORDER BY position`,
+		parentID,
+	)
+}
+
+func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE content_items
+		 SET title = COALESCE($2, title),
+		     description = COALESCE($3, description),
+		     position = COALESCE($4, position),
+		     is_visible = COALESCE($5, is_visible),
+		     parent_id = COALESCE($6, parent_id),
+		     file_id = COALESCE($7, file_id)
+		 WHERE id = $1 AND deleted_at IS NULL
+		 RETURNING id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
+		id, title, description, position, isVisible, parentID, fileID,
+	)
+}
+
+func (q *Query) DeleteContentItem(ctx context.Context, id int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE content_items SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+// Assignment queries
+
+func (q *Query) CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO assignments (content_item_id, due_at, max_points) VALUES ($1, $2, $3)
+		 RETURNING content_item_id, due_at, max_points`,
+		contentItemID, dueAt, maxPoints,
+	)
+}
+
+func (q *Query) GetAssignmentByContentItemID(ctx context.Context, contentItemID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT content_item_id, due_at, max_points FROM assignments WHERE content_item_id = $1 AND deleted_at IS NULL`,
+		contentItemID,
+	)
+}
+
+func (q *Query) UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE assignments
+		 SET due_at = COALESCE($2, due_at),
+		     max_points = COALESCE($3, max_points)
+		 WHERE content_item_id = $1 AND deleted_at IS NULL
+		 RETURNING content_item_id, due_at, max_points`,
+		contentItemID, dueAt, maxPoints,
+	)
+}
+
+func (q *Query) DeleteAssignment(ctx context.Context, contentItemID int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE assignments SET deleted_at = NOW() WHERE content_item_id = $1 AND deleted_at IS NULL`,
+		contentItemID,
+	)
+}
+

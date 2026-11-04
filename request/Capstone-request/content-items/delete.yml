@@ -1,0 +1,11 @@
+info:
+  name: Delete content item
+  type: http
+  seq: 5
+http:
+  method: DELETE
+  url: http://localhost:8080/content-items/1
+  headers:
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  auth: inherit

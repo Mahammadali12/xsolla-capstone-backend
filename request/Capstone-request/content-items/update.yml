@@ -1,0 +1,19 @@
+info:
+  name: Update content item
+  type: http
+  seq: 4
+http:
+  method: PATCH
+  url: http://localhost:8080/content-items/1
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Week 1 Updated"
+      }
+  auth: inherit

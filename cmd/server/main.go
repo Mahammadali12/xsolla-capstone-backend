@@ -30,6 +30,7 @@ func main() {
 	store := store.NewStore(database)
 	authSvc := service.NewAuthService(store, store)
 	courseSvc := service.NewCourseService(store)
+	contentSvc := service.NewContentService(store)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -39,6 +40,7 @@ func main() {
 		7*24*time.Hour,
 	)
 	courseH := handlers.NewCourseHandlers(courseSvc)
+	contentH := handlers.NewContentHandlers(contentSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -58,6 +60,12 @@ func main() {
 	mux.Handle("POST /courses/{courseId}/enrollments", authenticator.Middleware(http.HandlerFunc(courseH.CreateEnrollment)))
 	mux.Handle("DELETE /courses/{courseId}/enrollments/{userId}", authenticator.Middleware(http.HandlerFunc(courseH.DeleteEnrollment)))
 	mux.Handle("GET /courses/{courseId}/enrollments", authenticator.Middleware(http.HandlerFunc(courseH.ListEnrollments)))
+
+	mux.Handle("POST /courses/{courseId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.CreateContentItem)))
+	mux.Handle("GET /courses/{courseId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.ListContentItems)))
+	mux.Handle("GET /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.GetContentItem)))
+	mux.Handle("PATCH /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.UpdateContentItem)))
+	mux.Handle("DELETE /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.DeleteContentItem)))
 
 	addr := cfg.Port
 	if addr[0] != ':' {
