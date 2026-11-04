@@ -9,8 +9,13 @@ Base URL: configured via frontend env `VITE_API_URL` (e.g. `http://localhost:808
 Every error response has this shape:
 
 ```json
-{ "error": "code", "message": "human readable", "status": 400 }
+{ "error": "code", "message": "human readable", "status": 400, "details": [...] }
 ```
+
+- `error` — short error code (e.g. `bad_request`, `invalid_credentials`, `conflict`, `not_found`, `unauthorized`, `forbidden`, `server_error`, `validation_failed`)
+- `message` — human-readable description
+- `status` — HTTP status code as an integer
+- `details` — optional array of `{ field, message }` for field-level validation errors (omitted when empty)
 
 Error codes: `400` bad body, `401` invalid credentials, `403` forbidden, `404` missing, `409` conflict (duplicate), `413` file too large, `415` unsupported file type, `422` validation failed, `500` server error.
 
