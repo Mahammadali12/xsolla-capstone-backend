@@ -51,7 +51,7 @@ func main() {
 		addr = ":" + addr
 	}
 	log.Printf("listening on %s", addr)
-	if err := http.ListenAndServe(addr, cors(mux, cfg.CORSOrigin)); err != nil {
+	if err := http.ListenAndServe(addr, middleware.Logging(cors(mux, cfg.CORSOrigin))); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }
