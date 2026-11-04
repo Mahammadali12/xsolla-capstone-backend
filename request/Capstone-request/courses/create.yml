@@ -1,0 +1,32 @@
+info:
+  name: Create course
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8080/courses
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "title": "CS50",
+        "description": "Intermediate to Computer Science"
+      }
+  auth: inherit
+
+runtime:
+  variables:
+    - name: accessToken
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzkzNzk2MDI1fQ.Nrq5CGt5lPrrjybcjFTvVUqUrhYps2olOKwOSuF0gho
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

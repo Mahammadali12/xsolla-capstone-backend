@@ -34,6 +34,12 @@ func CtxUserID(ctx context.Context) int64 {
 	return v
 }
 
+// CtxRole returns the role stored in context by Authenticator.Middleware.
+func CtxRole(ctx context.Context) string {
+	v, _ := ctx.Value(roleKey).(string)
+	return v
+}
+
 // Authenticator wraps JWT verification and sets user context.
 type Authenticator struct {
 	Secret []byte

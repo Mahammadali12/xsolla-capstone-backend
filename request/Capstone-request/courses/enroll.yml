@@ -1,0 +1,31 @@
+info:
+  name: Enroll in course
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: http://localhost:8080/courses/3/enrollments
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "user_id": 3
+      }
+  auth: inherit
+
+runtime:
+  variables:
+    - name: accessToken
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzkzNzk2MDI1fQ.Nrq5CGt5lPrrjybcjFTvVUqUrhYps2olOKwOSuF0gho
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

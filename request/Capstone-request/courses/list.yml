@@ -1,0 +1,23 @@
+info:
+  name: List courses
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: http://localhost:8080/courses
+  headers:
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  auth: inherit
+
+runtime:
+  variables:
+    - name: accessToken
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzkzNzk2MDI1fQ.Nrq5CGt5lPrrjybcjFTvVUqUrhYps2olOKwOSuF0gho
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

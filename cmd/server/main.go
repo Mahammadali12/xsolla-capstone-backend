@@ -29,23 +29,35 @@ func main() {
 
 	store := store.NewStore(database)
 	authSvc := service.NewAuthService(store, store)
+	courseSvc := service.NewCourseService(store)
 
-	h := handlers.NewAuthHandlers(
+	authH := handlers.NewAuthHandlers(
 		authSvc,
 		cfg.JWTAccessSecret,
 		cfg.JWTRefreshSecret,
 		15*time.Minute,
 		7*24*time.Hour,
 	)
+	courseH := handlers.NewCourseHandlers(courseSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/signup", h.Signup)
-	mux.HandleFunc("POST /auth/login", h.Login)
-	mux.HandleFunc("POST /auth/refresh", h.Refresh)
-	mux.HandleFunc("POST /auth/logout", h.Logout)
-	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(h.Me)))
+	mux.HandleFunc("POST /auth/signup", authH.Signup)
+	mux.HandleFunc("POST /auth/login", authH.Login)
+	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
+	mux.HandleFunc("POST /auth/logout", authH.Logout)
+	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
+
+	mux.Handle("POST /courses", authenticator.Middleware(http.HandlerFunc(courseH.CreateCourse)))
+	mux.Handle("GET /courses", authenticator.Middleware(http.HandlerFunc(courseH.ListCourses)))
+	mux.Handle("GET /courses/{id}", authenticator.Middleware(http.HandlerFunc(courseH.GetCourse)))
+	mux.Handle("PATCH /courses/{id}", authenticator.Middleware(http.HandlerFunc(courseH.PatchCourse)))
+	mux.Handle("DELETE /courses/{id}", authenticator.Middleware(http.HandlerFunc(courseH.DeleteCourse)))
+
+	mux.Handle("POST /courses/{courseId}/enrollments", authenticator.Middleware(http.HandlerFunc(courseH.CreateEnrollment)))
+	mux.Handle("DELETE /courses/{courseId}/enrollments/{userId}", authenticator.Middleware(http.HandlerFunc(courseH.DeleteEnrollment)))
+	mux.Handle("GET /courses/{courseId}/enrollments", authenticator.Middleware(http.HandlerFunc(courseH.ListEnrollments)))
 
 	addr := cfg.Port
 	if addr[0] != ':' {

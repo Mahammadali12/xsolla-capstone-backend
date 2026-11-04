@@ -75,3 +75,106 @@ func (q *Query) GetUserByID(ctx context.Context, id int64) *sql.Row {
 		id,
 	)
 }
+
+// Course queries
+
+func (q *Query) CreateCourse(ctx context.Context, title string, description string, createdBy int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO courses (title, description, created_by) VALUES ($1, $2, $3) RETURNING id, title, description, created_by, created_at`,
+		title, description, createdBy,
+	)
+}
+
+func (q *Query) GetCourseByID(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, title, description, created_by, created_at FROM courses WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+func (q *Query) GetCoursesForUser(ctx context.Context, userID int64, role string) (*sql.Rows, error) {
+	if role == "admin" {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT c.id, c.title, c.description, c.created_by, c.created_at
+			 FROM courses c WHERE c.deleted_at IS NULL`,
+		)
+	}
+	return q.DBTX.QueryContext(ctx,
+		`SELECT c.id, c.title, c.description, c.created_by, c.created_at
+		 FROM courses c
+		 JOIN enrollments e ON e.course_id = c.id
+		 WHERE c.deleted_at IS NULL AND e.user_id = $1`,
+		userID,
+	)
+}
+
+func (q *Query) PatchCourse(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) *sql.Row {
+	if isAdmin {
+		return q.DBTX.QueryRowContext(ctx,
+			`UPDATE courses SET title = COALESCE($2, title), description = COALESCE($3, description)
+			 WHERE id = $1 AND deleted_at IS NULL
+			 RETURNING id, title, description, created_by, created_at`,
+			id, title, description,
+		)
+	}
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE courses SET title = COALESCE($2, title), description = COALESCE($3, description)
+		 WHERE id = $1 AND created_by = $4 AND deleted_at IS NULL
+		 RETURNING id, title, description, created_by, created_at`,
+		id, title, description, createdBy,
+	)
+}
+
+func (q *Query) DeleteCourse(ctx context.Context, id int64, createdBy int64, isAdmin bool) (sql.Result, error) {
+	if isAdmin {
+		return q.DBTX.ExecContext(ctx,
+			`UPDATE courses SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+			id,
+		)
+	}
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE courses SET deleted_at = NOW() WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+		id, createdBy,
+	)
+}
+
+// Enrollment queries
+
+func (q *Query) CreateEnrollment(ctx context.Context, courseID int64, userID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO enrollments (course_id, user_id) VALUES ($1, $2) RETURNING id, course_id, user_id, created_at`,
+		courseID, userID,
+	)
+}
+
+func (q *Query) DeleteEnrollment(ctx context.Context, courseID int64, userID int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`DELETE FROM enrollments WHERE course_id = $1 AND user_id = $2`,
+		courseID, userID,
+	)
+}
+
+func (q *Query) GetEnrollmentsForCourse(ctx context.Context, courseID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT e.id, e.course_id, e.user_id, e.created_at, u.email, u.name, u.role
+		 FROM enrollments e
+		 JOIN users u ON u.id = e.user_id
+		 WHERE e.course_id = $1`,
+		courseID,
+	)
+}
+
+func (q *Query) IsUserEnrolled(ctx context.Context, courseID int64, userID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT 1 FROM enrollments WHERE course_id = $1 AND user_id = $2`,
+		courseID, userID,
+	)
+}
+
+func (q *Query) IsUserTeacherOfCourse(ctx context.Context, courseID int64, userID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT 1 FROM courses WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+		courseID, userID,
+	)
+}
+

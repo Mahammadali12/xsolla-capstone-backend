@@ -1,0 +1,11 @@
+info:
+  name: Unenroll from course
+  type: http
+  seq: 7
+http:
+  method: DELETE
+  url: http://localhost:8080/courses/1/enrollments/2
+  headers:
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  auth: inherit
