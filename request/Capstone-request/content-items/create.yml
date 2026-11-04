@@ -16,10 +16,10 @@ http:
     data: |-
       {
         "type": "file",
-        "title": "file-in-section",
+        "title": "child-child-file",
         "position": 1,
         "is_visible": true,
-        "parent_id": null
+        "parent_id": 6
       }
   auth: inherit
 

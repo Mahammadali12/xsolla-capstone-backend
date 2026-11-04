@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: http://localhost:8080/courses/3/enrollments
+  url: http://localhost:8080/courses/2/enrollments
   headers:
     - name: Content-Type
       value: application/json
