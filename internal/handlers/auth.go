@@ -2,64 +2,55 @@ package handlers
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
+	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/service"
 )
 
 type AuthHandlers struct {
-	DB             *sql.DB
-	AccessSecret   []byte
-	RefreshSecret  []byte
-	AccessTTL      time.Duration
-	RefreshTTL     time.Duration
+	svc           *service.AuthService
+	accessSecret  []byte
+	refreshSecret []byte
+	accessTTL     time.Duration
+	refreshTTL    time.Duration
+}
+
+// NewAuthHandlers creates auth handlers backed by the given service.
+func NewAuthHandlers(svc *service.AuthService, accessSecret []byte, refreshSecret []byte, accessTTL time.Duration, refreshTTL time.Duration) *AuthHandlers {
+	return &AuthHandlers{
+		svc:           svc,
+		accessSecret:  accessSecret,
+		refreshSecret: refreshSecret,
+		accessTTL:     accessTTL,
+		refreshTTL:    refreshTTL,
+	}
 }
 
 // POST /auth/signup
 func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Email    string `json:"email"`
-		Name     string `json:"name"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var req dto.SignupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
-	body.Email = strings.ToLower(strings.TrimSpace(body.Email))
-	body.Name = strings.TrimSpace(body.Name)
-	if body.Email == "" || body.Name == "" || body.Password == "" {
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Email == "" || req.Name == "" || req.Password == "" {
 		writeError(w, 400, "bad_request", "email, name, and password are required", nil)
 		return
 	}
 
-	hash, err := auth.Hash(body.Password)
+	id, role, err := h.svc.Signup(r.Context(), req.Email, req.Name, req.Password)
 	if err != nil {
-		writeError(w, 500, "server_error", "could not hash password", nil)
-		return
-	}
-
-	// first registered user becomes admin
-	var count int
-	h.DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
-	role := "student"
-	if count == 0 {
-		role = "admin"
-	}
-
-	var id int64
-	err = h.DB.QueryRow(
-		`INSERT INTO users (email, name, role, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
-		body.Email, body.Name, role, hash,
-	).Scan(&id)
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "Unique") {
+		if errors.Is(err, service.ErrEmailTaken) {
 			writeError(w, 409, "conflict", "email already exists", nil)
 			return
 		}
@@ -67,59 +58,47 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := auth.AccessToken(id, role, h.AccessSecret, h.AccessTTL)
+	access, err := auth.AccessToken(id, role, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
 	}
-	refresh, err := auth.RefreshToken(id, h.RefreshSecret, h.RefreshTTL)
+	refresh, err := auth.RefreshToken(id, h.refreshSecret, h.refreshTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign refresh token", nil)
 		return
 	}
 
-	// store refresh token in DB
-	if _, err := h.DB.Exec(
-		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-		id, hashToken(refresh), time.Now().Add(h.RefreshTTL),
-	); err != nil {
+	if err := h.svc.SaveRefreshToken(r.Context(), id, hashToken(refresh), time.Now().Add(h.refreshTTL)); err != nil {
 		writeError(w, 500, "server_error", "could not store refresh token", nil)
 		return
 	}
 
-	writeJSON(w, 201, map[string]any{
-		"user": map[string]any{
-			"id":         id,
-			"email":      body.Email,
-			"name":       body.Name,
-			"role":       role,
-			"created_at": time.Now().UTC(),
+	writeJSON(w, 201, dto.AuthResponse{
+		User: dto.UserResponse{
+			ID:         id,
+			Email:      req.Email,
+			Name:       req.Name,
+			Role:       role,
+			CreatedAt:  time.Now().UTC(),
 		},
-		"access_token":  access,
-		"refresh_token": refresh,
+		AccessToken:  access,
+		RefreshToken: refresh,
 	})
 }
 
 // POST /auth/login
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Login    string `json:"login"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var req dto.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
-	body.Login = strings.ToLower(strings.TrimSpace(body.Login))
+	req.Login = strings.ToLower(strings.TrimSpace(req.Login))
 
-	var id int64
-	var hash, role string
-	err := h.DB.QueryRow(
-		`SELECT id, password_hash, role FROM users WHERE lower(email) = $1`,
-		body.Login,
-	).Scan(&id, &hash, &role)
+	id, role, err := h.svc.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, service.ErrUserNotFound) || errors.Is(err, service.ErrInvalidCredentials) {
 			writeError(w, 401, "invalid_credentials", "invalid email or password", nil)
 		} else {
 			writeError(w, 500, "server_error", "database error", nil)
@@ -127,139 +106,90 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := auth.Compare(hash, body.Password); err != nil {
-		writeError(w, 401, "invalid_credentials", "invalid email or password", nil)
-		return
-	}
-
-	access, err := auth.AccessToken(id, role, h.AccessSecret, h.AccessTTL)
+	access, err := auth.AccessToken(id, role, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
 	}
-	refresh, err := auth.RefreshToken(id, h.RefreshSecret, h.RefreshTTL)
+	refresh, err := auth.RefreshToken(id, h.refreshSecret, h.refreshTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign refresh token", nil)
 		return
 	}
 
-	// replace any existing refresh token for this user (single session)
-	h.DB.Exec(`DELETE FROM refresh_tokens WHERE user_id = $1`, id)
-	if _, err := h.DB.Exec(
-		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-		id, hashToken(refresh), time.Now().Add(h.RefreshTTL),
-	); err != nil {
+	if err := h.svc.SaveRefreshToken(r.Context(), id, hashToken(refresh), time.Now().Add(h.refreshTTL)); err != nil {
 		writeError(w, 500, "server_error", "could not store refresh token", nil)
 		return
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"user": map[string]any{
-			"id":    id,
-			"email": body.Login,
-			"role":  role,
+	writeJSON(w, 200, dto.AuthResponse{
+		User: dto.UserResponse{
+			ID:    id,
+			Email: req.Login,
+			Role:  role,
 		},
-		"access_token":  access,
-		"refresh_token": refresh,
+		AccessToken:  access,
+		RefreshToken: refresh,
 	})
 }
 
 // POST /auth/refresh
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var req dto.RefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
 
-	type rt struct {
-		userID   int64
-		tokenHash string
-		expires  time.Time
-	}
-	rows, err := h.DB.Query(`SELECT user_id, token_hash, expires_at FROM refresh_tokens WHERE expires_at > NOW()`)
+	userID, _, _, err := h.svc.FindRefreshTokenByHash(r.Context(), req.RefreshToken)
 	if err != nil {
-		writeError(w, 500, "server_error", "database error", nil)
-		return
-	}
-	defer rows.Close()
-
-	var match *rt
-	for rows.Next() {
-		var r rt
-		if err := rows.Scan(&r.userID, &r.tokenHash, &r.expires); err != nil {
-			continue
-		}
-		if compareToken(r.tokenHash, body.RefreshToken) {
-			match = &r
-			break
-		}
-	}
-	if match == nil {
 		writeError(w, 401, "invalid_credentials", "invalid or expired refresh token", nil)
 		return
 	}
 
-	// look up user role
-	var role string
-	if err := h.DB.QueryRow(`SELECT role FROM users WHERE id = $1`, match.userID).Scan(&role); err != nil {
-		writeError(w, 500, "server_error", "user not found", nil)
+	_, _, _, role, _, err := h.svc.GetUserByID(r.Context(), userID)
+	if err != nil {
+		writeError(w, 500, "server_error", "user lookup failed", nil)
 		return
 	}
 
-	access, err := auth.AccessToken(match.userID, role, h.AccessSecret, h.AccessTTL)
+	access, err := auth.AccessToken(userID, role, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
 	}
-	newRefresh, err := auth.RefreshToken(match.userID, h.RefreshSecret, h.RefreshTTL)
+	newRefresh, err := auth.RefreshToken(userID, h.refreshSecret, h.refreshTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign refresh token", nil)
 		return
 	}
 
-	// rotate: delete old, insert new
-	h.DB.Exec(`DELETE FROM refresh_tokens WHERE user_id = $1 AND token_hash = $2`, match.userID, match.tokenHash)
-	if _, err := h.DB.Exec(
-		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-		match.userID, hashToken(newRefresh), time.Now().Add(h.RefreshTTL),
-	); err != nil {
+	if err := h.svc.DeleteRefreshToken(r.Context(), req.RefreshToken); err != nil {
+		writeError(w, 500, "server_error", "could not rotate refresh token", nil)
+		return
+	}
+	if err := h.svc.SaveRefreshToken(r.Context(), userID, hashToken(newRefresh), time.Now().Add(h.refreshTTL)); err != nil {
 		writeError(w, 500, "server_error", "could not store refresh token", nil)
 		return
 	}
 
-	writeJSON(w, 200, map[string]any{
-		"access_token":  access,
-		"refresh_token": newRefresh,
+	writeJSON(w, 200, dto.TokenResponse{
+		AccessToken:  access,
+		RefreshToken: newRefresh,
 	})
 }
 
 // POST /auth/logout
 func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.RefreshToken == "" {
-		// also accept from Authorization header
-		body.RefreshToken = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	var req dto.LogoutRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.RefreshToken == "" {
+		req.RefreshToken = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	}
 
-	rows, _ := h.DB.Query(`SELECT user_id, token_hash FROM refresh_tokens`)
-	defer rows.Close()
-	for rows.Next() {
-		var uid int64
-		var hash string
-		if err := rows.Scan(&uid, &hash); err != nil {
-			continue
-		}
-		if compareToken(hash, body.RefreshToken) {
-			h.DB.Exec(`DELETE FROM refresh_tokens WHERE user_id = $1 AND token_hash = $2`, uid, hash)
-			break
-		}
-	}
+	// Best effort: token may already be deleted
+	_ = h.svc.DeleteRefreshToken(r.Context(), req.RefreshToken)
+
 	w.WriteHeader(204)
 }
 
@@ -270,25 +200,21 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized", "missing user context", nil)
 		return
 	}
-	var email, name, role string
-	var createdAt time.Time
-	if err := h.DB.QueryRow(
-		`SELECT email, name, role, created_at FROM users WHERE id = $1`,
-		userID,
-	).Scan(&email, &name, &role, &createdAt); err != nil {
-		if err == sql.ErrNoRows {
+	_, email, name, role, _, err := h.svc.GetUserByID(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
 			writeError(w, 404, "not_found", "user not found", nil)
 		} else {
 			writeError(w, 500, "server_error", "database error", nil)
 		}
 		return
 	}
-	writeJSON(w, 200, map[string]any{
-		"id":         userID,
-		"email":      email,
-		"name":       name,
-		"role":       role,
-		"created_at": createdAt.UTC(),
+	writeJSON(w, 200, dto.UserResponse{
+		ID:         userID,
+		Email:      email,
+		Name:       name,
+		Role:       role,
+		CreatedAt:  time.Now().UTC(),
 	})
 }
 
@@ -298,10 +224,4 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
-}
-
-// compareToken checks a raw token against a stored SHA-256 hash.
-func compareToken(storedHash, token string) bool {
-	sum := sha256.Sum256([]byte(token))
-	return base64.RawURLEncoding.EncodeToString(sum[:]) == storedHash
 }

@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/config"
 	"xsolla-capstone-api/internal/db"
 	"xsolla-capstone-api/internal/handlers"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/store"
 )
 
 func main() {
@@ -26,16 +27,16 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	auth.AccessSecret = cfg.JWTAccessSecret
-	auth.RefreshSecret = cfg.JWTRefreshSecret
+	store := store.NewStore(database)
+	authSvc := service.NewAuthService(store, store)
 
-	h := handlers.AuthHandlers{
-		DB:           database,
-		AccessSecret: cfg.JWTAccessSecret,
-		RefreshSecret: cfg.JWTRefreshSecret,
-		AccessTTL:    15 * time.Minute,
-		RefreshTTL:   7 * 24 * time.Hour,
-	}
+	h := handlers.NewAuthHandlers(
+		authSvc,
+		cfg.JWTAccessSecret,
+		cfg.JWTRefreshSecret,
+		15*time.Minute,
+		7*24*time.Hour,
+	)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
