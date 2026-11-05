@@ -31,7 +31,8 @@ func main() {
 	authSvc := service.NewAuthService(store, store)
 	courseSvc := service.NewCourseService(store)
 	contentSvc := service.NewContentService(store)
-	fileH := handlers.NewFileHandlers()
+	fileSvc := service.NewFileService(store)
+	fileH := handlers.NewFileHandlers(fileSvc)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -68,7 +69,7 @@ func main() {
 	mux.Handle("PATCH /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.UpdateContentItem)))
 	mux.Handle("DELETE /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.DeleteContentItem)))
 
-	mux.HandleFunc("POST /files", fileH.UploadFile)
+	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
 
 	addr := cfg.Port
 	if addr[0] != ':' {

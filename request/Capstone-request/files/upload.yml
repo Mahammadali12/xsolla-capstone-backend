@@ -1,0 +1,25 @@
+info:
+  name: Upload file
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8080/files
+  headers:
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: multipart-form
+    data:
+      - name: file
+        type: file
+        value:
+          - test-assets/image-1.jpeg
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

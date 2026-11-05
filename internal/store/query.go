@@ -292,3 +292,38 @@ func (q *Query) DeleteAssignment(ctx context.Context, contentItemID int64) (sql.
 	)
 }
 
+// File queries
+
+func (q *Query) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO files (uploaded_by, original_name, storage_key, mime_type, size_bytes)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, uploaded_by, original_name, storage_key, mime_type, size_bytes, created_at`,
+		uploadedBy, originalName, storageKey, mimeType, sizeBytes,
+	)
+}
+
+func (q *Query) GetFileByID(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, uploaded_by, original_name, storage_key, mime_type, size_bytes, created_at
+		 FROM files WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+func (q *Query) GetFilesForUser(ctx context.Context, uploadedBy int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT id, uploaded_by, original_name, storage_key, mime_type, size_bytes, created_at
+		 FROM files WHERE uploaded_by = $1 AND deleted_at IS NULL
+		 ORDER BY created_at DESC`,
+		uploadedBy,
+	)
+}
+
+func (q *Query) DeleteFile(ctx context.Context, id int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE files SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+

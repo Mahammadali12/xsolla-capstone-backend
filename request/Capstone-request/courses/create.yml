@@ -12,12 +12,11 @@ http:
     - name: Authorization
       value: Bearer {{accessToken}}
   body:
-    type: json
-    data: |-
-      {
-        "title": "CS50",
-        "description": "Introduction to Computer Science"
-      }
+    type: file
+    data:
+      - filePath: ""
+        contentType: ""
+        selected: true
   auth: inherit
 
 settings:
