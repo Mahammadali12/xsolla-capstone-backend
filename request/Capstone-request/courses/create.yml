@@ -2,7 +2,6 @@ info:
   name: Create course
   type: http
   seq: 1
-
 http:
   method: POST
   url: http://localhost:8080/courses
@@ -12,11 +11,12 @@ http:
     - name: Authorization
       value: Bearer {{accessToken}}
   body:
-    type: file
-    data:
-      - filePath: ""
-        contentType: ""
-        selected: true
+    type: json
+    data: |-
+      {
+        "title": "CS101",
+        "description": "Introduction to Computer Science"
+      }
   auth: inherit
 
 settings:

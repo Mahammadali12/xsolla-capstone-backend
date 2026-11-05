@@ -6,7 +6,7 @@
   <title>File Upload - Xsolla LMS</title>
 </head>
 <body>
-  <h1>Upload File</h1>
+  <!-- <h1>Upload File</h1>
   <form id="uploadForm" enctype="multipart/form-data">
     <label for="file">Choose file:</label><br>
     <input type="file" id="file" name="file" required><br><br>
@@ -39,6 +39,27 @@
         response.textContent = `Error: ${err.message}`;
       }
     });
-  </script>
+  </script> -->
+
+  <h1>HEADING OF LMS</h1>
+  <div class="iframe-screen">
+    <iframe src="http://localhost:5173/"></iframe>
+  </div>
+
+  <style>
+    .iframe-screen {
+      width: 300px;
+      height: 200px;
+      overflow: hidden;
+    }
+
+    .iframe-screen iframe {
+      width: 1200px;
+      height: 800px;
+      border: 0;
+      transform: scale(0.25);
+      transform-origin: top left;
+    }
+  </style>
 </body>
 </html>

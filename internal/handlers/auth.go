@@ -34,7 +34,16 @@ func NewAuthHandlers(svc *service.AuthService, accessSecret []byte, refreshSecre
 	}
 }
 
-// POST /auth/signup
+// @Summary     Sign up
+// @Description Create a new user account. First user becomes admin, @xsolla.com emails become teacher, rest are student.
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       request body dto.SignupRequest true "Registration credentials"
+// @Success     201 {object} dto.AuthResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     409 {object} handlers.ErrorResponse
+// @Router      /auth/signup [post]
 func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 	var req dto.SignupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -87,7 +96,16 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /auth/login
+// @Summary     Log in
+// @Description Authenticate with email and password to receive JWT and refresh tokens
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       request body dto.LoginRequest true "Login credentials"
+// @Success     200 {object} dto.AuthResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Router      /auth/login [post]
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -133,7 +151,16 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /auth/refresh
+// @Summary     Refresh access token
+// @Description Rotate the refresh token and receive a new JWT
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       request body dto.RefreshRequest true "Refresh token"
+// @Success     200 {object} dto.TokenResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Router      /auth/refresh [post]
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req dto.RefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -179,7 +206,15 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /auth/logout
+// @Summary     Log out
+// @Description Revoke the refresh token
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       request body dto.LogoutRequest true "Refresh token"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Router      /auth/logout [post]
 func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	var req dto.LogoutRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
@@ -193,7 +228,15 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
-// GET /users/me
+// @Summary     Get current user
+// @Description Get the currently authenticated user profile
+// @Tags        users
+// @Produce     json
+// @Security    BearerAuth
+// @Success     200 {object} dto.UserResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /users/me [get]
 func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	if userID == 0 {

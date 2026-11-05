@@ -4,15 +4,15 @@ import "time"
 
 // SignupRequest is the payload for POST /auth/signup.
 type SignupRequest struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
+	Email    string `json:"email" example:"alice@xsolla.com"`
+	Name     string `json:"name" example:"Alice"`
+	Password string `json:"password" example:"secret123"`
 }
 
 // LoginRequest is the payload for POST /auth/login.
 type LoginRequest struct {
-	Login    string `json:"login"`
-	Password string `json:"password"`
+	Login    string `json:"login" example:"alice@xsolla.com"`
+	Password string `json:"password" example:"secret123"`
 }
 
 // RefreshRequest is the payload for POST /auth/refresh.

@@ -20,7 +20,18 @@ func NewCourseHandlers(svc *service.CourseService) *CourseHandlers {
 	return &CourseHandlers{svc: svc}
 }
 
-// POST /courses
+// @Summary     Create course
+// @Description Create a new course (teacher or admin only). The creator is auto-enrolled as teacher.
+// @Tags        courses
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       request body dto.CreateCourseRequest true "Course details"
+// @Success     201 {object} dto.CourseResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /courses [post]
 func (h *CourseHandlers) CreateCourse(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -54,7 +65,15 @@ func (h *CourseHandlers) CreateCourse(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /courses
+// @Summary     List courses
+// @Description Get courses the user is enrolled in (student), teaching (teacher), or all (admin)
+// @Tags        courses
+// @Produce     json
+// @Security    BearerAuth
+// @Success     200 {array} dto.CourseResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /courses [get]
 func (h *CourseHandlers) ListCourses(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -78,7 +97,17 @@ func (h *CourseHandlers) ListCourses(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, resp)
 }
 
-// GET /courses/:id
+// @Summary     Get course by ID
+// @Description Get course details if the user is enrolled or is the teacher
+// @Tags        courses
+// @Produce     json
+// @Security    BearerAuth
+// @Param       id path int true "Course ID"
+// @Success     200 {object} dto.CourseResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /courses/{id} [get]
 func (h *CourseHandlers) GetCourse(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -110,7 +139,19 @@ func (h *CourseHandlers) GetCourse(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PATCH /courses/:id
+// @Summary     Update course
+// @Description Update course title/description (teacher or admin only)
+// @Tags        courses
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       id path int true "Course ID"
+// @Param       request body dto.UpdateCourseRequest true "Course details"
+// @Success     200 {object} dto.CourseResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /courses/{id} [patch]
 func (h *CourseHandlers) PatchCourse(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -148,7 +189,16 @@ func (h *CourseHandlers) PatchCourse(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DELETE /courses/:id
+// @Summary     Delete course
+// @Description Soft-delete a course (teacher or admin only)
+// @Tags        courses
+// @Security    BearerAuth
+// @Param       id path int true "Course ID"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /courses/{id} [delete]
 func (h *CourseHandlers) DeleteCourse(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -173,7 +223,19 @@ func (h *CourseHandlers) DeleteCourse(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
-// POST /courses/:courseId/enrollments
+// @Summary     Enroll in course
+// @Description Enroll a user in a course. Students can only enroll themselves, teachers/admins can enroll anyone
+// @Tags        enrollments
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       courseId path int true "Course ID"
+// @Param       request body dto.EnrollRequest true "User ID to enroll"
+// @Success     201 {object} dto.EnrollmentResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     409 {object} handlers.ErrorResponse
+// @Router      /courses/{courseId}/enrollments [post]
 func (h *CourseHandlers) CreateEnrollment(w http.ResponseWriter, r *http.Request) {
 	actorID := middleware.CtxUserID(r.Context())
 	actorRole := middleware.CtxRole(r.Context())
@@ -213,7 +275,17 @@ func (h *CourseHandlers) CreateEnrollment(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// DELETE /courses/:courseId/enrollments/:userId
+// @Summary     Unenroll from course
+// @Description Remove a user from a course. Students can only unenroll themselves
+// @Tags        enrollments
+// @Security    BearerAuth
+// @Param       courseId path int true "Course ID"
+// @Param       userId path int true "User ID"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /courses/{courseId}/enrollments/{userId} [delete]
 func (h *CourseHandlers) DeleteEnrollment(w http.ResponseWriter, r *http.Request) {
 	actorID := middleware.CtxUserID(r.Context())
 	actorRole := middleware.CtxRole(r.Context())
@@ -243,7 +315,17 @@ func (h *CourseHandlers) DeleteEnrollment(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(204)
 }
 
-// GET /courses/:courseId/enrollments
+// @Summary     List course enrollments
+// @Description Get all enrollments for a course (members must be enrolled/teacher/admin)
+// @Tags        enrollments
+// @Produce     json
+// @Security    BearerAuth
+// @Param       courseId path int true "Course ID"
+// @Success     200 {array} dto.EnrollmentResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /courses/{courseId}/enrollments [get]
 func (h *CourseHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())

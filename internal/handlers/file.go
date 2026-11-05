@@ -25,7 +25,20 @@ func NewFileHandlers(svc *service.FileService) *FileHandlers {
 	return &FileHandlers{svc: svc}
 }
 
-// POST /files
+// @Summary     Upload file
+// @Description Upload a file (pdf, pptx, md, zip, images) and store it on disk
+// @Tags        files
+// @Accept      multipart/form-data
+// @Produce     json
+// @Security    BearerAuth
+// @Param       file formData file true "File to upload"
+// @Success     201 {object} dto.FileResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     413 {object} handlers.ErrorResponse
+// @Failure     415 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /files [post]
 func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	log.Printf("file handler: UploadFile called by user %d", userID)

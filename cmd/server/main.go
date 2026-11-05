@@ -1,5 +1,21 @@
 package main
 
+// @title           Xsolla School LMS API
+// @description     API for Xsolla School LMS - Courses, Content Items, Submissions, and File Uploads
+// @terms.url       https://xsolla.com/terms/
+// @contact.name    Xsolla School LMS
+// @contact.url     https://xsolla.com
+// @contact.email   support@xsolla.com
+// @license.name    MIT
+// @license.url     https://opensource.org/licenses/MIT
+// @version         1.0
+// @host            localhost:8080
+// @BasePath        /
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+// @description Enter your JWT token as: Bearer <token>
+
 import (
 	"log"
 	"net/http"
@@ -11,6 +27,10 @@ import (
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/store"
+
+	"github.com/swaggo/http-swagger"
+	_ "github.com/swaggo/files"
+	_ "xsolla-capstone-api/docs"
 )
 
 func main() {
@@ -70,6 +90,9 @@ func main() {
 	mux.Handle("DELETE /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.DeleteContentItem)))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
+	mux.Handle("/swagger/", httpSwagger.Handler(
+		httpSwagger.URL("doc.json"),
+	))
 
 	addr := cfg.Port
 	if addr[0] != ':' {

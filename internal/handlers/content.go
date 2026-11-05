@@ -22,7 +22,17 @@ func NewContentHandlers(svc *service.ContentService) *ContentHandlers {
 	return &ContentHandlers{svc: svc}
 }
 
-// GET /courses/:courseId/content-items
+// @Summary     List content items
+// @Description Get the content tree for a course (sections, files, assignments)
+// @Tags        content-items
+// @Produce     json
+// @Security    BearerAuth
+// @Param       courseId path int true "Course ID"
+// @Success     200 {array} dto.ContentTreeNode
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /courses/{courseId}/content-items [get]
 func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -47,7 +57,20 @@ func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, 200, buildContentTree(items))
 }
 
-// POST /courses/:courseId/content-items
+// @Summary     Create content item
+// @Description Create a section, file, or assignment (teacher or admin only)
+// @Tags        content-items
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       courseId path int true "Course ID"
+// @Param       request body dto.CreateContentItemRequest true "Content item details"
+// @Success     201 {object} dto.ContentItemResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /courses/{courseId}/content-items [post]
 func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -105,7 +128,17 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// GET /content-items/:id
+// @Summary     Get content item
+// @Description Get a single content item by ID
+// @Tags        content-items
+// @Produce     json
+// @Security    BearerAuth
+// @Param       id path int true "Content item ID"
+// @Success     200 {object} dto.ContentItemResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /content-items/{id} [get]
 func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -142,7 +175,19 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// PATCH /content-items/:id
+// @Summary     Update content item
+// @Description Update content item fields (teacher or admin only)
+// @Tags        content-items
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       id path int true "Content item ID"
+// @Param       request body dto.UpdateContentItemRequest true "Content item updates"
+// @Success     200 {object} dto.ContentItemResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /content-items/{id} [patch]
 func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -188,7 +233,16 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// DELETE /content-items/:id
+// @Summary     Delete content item
+// @Description Soft-delete a content item (teacher or admin only)
+// @Tags        content-items
+// @Security    BearerAuth
+// @Param       id path int true "Content item ID"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /content-items/{id} [delete]
 func (h *ContentHandlers) DeleteContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
