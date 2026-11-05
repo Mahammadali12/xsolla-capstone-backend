@@ -327,3 +327,89 @@ func (q *Query) DeleteFile(ctx context.Context, id int64) (sql.Result, error) {
 	)
 }
 
+// Submission queries
+
+func (q *Query) CreateSubmission(ctx context.Context, contentItemID int64, studentID int64, textBody string) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO submissions (content_item_id, student_id, text_body)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at`,
+		contentItemID, studentID, textBody,
+	)
+}
+
+func (q *Query) GetSubmissionByID(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at
+		 FROM submissions WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+func (q *Query) GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at
+		 FROM submissions
+		 WHERE student_id = $1 AND content_item_id = $2 AND deleted_at IS NULL`,
+		studentID, contentItemID,
+	)
+}
+
+func (q *Query) GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT s.id, s.content_item_id, s.student_id, s.text_body, s.submitted_at, s.grade, s.feedback, s.graded_by, s.graded_at, s.created_at,
+		       u.id, u.email, u.name, u.role
+		 FROM submissions s
+		 JOIN users u ON u.id = s.student_id
+		 WHERE s.content_item_id = $1 AND s.deleted_at IS NULL
+		 ORDER BY u.name`,
+		contentItemID,
+	)
+}
+
+func (q *Query) UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE submissions
+		 SET grade = COALESCE($2, grade),
+		     feedback = COALESCE($3, feedback),
+		     graded_by = $4,
+		     graded_at = NOW()
+		 WHERE id = $1 AND deleted_at IS NULL
+		 RETURNING id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at`,
+		id, grade, feedback, gradedBy,
+	)
+}
+
+func (q *Query) DeleteSubmission(ctx context.Context, id int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE submissions SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+// Submission file queries
+
+func (q *Query) CreateSubmissionFile(ctx context.Context, submissionID int64, fileID int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`INSERT INTO submission_files (submission_id, file_id) VALUES ($1, $2)`,
+		submissionID, fileID,
+	)
+}
+
+func (q *Query) DeleteSubmissionFiles(ctx context.Context, submissionID int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`DELETE FROM submission_files WHERE submission_id = $1`,
+		submissionID,
+	)
+}
+
+func (q *Query) GetSubmissionFiles(ctx context.Context, submissionID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT f.id, f.uploaded_by, f.original_name, f.storage_key, f.mime_type, f.size_bytes, f.created_at
+		 FROM submission_files sf
+		 JOIN files f ON f.id = sf.file_id
+		 WHERE sf.submission_id = $1 AND f.deleted_at IS NULL`,
+		submissionID,
+	)
+}
+

@@ -1,0 +1,27 @@
+info:
+  name: Create submission
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:8080/courses/1/content-items/2/submissions
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "text_body": "This is my homework submission.",
+        "file_ids": []
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

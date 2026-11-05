@@ -13,7 +13,7 @@ http:
     type: json
     data: |-
       {
-        "login": "teacher@xsolla.com",
+        "login": "student-2@edu.com",
         "password": "secret123"
       }
 

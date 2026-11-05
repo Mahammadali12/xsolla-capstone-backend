@@ -15,8 +15,8 @@ http:
     type: json
     data: |-
       {
-        "type": "file",
-        "title": "independent-file",
+        "type": "assignment",
+        "title": "independent-assignment",
         "position": 1,
         "is_visible": true,
         "parent_id": null

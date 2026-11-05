@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: http://localhost:8080/courses/2/enrollments
+  url: http://localhost:8080/courses/1/enrollments
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}

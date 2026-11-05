@@ -14,7 +14,7 @@ http:
 runtime:
   variables:
     - name: accessToken
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ0ZWFjaGVyIiwiZXhwIjoxNzkzODI3NTIyfQ.raHNa9wfBgLsmYO9GiJK9gtDnc3pTxsGhZ9X4wslXLE
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ0ZWFjaGVyIiwiZXhwIjoxNzkzOTA5NjAwfQ.1De6pSpoMdrRomYXCZrocG2Q3wYxxrzFvOAw7JRn20Y
 
 settings:
   encodeUrl: true
