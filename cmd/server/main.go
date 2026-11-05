@@ -31,6 +31,7 @@ func main() {
 	authSvc := service.NewAuthService(store, store)
 	courseSvc := service.NewCourseService(store)
 	contentSvc := service.NewContentService(store)
+	fileH := handlers.NewFileHandlers()
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -67,6 +68,8 @@ func main() {
 	mux.Handle("PATCH /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.UpdateContentItem)))
 	mux.Handle("DELETE /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.DeleteContentItem)))
 
+	mux.HandleFunc("POST /files", fileH.UploadFile)
+
 	addr := cfg.Port
 	if addr[0] != ':' {
 		addr = ":" + addr
@@ -79,7 +82,8 @@ func main() {
 
 func cors(next http.Handler, origin string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		//! w.Header().Set("Access-Control-Allow-Origin", origin)  TODO: temporarily disabled for CORS issue
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		if r.Method == http.MethodOptions {

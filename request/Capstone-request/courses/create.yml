@@ -20,11 +20,6 @@ http:
       }
   auth: inherit
 
-runtime:
-  variables:
-    - name: accessToken
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ0ZWFjaGVyIiwiZXhwIjoxNzkzODI4MDI1fQ.QRglI_qqm6laHLLSayIYaQhAZ_jiPEjM7bJr1JZR7a8
-
 settings:
   encodeUrl: true
   timeout: 0

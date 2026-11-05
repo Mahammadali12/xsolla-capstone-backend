@@ -2,6 +2,22 @@ opencollection: 1.0.0
 
 info:
   name: Capstone-request
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  variables:
+    - name: accessToken
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc5Mzg2NDgxN30.SsqDKH3JMY0oDFqMc-HiDXf8aS52yInidOIx0rTvK3k
 bundled: false
 extensions:
   bruno:
