@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"xsolla-capstone-api/internal/store"
 )
@@ -15,6 +16,9 @@ type FileService struct {
 func NewFileService(s *store.Store) *FileService {
 	return &FileService{store: s}
 }
+
+// ErrFileReferenced is returned when a file is still referenced and cannot be deleted.
+var ErrFileReferenced = errors.New("file is still referenced by a content item or submission")
 
 // CreateFile creates a new file record.
 func (s *FileService) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) (*store.File, error) {
@@ -31,7 +35,65 @@ func (s *FileService) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]
 	return s.store.GetFilesForUser(ctx, uploadedBy)
 }
 
-// DeleteFile soft-deletes a file record.
-func (s *FileService) DeleteFile(ctx context.Context, id int64) error {
+// CanReadFile checks the link-rule access and returns the file if readable.
+func (s *FileService) CanReadFile(ctx context.Context, userID int64, role string, fileID int64) (*store.File, error) {
+	f, err := s.store.GetFileByID(ctx, fileID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Owner or admin can always read
+	if f.UploadedBy == userID || role == "admin" {
+		return f, nil
+	}
+
+	// Linked to a visible content item in an enrolled/teacher course
+	if ci, err := s.store.GetContentItemForFile(ctx, fileID); err == nil && ci != nil {
+		if enrolled, _ := s.store.IsUserEnrolled(ctx, ci.CourseID, userID); enrolled {
+			return f, nil
+		}
+		if role == "teacher" {
+			if teacher, _ := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID); teacher {
+				return f, nil
+			}
+		}
+	}
+
+	// Linked to a submission you own, or may grade (teacher/admin enrolled in course)
+	if sub, err := s.store.GetSubmissionForFile(ctx, fileID); err == nil && sub != nil {
+		if sub.StudentID == userID {
+			return f, nil
+		}
+		if role == "teacher" || role == "admin" {
+			if ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID); err == nil && ci != nil {
+				if teacher, _ := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID); teacher {
+					return f, nil
+				}
+			}
+		}
+	}
+
+	return nil, errors.New("forbidden")
+}
+
+// DeleteFile soft-deletes a file if authorized and not referenced.
+func (s *FileService) DeleteFile(ctx context.Context, userID int64, role string, id int64) error {
+	f, err := s.store.GetFileByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if f.UploadedBy != userID && role != "admin" {
+		return errors.New("forbidden")
+	}
+
+	count, err := s.store.FileReferencedCount(ctx, id)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrFileReferenced
+	}
+
 	return s.store.DeleteFile(ctx, id)
 }

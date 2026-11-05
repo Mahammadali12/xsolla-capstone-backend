@@ -97,6 +97,9 @@ func main() {
 	mux.Handle("POST /submissions/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeSubmission)))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
+	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))
+	mux.Handle("GET /files/{id}/download", authenticator.Middleware(http.HandlerFunc(fileH.DownloadFile)))
+	mux.Handle("DELETE /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.DeleteFile)))
 	mux.Handle("/swagger/", httpSwagger.Handler(
 		httpSwagger.URL("doc.json"),
 	))

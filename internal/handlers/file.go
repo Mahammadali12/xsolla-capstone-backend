@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,10 +11,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/store"
 )
 
 type FileHandlers struct {
@@ -131,4 +135,98 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 		SizeBytes:    f.SizeBytes,
 		CreatedAt:    f.CreatedAt,
 	})
+}
+
+// GET /files/:id
+func (h *FileHandlers) GetFile(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	role := middleware.CtxRole(r.Context())
+
+	fileID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid file ID", nil)
+		return
+	}
+
+	f, err := h.svc.CanReadFile(r.Context(), userID, role, fileID)
+	if err != nil {
+		if errors.Is(err, store.ErrFileNotFound) {
+			writeError(w, 404, "not_found", "file not found", nil)
+		} else {
+			writeError(w, 403, "forbidden", "cannot access this file", nil)
+		}
+		return
+	}
+
+	writeJSON(w, 200, dto.FileResponse{
+		ID:           f.ID,
+		OriginalName: f.OriginalName,
+		StorageKey:   f.StorageKey,
+		MimeType:     f.MimeType,
+		SizeBytes:    f.SizeBytes,
+		CreatedAt:    f.CreatedAt,
+	})
+}
+
+// GET /files/:id/download
+func (h *FileHandlers) DownloadFile(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	role := middleware.CtxRole(r.Context())
+
+	fileID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid file ID", nil)
+		return
+	}
+
+	f, err := h.svc.CanReadFile(r.Context(), userID, role, fileID)
+	if err != nil {
+		if errors.Is(err, store.ErrFileNotFound) {
+			writeError(w, 404, "not_found", "file not found", nil)
+		} else {
+			writeError(w, 403, "forbidden", "cannot download this file", nil)
+		}
+		return
+	}
+
+	path := filepath.Join("uploads", f.StorageKey)
+	file, err := os.Open(path)
+	if err != nil {
+		writeError(w, 404, "not_found", "file not found on disk", nil)
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", f.OriginalName))
+	w.Header().Set("Content-Type", f.MimeType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", f.SizeBytes))
+	http.ServeContent(w, r, f.OriginalName, f.CreatedAt, file)
+}
+
+// DELETE /files/:id
+func (h *FileHandlers) DeleteFile(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	role := middleware.CtxRole(r.Context())
+
+	fileID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid file ID", nil)
+		return
+	}
+
+	err = h.svc.DeleteFile(r.Context(), userID, role, fileID)
+	if err != nil {
+		if errors.Is(err, store.ErrFileNotFound) {
+			writeError(w, 404, "not_found", "file not found", nil)
+		} else if errors.Is(err, service.ErrFileReferenced) {
+			writeError(w, 409, "conflict", "file is still referenced by a content item or submission", nil)
+		} else if strings.Contains(err.Error(), "forbidden") {
+			writeError(w, 403, "forbidden", "cannot delete this file", nil)
+		} else {
+			writeError(w, 500, "server_error", "could not delete file", nil)
+		}
+		return
+	}
+
+	w.WriteHeader(204)
 }

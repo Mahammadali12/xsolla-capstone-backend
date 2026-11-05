@@ -327,6 +327,31 @@ func (q *Query) DeleteFile(ctx context.Context, id int64) (sql.Result, error) {
 	)
 }
 
+func (q *Query) GetContentItemForFile(ctx context.Context, fileID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, course_id FROM content_items WHERE file_id = $1 AND deleted_at IS NULL LIMIT 1`,
+		fileID,
+	)
+}
+
+func (q *Query) GetSubmissionForFile(ctx context.Context, fileID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT s.id, s.student_id, s.content_item_id
+		 FROM submissions s
+		 JOIN submission_files sf ON sf.submission_id = s.id
+		 WHERE sf.file_id = $1 AND s.deleted_at IS NULL LIMIT 1`,
+		fileID,
+	)
+}
+
+func (q *Query) FileReferencedCount(ctx context.Context, fileID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT (SELECT COUNT(*) FROM content_items WHERE file_id = $1 AND deleted_at IS NULL) +
+		       (SELECT COUNT(*) FROM submission_files WHERE file_id = $1)`,
+		fileID,
+	)
+}
+
 // Submission queries
 
 func (q *Query) CreateSubmission(ctx context.Context, contentItemID int64, studentID int64, textBody string) *sql.Row {
