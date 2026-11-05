@@ -57,5 +57,5 @@ type ContentTreeNode struct {
 	FileID      *int64               `json:"file_id"`
 	DueAt       *time.Time           `json:"due_at,omitempty"`
 	MaxPoints   int                  `json:"max_points,omitempty"`
-	Children    []ContentTreeNode    `json:"children,omitempty"`
+	Children    []*ContentTreeNode   `json:"children,omitempty"`
 }

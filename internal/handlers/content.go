@@ -80,10 +80,12 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 	ci, err := h.svc.CreateContentItem(r.Context(), userID, role, courseID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID)
 	if err != nil {
 		log.Printf("content handler: CreateContentItem error: %v", err)
-		if errors.Is(err, store.ErrNotCourseTeacher) {
+		if errors.Is(err, service.ErrNotCourseTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this course", nil)
-		} else if errors.Is(err, store.ErrContentItemNotFound) {
+		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongCourse) {
 			writeError(w, 404, "not_found", "parent item not found", nil)
+		} else if errors.Is(err, service.ErrParentMustBeSection) {
+			writeError(w, 400, "bad_request", "parent item must be a section", nil)
 		} else {
 			writeError(w, 500, "server_error", "could not create content item", nil)
 		}
@@ -226,7 +228,7 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			Position:    ci.Position,
 			IsVisible:   ci.IsVisible,
 			FileID:      ci.FileID,
-			Children:    []dto.ContentTreeNode{},
+			Children:    []*dto.ContentTreeNode{},
 		}
 		itemMap[ci.ID] = &node
 	}
@@ -238,7 +240,7 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 		} else {
 			parent := itemMap[*ci.ParentID]
 			if parent != nil {
-				parent.Children = append(parent.Children, *node)
+				parent.Children = append(parent.Children, node)
 			} else {
 				// Parent not in list (e.g. hidden), treat as root
 				roots = append(roots, node)

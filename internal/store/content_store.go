@@ -10,6 +10,10 @@ import (
 var (
 	// ErrContentItemNotFound is returned when a content item does not exist or is deleted.
 	ErrContentItemNotFound = errors.New("content item not found")
+	// ErrParentMustBeSection is returned when a parent item is not a section.
+	ErrParentMustBeSection = errors.New("parent item must be a section")
+	// ErrParentWrongCourse is returned when a parent item belongs to a different course.
+	ErrParentWrongCourse = errors.New("parent item belongs to a different course")
 )
 
 // ContentItem represents a content item row from the database.

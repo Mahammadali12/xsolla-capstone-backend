@@ -47,10 +47,10 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 			return nil, err
 		}
 		if parent.CourseID != courseID {
-			return nil, errors.New("parent item belongs to a different course")
+			return nil, ErrParentWrongCourse
 		}
 		if parent.Type != "section" {
-			return nil, errors.New("parent item must be a section")
+			return nil, ErrParentMustBeSection
 		}
 	}
 

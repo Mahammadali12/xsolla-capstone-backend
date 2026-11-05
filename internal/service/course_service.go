@@ -174,5 +174,11 @@ var ErrNotCourseTeacher = store.ErrNotCourseTeacher
 // ErrNotEnrolled is re-exported from the store package for handler use.
 var ErrNotEnrolled = store.ErrNotEnrolled
 
+// ErrParentMustBeSection is re-exported from the store package for handler use.
+var ErrParentMustBeSection = store.ErrParentMustBeSection
+
+// ErrParentWrongCourse is re-exported from the store package for handler use.
+var ErrParentWrongCourse = store.ErrParentWrongCourse
+
 // ErrAlreadyEnrolled is re-exported from the store package for handler use.
 var ErrAlreadyEnrolled = store.ErrAlreadyEnrolled
