@@ -1,11 +1,11 @@
 info:
-  name: Get course
+  name: Delete module
   type: http
-  seq: 3
+  seq: 5
 
 http:
-  method: GET
-  url: http://localhost:8080/courses/1
+  method: DELETE
+  url: http://localhost:8080/modules/2
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}

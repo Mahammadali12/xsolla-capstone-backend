@@ -26,7 +26,7 @@ type File struct {
 // ContentItemRef links a file to its content item.
 type ContentItemRef struct {
 	ID       int64
-	CourseID int64
+	ModuleID int64
 }
 
 // SubmissionRef links a file to its submission.
@@ -98,7 +98,7 @@ func (s *Store) DeleteFile(ctx context.Context, id int64) error {
 // GetContentItemForFile returns the content item linked to a file, if any.
 func (s *Store) GetContentItemForFile(ctx context.Context, fileID int64) (*ContentItemRef, error) {
 	var ref ContentItemRef
-	err := s.DB().GetContentItemForFile(ctx, fileID).Scan(&ref.ID, &ref.CourseID)
+	err := s.DB().GetContentItemForFile(ctx, fileID).Scan(&ref.ID, &ref.ModuleID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil

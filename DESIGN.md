@@ -34,12 +34,14 @@ xsolla-capstone/              # Backend repo (this repo)
 ├── API_CONTRACT.md           # request/response payload contract
 ├── .gitignore                # exists
 └── README.md                 # local dev setup
+```
 
 Frontend repo (separate, not in this tree)
+```
 ├── src/
 │   ├── api/                  # fetch wrappers per endpoint (base URL from VITE_API_URL)
 │   ├── components/           # shared UI
-│   ├── pages/                # Login, CourseTree, AssignmentView, Gradebook, etc.
+│   ├── pages/                # Login, ModuleTree, AssignmentView, Gradebook, etc.
 │   ├── context/              # auth context (tokens, logout)
 │   └── App.tsx / main.tsx
 └── package.json
@@ -55,18 +57,18 @@ Extensions: `CREATE EXTENSION citext;`
 - `id bigint PK`, `email citext UK`, `name text`, `role text CHECK role IN ('student','teacher','admin')`, `password_hash text NOT NULL`, `created_at timestamptz`
 - Signup defaults role to `student`. First registered user becomes `admin` (bootstrap). No role-change endpoint for capstone.
 
-**courses**
+**modules** (frontend refers to these as "modules"; backend DB table renamed from `courses`)
 - `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
 
 **enrollments**
-- `id bigint PK`, `course_id bigint FK` (index, CASCADE), `user_id bigint FK` (index, CASCADE), `created_at timestamptz`
-- `UNIQUE (course_id, user_id)` — no double enrolls, no app-level check-then-insert race
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `user_id bigint FK` (index, CASCADE), `created_at timestamptz`
+- `UNIQUE (module_id, user_id)` — no double enrolls, no app-level check-then-insert race
 
-**content_items** (sections / files / assignments, nested by `parent_id`)
-- `id bigint PK`, `course_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; null = course root), `type text CHECK type IN ('section','file','assignment')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `deleted_at timestamptz NULL`, `created_at timestamptz`
+**content_items** (files / assignments, flat — sections removed, no nesting)
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `deleted_at timestamptz NULL`, `created_at timestamptz`
 - `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type != 'file' AND file_id IS NULL)`
-- `parent_id` must point to a `section` in the same course (or null for root); PATCH on `parent_id` rejects cycles
-- `UNIQUE (course_id, parent_id, position)`
+- `parent_id` is always null (sections removed — no parent-child nesting)
+- `UNIQUE (module_id, parent_id, position)`
 
 **assignments** (1:1 extension of a content item)
 - `content_item_id bigint PK, FK` (CASCADE), `due_at timestamptz`, `max_points int CHECK max_points > 0`, `deleted_at timestamptz NULL` (soft delete)
@@ -90,7 +92,7 @@ Extensions: `CREATE EXTENSION citext;`
 - `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
 - Constraint: `ends_at > starts_at`
 
-Indexes on every FK column used for filtering: `enrollments(course_id, user_id)`, `content_items(course_id, parent_id, file_id)`, `files(uploaded_by)`, `submissions(assignment_id, student_id, graded_by)`, `submission_files(submission_id, file_id)`, `mentor_slots(mentor_id, booked_by)`, `events(module_id)`.
+Indexes on every FK column used for filtering: `enrollments(module_id, user_id)`, `content_items(module_id, parent_id, file_id)`, `files(uploaded_by)`, `submissions(assignment_id, student_id, graded_by)`, `submission_files(submission_id, file_id)`, `mentor_slots(mentor_id, booked_by)`, `events(module_id)`.
 
 ---
 
@@ -116,16 +118,16 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /auth/logout / refresh | any | any | any | — |
 | GET /users/me | self | self | self | — |
 | GET /users?search= | — | — | any | admin only |
-| POST /courses | — | create + auto-enroll as teacher | create | — |
-| GET /courses | enrolled | enrolled / teacher | any | — |
-| GET /courses/:id | if enrolled | if enrolled / teacher | any | else 403 |
-| PATCH /courses/:id | — | if created_by | if created_by | — |
-| DELETE /courses/:id | — | if created_by | any | soft delete; collect storage keys first |
-| POST /courses/:id/enrollments | self only | any user | any | 409 duplicate |
-| DELETE /courses/:id/enrollments/:userId | self only | any | any | — |
-| GET /courses/:id/enrollments | if enrolled | if enrolled / teacher | any | — |
-| GET /courses/:id/content-items | if enrolled | if enrolled / teacher | any | `is_visible` filtered server-side |
-| POST /courses/:id/content-items | — | if enrolled / teacher | any | parent rules enforced |
+| POST /modules | — | create + auto-enroll as teacher | create | — |
+| GET /modules | enrolled | enrolled / teacher | any | — |
+| GET /modules/:id | if enrolled | if enrolled / teacher | any | else 403 |
+| PATCH /modules/:id | — | if created_by | if created_by | — |
+| DELETE /modules/:id | — | if created_by | any | soft delete; collect storage keys first |
+| POST /modules/:id/enrollments | self only | any user | any | 409 duplicate |
+| DELETE /modules/:id/enrollments/:userId | self only | any | any | — |
+| GET /modules/:id/enrollments | if enrolled | if enrolled / teacher | any | — |
+| GET /modules/:id/content-items | if enrolled | if enrolled / teacher | any | `is_visible` filtered server-side |
+| POST /modules/:id/content-items | — | if enrolled / teacher | any | parent rules enforced |
 | GET /content-items/:id | if enrolled + visible | if enrolled / teacher | any | else 403/404 |
 | PATCH /content-items/:id | — | if enrolled / teacher | any | cycle check on parent_id |
 | DELETE /content-items/:id | — | if enrolled / teacher | any | soft delete |
@@ -135,29 +137,29 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
 | POST /content-items/:id/submissions | self only | — | — | single attempt; file ownership check |
 | GET /content-items/:id/submissions/me | self only | — | — | own submission |
-| GET /courses/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / teacher (all) | any | LEFT JOIN enrollments |
-| POST /submissions/:id/grade | — | if enrolled as teacher | any | teacher/admin AND enrolled in course |
+| GET /modules/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / teacher (all) | any | LEFT JOIN enrollments |
+| POST /submissions/:id/grade | — | if enrolled as teacher | any | teacher/admin AND enrolled in module |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
 | GET /events?from=&to= | if modules open | if enrolled/teacher | any | date range filter |
-| POST /events | — | create | create | lecturer/admin only |
-| PATCH /events/:id | — | if created | any | lecturer/admin only |
+| POST /events | — | create | create | teacher/admin only |
+| PATCH /events/:id | — | if created | any | teacher/admin only |
 | DELETE /events/:id | — | if created | any | soft delete |
 | GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
 | POST /mentor-slots | — | open window | open window | mentor creates slots |
 | DELETE /mentor-slots/:id | — | own slot | own slot | only if free |
 | POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
 | DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
-| GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled courses |
-| GET /courses/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
+| GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled modules |
+| GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
 
 **File read rule** — a file is readable if:
-1. linked to a visible, non-deleted content item in a course you're enrolled in, **or**
+1. linked to a visible, non-deleted content item in a module you're enrolled in, **or**
 2. linked to a submission you own, **or**
-3. linked to a submission you may grade (teacher/admin enrolled in the course).
+3. linked to a submission you may grade (teacher/admin enrolled in the module).
 
 A teacher cannot download a random student's upload unless it's attached to a submission they're grading.
 
-**Grading rule** — `POST /submissions/:id/grade`: caller must be `teacher` or `admin` **AND** enrolled in the course that owns the submission's assignment. Join: `submissions → assignments → content_items → courses → enrollments`. "Is a teacher" is not enough; must be "teaches this course."
+**Grading rule** — `POST /submissions/:id/grade`: caller must be `teacher` or `admin` **AND** enrolled in the module that owns the submission's assignment. Join: `submissions → assignments → content_items → modules → enrollments`. "Is a teacher" is not enough; must be "teaches this module."
 
 ---
 
@@ -169,7 +171,7 @@ A teacher cannot download a random student's upload unless it's attached to a su
 - `storage_key` = `users/<user_id>/<uuid>.<ext>` generated by backend; client never supplies it.
 - `original_name` sanitized before echoing into headers/responses.
 - Files soft-deleted (`deleted_at`); hard delete refused while referenced by `content_items` or `submission_files`.
-- Course deletion: collect `storage_key`s before cascade, delete from storage, then soft-delete DB rows.
+- Module deletion: collect `storage_key`s before cascade, delete from storage, then soft-delete DB rows.
 - Submission creation accepts `file_ids` and validates each belongs to the student in the same request. Resubmit replaces `submission_files` rows (old files become storage orphans — documented ceiling; cleanup job later).
 
 ---
@@ -178,11 +180,11 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **Auth:** signup, login, refresh, logout, me, user search (admin)
 
-**Courses:** create, list, get, patch, delete (soft)
+**Modules:** create, list, get, patch, delete (soft)
 
 **Enrollments:** create (self or teacher/admin), delete, list members
 
-**Content items** (single route set; no separate `/assignments/*`): tree (with `is_visible` server-side filter), create, get, patch, delete (soft)
+**Content items** (single route set; no separate `/assignments/*`): list (with `is_visible` server-side filter), create, get, patch, delete (soft). Sections removed — flat list of files and assignments.
 
 **Submissions:** create/resubmit (single attempt), get mine, get roster (left join — missing work shown), grade, list files
 
@@ -190,9 +192,9 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **1:1 mentor slots:** list, open window, delete, book, cancel booking
 
-**Deadlines:** `GET /users/me/deadlines` — upcoming assignments across enrolled courses, one joined query
+**Deadlines:** `GET /users/me/deadlines` — upcoming assignments across enrolled modules, one joined query
 
-**Gradebook:** `GET /courses/:id/gradebook` — students × assignments with submission/grade
+**Gradebook:** `GET /modules/:id/gradebook` — students × assignments with submission/grade
 
 ---
 
@@ -206,20 +208,26 @@ Frontend and backend are separate repos. The contract in `API_CONTRACT.md` is th
 - Backend: `CORS_ORIGIN`, `DATABASE_URL`, `JWT_SECRET`, `REFRESH_TOKEN_SECRET`, `STORAGE_PATH` (default `/data/uploads/`), `PORT` (default `8080`)
 - Frontend: `VITE_API_URL` (e.g. `http://localhost:8080`)
 
-**Frontend contract — content tree** (most important payload, consumed by the separate frontend repo):
+**Frontend contract — content items** (most important payload, consumed by the separate frontend repo):
 
 ```json
 [
   {
     "id": "...",
-    "type": "section",
-    "title": "Week 1",
+    "type": "file",
+    "title": "syllabus.pdf",
     "position": 1,
     "is_visible": true,
-    "children": [
-      { "id": "...", "type": "file", "title": "syllabus.pdf", ... },
-      { "id": "...", "type": "assignment", "title": "Homework 1", "due_at": "...", "max_points": 100, ... }
-    ]
+    "file_id": "..."
+  },
+  {
+    "id": "...",
+    "type": "assignment",
+    "title": "Homework 1",
+    "position": 2,
+    "is_visible": true,
+    "due_at": "...",
+    "max_points": 100
   }
 ]
 ```
@@ -232,14 +240,14 @@ Auth: store tokens (memory or `localStorage` — document XSS tradeoff), send `A
 
 | Shortcut | Ceiling | Upgrade |
 |---|---|---|
-| Global role on `users`, not per-course | Can't model teacher-in-one-course / student-in-another | Move `role` to `enrollments` |
+| Global role on `users`, not per-module | Can't model teacher-in-one-module / student-in-another | Move `role` to `enrollments` |
 | Local disk storage | Container restart loses uploads | S3-like storage, one interface swap |
 | Single submission attempt | No graded re-attempts | Add `attempt_number`, keep history |
 | Resubmit replaces files (old ones orphan) | Storage bloat over a semester | Nightly orphan cleanup job |
 | JWT in localStorage | XSS token theft | httpOnly cookies + refresh rotation |
 | Calendar events stored in same DB (no external calendar sync) | No Google Calendar / Outlook sync | Add iCal export / sync later |
-| 30-min fixed slot length | All slots are 30 minutes | Configurable `slot_minutes` per window |
-| Module lock by `opens_at` on sections only | Events not tied to modules for locking | Full module-date-range enforcement |
+| Module lock by dates on modules only | Events not tied to modules for locking | Full module-date-range enforcement |
+| Flat content items (no sections) | No nested hierarchy under modules | Re-add sections with parent_id nesting |
 
 ---
 
@@ -247,8 +255,8 @@ Auth: store tokens (memory or `localStorage` — document XSS tradeoff), send `A
 
 1. Migrations + `db` package
 2. Auth (signup/login/refresh/logout/me) + middleware + CORS
-3. Courses + enrollments
-4. Content items tree
+3. Modules + enrollments
+4. Content items (flat list — files/assignments, no sections)
 5. Files + local storage
 6. Submissions + grading
 7. Deadlines + gradebook

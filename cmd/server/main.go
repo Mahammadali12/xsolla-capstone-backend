@@ -49,7 +49,7 @@ func main() {
 
 	store := store.NewStore(database)
 	authSvc := service.NewAuthService(store, store)
-	courseSvc := service.NewCourseService(store)
+	moduleSvc := service.NewModuleService(store)
 	contentSvc := service.NewContentService(store)
 	fileSvc := service.NewFileService(store)
 	submissionSvc := service.NewSubmissionService(store)
@@ -62,7 +62,7 @@ func main() {
 		15*time.Minute,
 		7*24*time.Hour,
 	)
-	courseH := handlers.NewCourseHandlers(courseSvc)
+	moduleH := handlers.NewModuleHandlers(moduleSvc)
 	contentH := handlers.NewContentHandlers(contentSvc)
 	fileH := handlers.NewFileHandlers(fileSvc)
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
@@ -77,25 +77,25 @@ func main() {
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
 
-	mux.Handle("POST /courses", authenticator.Middleware(http.HandlerFunc(courseH.CreateCourse)))
-	mux.Handle("GET /courses", authenticator.Middleware(http.HandlerFunc(courseH.ListCourses)))
-	mux.Handle("GET /courses/{id}", authenticator.Middleware(http.HandlerFunc(courseH.GetCourse)))
-	mux.Handle("PATCH /courses/{id}", authenticator.Middleware(http.HandlerFunc(courseH.PatchCourse)))
-	mux.Handle("DELETE /courses/{id}", authenticator.Middleware(http.HandlerFunc(courseH.DeleteCourse)))
+	mux.Handle("POST /modules", authenticator.Middleware(http.HandlerFunc(moduleH.CreateModule)))
+	mux.Handle("GET /modules", authenticator.Middleware(http.HandlerFunc(moduleH.ListModules)))
+	mux.Handle("GET /modules/{id}", authenticator.Middleware(http.HandlerFunc(moduleH.GetModule)))
+	mux.Handle("PATCH /modules/{id}", authenticator.Middleware(http.HandlerFunc(moduleH.PatchModule)))
+	mux.Handle("DELETE /modules/{id}", authenticator.Middleware(http.HandlerFunc(moduleH.DeleteModule)))
 
-	mux.Handle("POST /courses/{courseId}/enrollments", authenticator.Middleware(http.HandlerFunc(courseH.CreateEnrollment)))
-	mux.Handle("DELETE /courses/{courseId}/enrollments/{userId}", authenticator.Middleware(http.HandlerFunc(courseH.DeleteEnrollment)))
-	mux.Handle("GET /courses/{courseId}/enrollments", authenticator.Middleware(http.HandlerFunc(courseH.ListEnrollments)))
+	mux.Handle("POST /modules/{moduleId}/enrollments", authenticator.Middleware(http.HandlerFunc(moduleH.CreateEnrollment)))
+	mux.Handle("DELETE /modules/{moduleId}/enrollments/{userId}", authenticator.Middleware(http.HandlerFunc(moduleH.DeleteEnrollment)))
+	mux.Handle("GET /modules/{moduleId}/enrollments", authenticator.Middleware(http.HandlerFunc(moduleH.ListEnrollments)))
 
-	mux.Handle("POST /courses/{courseId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.CreateContentItem)))
-	mux.Handle("GET /courses/{courseId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.ListContentItems)))
+	mux.Handle("POST /modules/{moduleId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.CreateContentItem)))
+	mux.Handle("GET /modules/{moduleId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.ListContentItems)))
 	mux.Handle("GET /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.GetContentItem)))
 	mux.Handle("PATCH /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.UpdateContentItem)))
 	mux.Handle("DELETE /content-items/{id}", authenticator.Middleware(http.HandlerFunc(contentH.DeleteContentItem)))
 
-	mux.Handle("POST /courses/{courseId}/content-items/{assignmentId}/submissions", authenticator.Middleware(http.HandlerFunc(submissionH.CreateSubmission)))
-	mux.Handle("GET /courses/{courseId}/content-items/{assignmentId}/submissions", authenticator.Middleware(http.HandlerFunc(submissionH.ListSubmissions)))
-	mux.Handle("GET /courses/{courseId}/content-items/{assignmentId}/submissions/me", authenticator.Middleware(http.HandlerFunc(submissionH.GetMySubmission)))
+	mux.Handle("POST /modules/{moduleId}/content-items/{assignmentId}/submissions", authenticator.Middleware(http.HandlerFunc(submissionH.CreateSubmission)))
+	mux.Handle("GET /modules/{moduleId}/content-items/{assignmentId}/submissions", authenticator.Middleware(http.HandlerFunc(submissionH.ListSubmissions)))
+	mux.Handle("GET /modules/{moduleId}/content-items/{assignmentId}/submissions/me", authenticator.Middleware(http.HandlerFunc(submissionH.GetMySubmission)))
 	mux.Handle("POST /submissions/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeSubmission)))
 	mux.Handle("GET /submissions/{id}/files", authenticator.Middleware(http.HandlerFunc(submissionH.GetSubmissionFiles)))
 

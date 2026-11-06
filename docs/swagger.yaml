@@ -59,7 +59,7 @@ definitions:
       type:
         type: string
     type: object
-  dto.CourseResponse:
+  dto.ModuleResponse:
     properties:
       created_at:
         type: string
@@ -89,7 +89,7 @@ definitions:
       type:
         type: string
     type: object
-  dto.CreateCourseRequest:
+  dto.CreateModuleRequest:
     properties:
       description:
         type: string
@@ -180,7 +180,7 @@ definitions:
       title:
         type: string
     type: object
-  dto.UpdateCourseRequest:
+  dto.UpdateModuleRequest:
     properties:
       description:
         type: string
@@ -455,9 +455,9 @@ paths:
       summary: Update content item
       tags:
       - content-items
-  /courses:
+  /modules:
     get:
-      description: Get courses the user is enrolled in (student), teaching (teacher),
+      description: Get modules the user is enrolled in (student), teaching (teacher),
         or all (admin)
       produces:
       - application/json
@@ -466,7 +466,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/dto.CourseResponse'
+              $ref: '#/definitions/dto.ModuleResponse'
             type: array
         "401":
           description: Unauthorized
@@ -478,13 +478,13 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List courses
+      summary: List modules
       tags:
-      - courses
+      - modules
     post:
       consumes:
       - application/json
-      description: Create a new course (teacher or admin only). The creator is auto-enrolled
+      description: Create a new module (teacher or admin only). The creator is auto-enrolled
         as teacher.
       parameters:
       - description: Course details
@@ -492,14 +492,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCourseRequest'
+          $ref: '#/definitions/dto.CreateModuleRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CourseResponse'
+            $ref: '#/definitions/dto.ModuleResponse'
         "400":
           description: Bad Request
           schema:
@@ -514,16 +514,16 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create course
+      summary: Create module
       tags:
-      - courses
-  /courses/{courseId}/content-items:
+      - modules
+  /modules/{moduleId}/content-items:
     get:
       description: Get the content tree for a course (sections, files, assignments)
       parameters:
       - description: Course ID
         in: path
-        name: courseId
+        name: moduleId
         required: true
         type: integer
       produces:
@@ -559,7 +559,7 @@ paths:
       parameters:
       - description: Course ID
         in: path
-        name: courseId
+        name: moduleId
         required: true
         type: integer
       - description: Content item details
@@ -596,13 +596,13 @@ paths:
       summary: Create content item
       tags:
       - content-items
-  /courses/{courseId}/enrollments:
+  /modules/{moduleId}/enrollments:
     get:
       description: Get all enrollments for a course (members must be enrolled/teacher/admin)
       parameters:
       - description: Course ID
         in: path
-        name: courseId
+        name: moduleId
         required: true
         type: integer
       produces:
@@ -628,7 +628,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List course enrollments
+      summary: List module enrollments
       tags:
       - enrollments
     post:
@@ -639,7 +639,7 @@ paths:
       parameters:
       - description: Course ID
         in: path
-        name: courseId
+        name: moduleId
         required: true
         type: integer
       - description: User ID to enroll
@@ -669,16 +669,16 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Enroll in course
+      summary: Enroll in module
       tags:
       - enrollments
-  /courses/{courseId}/enrollments/{userId}:
+  /modules/{moduleId}/enrollments/{userId}:
     delete:
       description: Remove a user from a course. Students can only unenroll themselves
       parameters:
       - description: Course ID
         in: path
-        name: courseId
+        name: moduleId
         required: true
         type: integer
       - description: User ID
@@ -705,12 +705,12 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Unenroll from course
+      summary: Unenroll from module
       tags:
       - enrollments
-  /courses/{id}:
+  /modules/{id}:
     delete:
-      description: Soft-delete a course (teacher or admin only)
+      description: Soft-delete a module (teacher or admin only)
       parameters:
       - description: Course ID
         in: path
@@ -736,11 +736,11 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Delete course
+      summary: Delete module
       tags:
-      - courses
+      - modules
     get:
-      description: Get course details if the user is enrolled or is the teacher
+      description: Get module details if the user is enrolled or is the teacher
       parameters:
       - description: Course ID
         in: path
@@ -753,7 +753,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CourseResponse'
+            $ref: '#/definitions/dto.ModuleResponse'
         "400":
           description: Bad Request
           schema:
@@ -768,13 +768,13 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Get course by ID
+      summary: Get module by ID
       tags:
-      - courses
+      - modules
     patch:
       consumes:
       - application/json
-      description: Update course title/description (teacher or admin only)
+      description: Update module title/description (teacher or admin only)
       parameters:
       - description: Course ID
         in: path
@@ -786,14 +786,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateCourseRequest'
+          $ref: '#/definitions/dto.UpdateModuleRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CourseResponse'
+            $ref: '#/definitions/dto.ModuleResponse'
         "400":
           description: Bad Request
           schema:
@@ -808,9 +808,9 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Update course
+      summary: Update module
       tags:
-      - courses
+      - modules
   /files:
     post:
       consumes:

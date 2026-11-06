@@ -5,16 +5,11 @@ info:
 
 http:
   method: GET
-  url: http://localhost:8080/content-items/6
+  url: http://localhost:8080/content-items/1
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}
   auth: inherit
-
-runtime:
-  variables:
-    - name: accessToken
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJ0ZWFjaGVyIiwiZXhwIjoxNzkzODY1OTgwfQ.0T3ajfeGZmJ_7gCkI3b3qfg9hSB4c_HPugTjleSdsNE
 
 settings:
   encodeUrl: true

@@ -15,18 +15,18 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `id bigint PK`, `email citext UK`, `name text`, `role text CHECK role IN ('student','teacher','admin')`, `password_hash text NOT NULL`, `created_at timestamptz`
 - Signup defaults role to `student`. First registered user becomes `admin` (bootstrap); after that only an admin can create teacher accounts. No role-change endpoint for capstone.
 
-**COURSES**
+**MODULES** (renamed from courses — frontend refers to them as modules)
 - `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
 
 **ENROLLMENTS**
-- `id bigint PK`, `course_id bigint FK` (index, CASCADE with course), `user_id bigint FK` (index, CASCADE with user), `created_at timestamptz`
-- `UNIQUE (course_id, user_id)` — no double enrolls, no app-level check-then-insert race
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE with module), `user_id bigint FK` (index, CASCADE with user), `created_at timestamptz`
+- `UNIQUE (module_id, user_id)` — no double enrolls, no app-level check-then-insert race
 
-**CONTENT_ITEMS** (sections / files / assignments, nested by `parent_id`)
-- `id bigint PK`, `course_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; root = course root), `type text CHECK type IN ('section','file','assignment')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `deleted_at timestamptz NULL`, `created_at timestamptz`
+**CONTENT_ITEMS** (files / assignments, flat — no sections, no nesting)
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `deleted_at timestamptz NULL`, `created_at timestamptz`
 - `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type != 'file' AND file_id IS NULL)` — both directions
-- `parent_id` must point to a `section` (or be null for course root), same course. PATCH on `parent_id` rejects cycles.
-- `UNIQUE (course_id, parent_id, position)` — no duplicate positions under the same parent
+- `parent_id` is always null (sections removed — no parent-child nesting)
+- `UNIQUE (module_id, parent_id, position)` — no duplicate positions under the same parent
 
 **ASSIGNMENTS** (1:1 extension of a content item)
 - `content_item_id bigint PK, FK` (CASCADE), `due_at timestamptz`, `max_points int CHECK max_points > 0`, `deleted_at timestamptz NULL` (soft delete)
@@ -60,16 +60,16 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | POST /auth/logout | any | any | any | — |
 | GET /users/me | self | self | self | — |
 | GET /users?search= | — | — | any | admin only |
-| POST /courses | — | create + auto-enroll as teacher | create | — |
-| GET /courses | enrolled | enrolled / teacher | any | — |
-| GET /courses/:id | if enrolled | if enrolled / teacher | any | 403 otherwise |
-| PATCH /courses/:id | — | if created_by | if created_by | — |
-| DELETE /courses/:id | — | if created_by | any | soft delete; collect storage keys first |
-| POST /courses/:id/enrollments | self only | any user | any | 409 duplicate |
-| DELETE /courses/:id/enrollments/:userId | self only | any | any | — |
-| GET /courses/:id/enrollments | if enrolled | if enrolled / teacher | any | — |
-| GET /courses/:id/content-items | if enrolled | if enrolled / teacher | any | is_visible filtered server-side |
-| POST /courses/:id/content-items | — | if enrolled / teacher | any | parent rules enforced |
+| POST /modules | — | create + auto-enroll as teacher | create | — |
+| GET /modules | enrolled | enrolled / teacher | any | — |
+| GET /modules/:id | if enrolled | if enrolled / teacher | any | 403 otherwise |
+| PATCH /modules/:id | — | if created_by | if created_by | — |
+| DELETE /modules/:id | — | if created_by | any | soft delete; collect storage keys first |
+| POST /modules/:id/enrollments | self only | any user | any | 409 duplicate |
+| DELETE /modules/:id/enrollments/:userId | self only | any | any | — |
+| GET /modules/:id/enrollments | if enrolled | if enrolled / teacher | any | — |
+| GET /modules/:id/content-items | if enrolled | if enrolled / teacher | any | `is_visible` filtered server-side |
+| POST /modules/:id/content-items | — | if enrolled / teacher | any | parent rules enforced |
 | GET /content-items/:id | if enrolled + visible | if enrolled / teacher | any | 403/404 |
 | PATCH /content-items/:id | — | if enrolled / teacher | any | cycle check on parent_id |
 | DELETE /content-items/:id | — | if enrolled / teacher | any | soft delete |
@@ -77,32 +77,31 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | GET /files/:id | if accessible via link | if accessible via link | any | — |
 | GET /files/:id/download | if accessible via link | if accessible via link | any | link rule below |
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
-| GET /courses/:id/assignments | if enrolled | if enrolled / teacher | any | alias of content-items type=assignment |
-| POST /assignments/:assignmentId/submissions | self only | — | — | single attempt; file ownership check |
-| GET /assignments/:assignmentId/submissions/me | self only | — | — | own submission |
-| GET /courses/:id/submissions | if enrolled (own only) | if enrolled / teacher (all roster) | any | LEFT JOIN enrollments — missing work shown |
-| POST /submissions/:id/grade | — | if enrolled as teacher | any | one line: teacher/admin AND enrolled in course |
+| POST /modules/:id/content-items/:assignmentId/submissions | self only | — | — | single attempt; file ownership check |
+| GET /content-items/:assignmentId/submissions/me | self only | — | — | own submission |
+| GET /modules/:id/submissions | if enrolled (own only) | if enrolled / teacher (all roster) | any | LEFT JOIN enrollments — missing work shown |
+| POST /submissions/:id/grade | — | if enrolled as teacher | any | one line: teacher/admin AND enrolled in module |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
 | GET /events?from=&to= | if modules open | if enrolled/teacher | any | date range filter |
-| POST /events | — | create | create | lecturer/admin only |
-| PATCH /events/:id | — | if created | any | lecturer/admin only |
+| POST /events | — | create | create | teacher/admin only |
+| PATCH /events/:id | — | if created | any | teacher/admin only |
 | DELETE /events/:id | — | if created | any | soft delete |
 | GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
 | POST /mentor-slots | — | open window | open window | mentor creates slots |
 | DELETE /mentor-slots/:id | — | own slot | own slot | only if free |
 | POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
 | DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
-| GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled courses |
-| GET /courses/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
+| GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled modules |
+| GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
 
 **File read rule** — a file is readable if:
-1. it's linked to a visible, non-deleted content item in a course you're enrolled in, **or**
+1. it's linked to a visible, non-deleted content item in a module you're enrolled in, **or**
 2. it's linked to a submission you own, **or**
-3. you may grade that submission (teacher/admin enrolled in the course).
+3. you may grade that submission (teacher/admin enrolled in the module).
 
 A teacher cannot download a random student's upload unless it's attached to a submission they're grading.
 
-**Grading rule** — `POST /submissions/:id/grade`: caller must be `teacher` or `admin` **AND** enrolled in the course that owns that submission's assignment. Query joins `submissions → assignments → content_items → courses → enrollments` and checks the caller's enrollment role for that course. "Is a teacher" is not enough; must be "teaches this course."
+**Grading rule** — `POST /submissions/:id/grade`: caller must be `teacher` or `admin` **AND** enrolled in the module that owns that submission's assignment. Query joins `submissions → assignments → content_items → modules → enrollments` and checks the caller's enrollment role for that module. "Is a teacher" is not enough; must be "teaches this module."
 
 ## Endpoints
 
@@ -138,64 +137,65 @@ A teacher cannot download a random student's upload unless it's attached to a su
 - Admin only. Returns users matching email/name substring.
 - Needed so admins/teachers can look up `user_id` for enrollment
 
-### Courses
+### Modules
 
-**POST /courses**
+**POST /modules**
 - Body: `{ title, description }`
 - Teacher/admin creates; auto-enrolls creator as `teacher`
-- Returns: course row
+- Returns: module row
 
-**GET /courses**
-- Student: courses they're enrolled in. Teacher: courses they teach + are enrolled in. Admin: all non-deleted courses.
+**GET /modules**
+- Student: modules they're enrolled in. Teacher: modules they teach + are enrolled in. Admin: all non-deleted modules.
 - One joined query
 
-**GET /courses/:id**
-- 404 if missing/soft-deleted. 403 if not enrolled and not admin/teacher of course
+**GET /modules/:id**
+- 404 if missing/soft-deleted. 403 if not enrolled and not admin/teacher of module
 
-**PATCH /courses/:id**
+**PATCH /modules/:id**
 - Body: `{ title?, description? }`
 - Only `created_by` or admin
 
-**DELETE /courses/:id**
-- Soft delete (`deleted_at`). Before DB delete, collect `storage_key`s of all linked files, delete from storage, then soft-delete course (CASCADE handles enrollments/content/assignments/submissions in DB)
+**DELETE /modules/:id**
+- Soft delete (`deleted_at`). Before DB delete, collect `storage_key`s of all linked files, delete from storage, then soft-delete module (CASCADE handles enrollments/content/assignments/submissions in DB)
 
 ### Enrollments
 
-**POST /courses/:courseId/enrollments**
+**POST /modules/:moduleId/enrollments**
 - Body: `{ user_id }`
 - Student: self only. Teacher/admin: any user.
-- 409 on duplicate (`UNIQUE course_id, user_id`)
+- 409 on duplicate (`UNIQUE module_id, user_id`)
 
-**DELETE /courses/:courseId/enrollments/:userId**
+**DELETE /modules/:moduleId/enrollments/:userId**
 - Student: self only. Teacher/admin: any. Returns 204
 
-**GET /courses/:courseId/enrollments**
+**GET /modules/:moduleId/enrollments**
 - Members with user info. One join query.
 
-### Content items (sections, files, assignments — single route set)
+### Content items (files, assignments — single route set)
 
-**GET /courses/:courseId/content-items**
-- Returns nested tree. Root items have `parent_id = null`.
+**GET /modules/:moduleId/content-items**
+- Returns flat list. All items have `parent_id = null` (sections removed).
 - Server-side filter: `is_visible = true` and `deleted_at IS NULL` for students/teachers; admin sees all.
-- One query for all items of course; tree built in memory (O(n), n small)
+- One query for all items of module; list built in memory (O(n), n small)
 - Response shape:
   ```json
   [
     {
       "id": "...",
-      "type": "section",
+      "type": "file",
       "title": "...",
       "position": 1,
       "is_visible": true,
-      "children": [ { "id": "...", "type": "file", ... } ]
+      "file_id": "..."
     }
   ]
   ```
 
-**POST /courses/:courseId/content-items**
+**POST /modules/:moduleId/content-items**
 - Body: `{ parent_id?, type, title, description?, position?, is_visible?, file_id?, due_at?, max_points? }`
-- `parent_id` must be a section in same course (or null); cycle rejected
+- `parent_id` must be null (sections removed); cycle rejected
 - `type = 'file'` requires `file_id`; `type = 'assignment'` inserts ASSIGNMENTS row in same transaction (`due_at`, `max_points`)
+- `type = 'section'` returns 400 (not supported)
 - `position` defaults to last+1 under parent
 - Returns: created item (+ assignment fields if type=assignment)
 
@@ -205,11 +205,11 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **PATCH /content-items/:id**
 - Body: any updatable field
-- Cycle check on `parent_id`; course membership check
-- Teacher/admin of course, or `created_by`
+- Course membership check
+- Teacher/admin of module, or `created_by`
 
 **DELETE /content-items/:id**
-- Soft delete. CASCADE soft-deletes children and ASSIGNMENTS row. Submissions stay (graded work preserved).
+- Soft delete. CASCADE soft-deletes ASSIGNMENTS row. Submissions stay (graded work preserved).
 
 ### Files
 
@@ -231,7 +231,7 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 ### Submissions (merged — no separate /assignments route set)
 
-**POST /courses/:courseId/content-items/:assignmentId/submissions** (alias: POST /content-items/:id/submissions when type=assignment)
+**POST /modules/:moduleId/content-items/:assignmentId/submissions** (alias: POST /content-items/:id/submissions when type=assignment)
 - Body: `{ text_body?, file_ids: [...] }`
 - Student id = auth user. `UNIQUE (assignment_id, student_id)` — resubmit updates same row
 - File ownership: student may only attach `file_ids` they uploaded
@@ -243,13 +243,13 @@ A teacher cannot download a random student's upload unless it's attached to a su
 **GET /content-items/:assignmentId/submissions/me**
 - Own submission: text, grade, feedback, files
 
-**GET /courses/:courseId/content-items/:assignmentId/submissions** (teacher/admin)
+**GET /modules/:moduleId/content-items/:assignmentId/submissions** (teacher/admin)
 - Full enrolled roster: `enrollments LEFT JOIN submissions` — one row per enrolled student, missing work shown as null
-- Teacher must be enrolled in the course
+- Teacher must be enrolled in the module
 
 **POST /submissions/:id/grade**
 - Body: `{ grade, feedback }`
-- Rule: caller is `teacher` or `admin` AND enrolled in the course owning the submission
+- Rule: caller is `teacher` or `admin` AND enrolled in the module owning the submission
 - Sets `graded_by = auth user`, `graded_at = now`, `grade CHECK 0 <= grade <= max_points` (enforced in app code)
 
 **GET /submissions/:id/files**
@@ -293,13 +293,13 @@ A teacher cannot download a random student's upload unless it's attached to a su
 ### Deadlines (requirement 2)
 
 **GET /users/me/deadlines**
-- Upcoming assignments across all enrolled courses, sorted by `due_at`, with submission status (submitted? grade?)
-- One joined query — no query-per-course loop
+- Upcoming assignments across all enrolled modules, sorted by `due_at`, with submission status (submitted? grade?)
+- One joined query — no query-per-module loop
 
 ### Gradebook
 
-**GET /courses/:id/gradebook**
-- Teacher/admin of course. All enrolled students × all assignments with submission/grade.
+**GET /modules/:id/gradebook**
+- Teacher/admin of module. All enrolled students × all assignments with submission/grade.
 - Student: own row only.
 
 ## Errors
@@ -317,6 +317,7 @@ Codes: 400 bad body, 401 invalid credentials, 403 forbidden, 404 missing, 409 du
 - Interactive game — nothing in ER covers it; no endpoints until defined
 - Multiple submission attempts — single attempt documented above; revisit after capstone
 - Storage backend — local disk for capstone (disappears on container restart; documented ceiling). S3-like later is one config change.
+- Section nesting — content items are flat (files/assignments only); sections removed
 
 ## Framework decision pending
 

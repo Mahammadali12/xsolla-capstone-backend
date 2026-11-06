@@ -1,11 +1,11 @@
 info:
-  name: Update course
+  name: Update module
   type: http
   seq: 4
 
 http:
   method: PATCH
-  url: http://localhost:8080/courses/2
+  url: http://localhost:8080/modules/2
   headers:
     - name: Content-Type
       value: application/json

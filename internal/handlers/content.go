@@ -23,31 +23,31 @@ func NewContentHandlers(svc *service.ContentService) *ContentHandlers {
 }
 
 // @Summary     List content items
-// @Description Get the content tree for a course (sections, files, assignments)
+// @Description Get the content tree for a module (files, assignments)
 // @Tags        content-items
 // @Produce     json
 // @Security    BearerAuth
-// @Param       courseId path int true "Course ID"
+// @Param       moduleId path int true "Module ID"
 // @Success     200 {array} dto.ContentTreeNode
 // @Failure     400 {object} handlers.ErrorResponse
 // @Failure     403 {object} handlers.ErrorResponse
 // @Failure     500 {object} handlers.ErrorResponse
-// @Router      /courses/{courseId}/content-items [get]
+// @Router      /modules/{moduleId}/content-items [get]
 func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
 
-	courseID, err := strconv.ParseInt(r.PathValue("courseId"), 10, 64)
+	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
-		writeError(w, 400, "bad_request", "invalid course ID", nil)
+		writeError(w, 400, "bad_request", "invalid module ID", nil)
 		return
 	}
 
-	items, err := h.svc.GetContentItemsForCourse(r.Context(), userID, role, courseID)
+	items, err := h.svc.GetContentItemsForModule(r.Context(), userID, role, moduleID)
 	if err != nil {
 		log.Printf("content handler: ListContentItems error: %v", err)
 		if errors.Is(err, store.ErrNotEnrolled) {
-			writeError(w, 403, "forbidden", "not enrolled in this course", nil)
+			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
 		} else {
 			writeError(w, 500, "server_error", "could not list content items", nil)
 		}
@@ -58,26 +58,26 @@ func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Reques
 }
 
 // @Summary     Create content item
-// @Description Create a section, file, or assignment (teacher or admin only)
+// @Description Create a file or assignment (teacher or admin only)
 // @Tags        content-items
 // @Accept      json
 // @Produce     json
 // @Security    BearerAuth
-// @Param       courseId path int true "Course ID"
+// @Param       moduleId path int true "Module ID"
 // @Param       request body dto.CreateContentItemRequest true "Content item details"
 // @Success     201 {object} dto.ContentItemResponse
 // @Failure     400 {object} handlers.ErrorResponse
 // @Failure     403 {object} handlers.ErrorResponse
 // @Failure     404 {object} handlers.ErrorResponse
 // @Failure     500 {object} handlers.ErrorResponse
-// @Router      /courses/{courseId}/content-items [post]
+// @Router      /modules/{moduleId}/content-items [post]
 func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
 
-	courseID, err := strconv.ParseInt(r.PathValue("courseId"), 10, 64)
+	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
-		writeError(w, 400, "bad_request", "invalid course ID", nil)
+		writeError(w, 400, "bad_request", "invalid module ID", nil)
 		return
 	}
 
@@ -100,12 +100,14 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		isVisible = *req.IsVisible
 	}
 
-	ci, err := h.svc.CreateContentItem(r.Context(), userID, role, courseID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID)
+	ci, err := h.svc.CreateContentItem(r.Context(), userID, role, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID)
 	if err != nil {
 		log.Printf("content handler: CreateContentItem error: %v", err)
-		if errors.Is(err, service.ErrNotCourseTeacher) {
-			writeError(w, 403, "forbidden", "not the teacher of this course", nil)
-		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongCourse) {
+		if errors.Is(err, service.ErrNotModuleTeacher) {
+			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
+		} else if errors.Is(err, service.ErrUnsupportedContentType) {
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongModule) {
 			writeError(w, 404, "not_found", "parent item not found", nil)
 		} else if errors.Is(err, service.ErrParentMustBeSection) {
 			writeError(w, 400, "bad_request", "parent item must be a section", nil)
@@ -153,7 +155,7 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.Printf("content handler: GetContentItem error: %v", err)
 		if errors.Is(err, store.ErrNotEnrolled) {
-			writeError(w, 403, "forbidden", "not enrolled in this course", nil)
+			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) {
 			writeError(w, 404, "not_found", "content item not found", nil)
 		} else {
@@ -210,8 +212,8 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 	ci, err := h.svc.UpdateContentItem(r.Context(), userID, role, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID)
 	if err != nil {
 		log.Printf("content handler: UpdateContentItem error: %v", err)
-		if errors.Is(err, store.ErrNotCourseTeacher) {
-			writeError(w, 403, "forbidden", "not the teacher of this course", nil)
+		if errors.Is(err, store.ErrNotModuleTeacher) {
+			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) {
 			writeError(w, 404, "not_found", "content item not found", nil)
 		} else {
@@ -255,8 +257,8 @@ func (h *ContentHandlers) DeleteContentItem(w http.ResponseWriter, r *http.Reque
 
 	if err := h.svc.DeleteContentItem(r.Context(), userID, role, itemID); err != nil {
 		log.Printf("content handler: DeleteContentItem error: %v", err)
-		if errors.Is(err, store.ErrNotCourseTeacher) {
-			writeError(w, 403, "forbidden", "not the teacher of this course", nil)
+		if errors.Is(err, store.ErrNotModuleTeacher) {
+			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) {
 			writeError(w, 404, "not_found", "content item not found", nil)
 		} else {

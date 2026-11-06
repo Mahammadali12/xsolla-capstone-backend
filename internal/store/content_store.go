@@ -12,22 +12,22 @@ var (
 	ErrContentItemNotFound = errors.New("content item not found")
 	// ErrParentMustBeSection is returned when a parent item is not a section.
 	ErrParentMustBeSection = errors.New("parent item must be a section")
-	// ErrParentWrongCourse is returned when a parent item belongs to a different course.
-	ErrParentWrongCourse = errors.New("parent item belongs to a different course")
+	// ErrParentWrongModule is returned when a parent item belongs to a different module.
+	ErrParentWrongModule = errors.New("parent item belongs to a different module")
 )
 
 // ContentItem represents a content item row from the database.
 type ContentItem struct {
-	ID          int64
-	CourseID    int64
-	ParentID    *int64
-	Type        string
-	Title       string
+	ID        int64
+	ModuleID  int64
+	ParentID  *int64
+	Type      string
+	Title     string
 	Description string
-	Position    int
-	IsVisible   bool
-	FileID      *int64
-	CreatedAt   time.Time
+	Position  int
+	IsVisible bool
+	FileID    *int64
+	CreatedAt time.Time
 }
 
 // Assignment represents an assignment extension of a content item.
@@ -38,10 +38,10 @@ type Assignment struct {
 }
 
 // CreateContentItem inserts a new content item.
-func (s *Store) CreateContentItem(ctx context.Context, courseID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) (*ContentItem, error) {
+func (s *Store) CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) (*ContentItem, error) {
 	var ci ContentItem
-	err := s.DB().CreateContentItem(ctx, courseID, parentID, itemType, title, description, position, isVisible, fileID).Scan(
-		&ci.ID, &ci.CourseID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
+	err := s.DB().CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID).Scan(
+		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (s *Store) CreateContentItem(ctx context.Context, courseID int64, parentID 
 func (s *Store) GetContentItemByID(ctx context.Context, id int64) (*ContentItem, error) {
 	var ci ContentItem
 	err := s.DB().GetContentItemByID(ctx, id).Scan(
-		&ci.ID, &ci.CourseID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
+		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -64,9 +64,9 @@ func (s *Store) GetContentItemByID(ctx context.Context, id int64) (*ContentItem,
 	return &ci, nil
 }
 
-// GetContentItemsForCourse returns all content items for a course.
-func (s *Store) GetContentItemsForCourse(ctx context.Context, courseID int64, visibleOnly bool) ([]ContentItem, error) {
-	rows, err := s.DB().GetContentItemsForCourse(ctx, courseID, visibleOnly)
+// GetContentItemsForModule returns all content items for a module.
+func (s *Store) GetContentItemsForModule(ctx context.Context, moduleID int64, visibleOnly bool) ([]ContentItem, error) {
+	rows, err := s.DB().GetContentItemsForModule(ctx, moduleID, visibleOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (s *Store) GetContentItemsForCourse(ctx context.Context, courseID int64, vi
 	var items []ContentItem
 	for rows.Next() {
 		var ci ContentItem
-		if err := rows.Scan(&ci.ID, &ci.CourseID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt); err != nil {
+		if err := rows.Scan(&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, ci)
@@ -87,7 +87,7 @@ func (s *Store) GetContentItemsForCourse(ctx context.Context, courseID int64, vi
 func (s *Store) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) (*ContentItem, error) {
 	var ci ContentItem
 	err := s.DB().UpdateContentItem(ctx, id, title, description, position, isVisible, parentID, fileID).Scan(
-		&ci.ID, &ci.CourseID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
+		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

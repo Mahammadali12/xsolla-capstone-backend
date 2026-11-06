@@ -21,7 +21,7 @@ func NewSubmissionService(s *store.Store) *SubmissionService {
 var ErrAlreadySubmitted = errors.New("student has already submitted to this assignment")
 
 // CreateSubmission creates a new submission for a student on an assignment.
-// The student must be enrolled in the course, the content item must be an
+// The student must be enrolled in the module, the content item must be an
 // assignment that is visible, and the student must not already have a submission.
 func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int64, courseID int64, contentItemID int64, textBody string, fileIDs []int64) (*store.Submission, error) {
 	// Verify the content item exists and is an assignment
@@ -39,7 +39,7 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 		return nil, errors.New("assignment is not visible")
 	}
 
-	// Verify the student is enrolled in the course
+	// Verify the student is enrolled in the module
 	enrolled, err := s.store.IsUserEnrolled(ctx, courseID, studentID)
 	if err != nil {
 		return nil, err
@@ -107,12 +107,12 @@ func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64,
 	} else if sub.StudentID == userID {
 		// Student can only view their own submission
 	} else {
-		// Teacher must be enrolled in the course
+		// Teacher must be enrolled in the module
 		ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
 		if err != nil {
 			return nil, err
 		}
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -162,12 +162,12 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 			return nil, err
 		}
 	} else if role == "teacher" {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, store.ErrNotCourseTeacher
+			return nil, store.ErrNotModuleTeacher
 		}
 		submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
 		if err != nil {
@@ -197,7 +197,7 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 }
 
 // UpdateSubmissionGrade updates a submission's grade and feedback.
-// Only the teacher of the course or an admin can grade.
+// Only the teacher of the module or an admin can grade.
 func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID int64, role string, submissionID int64, grade *float64, feedback string) (*store.Submission, error) {
 	sub, err := s.store.GetSubmissionByID(ctx, submissionID)
 	if err != nil {
@@ -211,12 +211,12 @@ func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID in
 		if err != nil {
 			return nil, err
 		}
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, store.ErrNotCourseTeacher
+			return nil, store.ErrNotModuleTeacher
 		}
 	}
 
@@ -253,5 +253,5 @@ func (s *SubmissionService) DeleteSubmission(ctx context.Context, userID int64, 
 		return s.store.DeleteSubmission(ctx, submissionID)
 	}
 
-	return store.ErrNotCourseTeacher
+	return store.ErrNotModuleTeacher
 }

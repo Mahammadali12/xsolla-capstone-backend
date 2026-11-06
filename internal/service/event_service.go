@@ -30,8 +30,8 @@ var ErrEndsBeforeStarts = errors.New("ends_at must be after starts_at")
 // ErrModuleNotFound is returned when module_id references a non-existent content item.
 var ErrModuleNotFound = errors.New("module not found")
 
-// ErrNotTeacherOfCourse is returned when the caller is not the teacher of the course.
-var ErrNotTeacherOfCourse = errors.New("not the teacher of this course")
+// ErrNotTeacherOfModule is returned when the caller is not the teacher of the module.
+var ErrNotTeacherOfModule = errors.New("not the teacher of this module")
 
 // Event represents a calendar event.
 type Event struct {
@@ -94,12 +94,12 @@ func (s *EventService) GetEventByID(ctx context.Context, userID int64, role stri
 		if err != nil {
 			return nil, err
 		}
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, errors.New("not the teacher of this course")
+			return nil, errors.New("not the teacher of this module")
 		}
 	}
 
@@ -123,7 +123,7 @@ func eventFromStorePtr(e *store.Event) *Event {
 
 // CreateEvent creates a new calendar event.
 // Only teachers and admins can create events. module_id must reference a
-// content item in a course the caller teaches (or be nil).
+// content item in a module the caller teaches (or be nil).
 func (s *EventService) CreateEvent(ctx context.Context, userID int64, role string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
 	if role != "teacher" && role != "admin" {
 		return nil, ErrOnlyStaffCanCreateEvent
@@ -133,7 +133,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, role strin
 		return nil, ErrEndsBeforeStarts
 	}
 
-	// Validate module_id references a content item in a course the caller teaches
+	// Validate module_id references a content item in a module the caller teaches
 	if moduleID != nil {
 		ci, err := s.store.GetContentItemByID(ctx, *moduleID)
 		if err != nil {
@@ -143,12 +143,12 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, role strin
 			return nil, err
 		}
 		if role != "admin" {
-			teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+			teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 			if err != nil {
 				return nil, err
 			}
 			if !teacher {
-				return nil, ErrNotTeacherOfCourse
+				return nil, ErrNotTeacherOfModule
 			}
 		}
 	}
@@ -162,7 +162,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, role strin
 }
 
 // UpdateEvent updates an event.
-// Only the creator (via module course ownership) or admin can update.
+// Only the creator (via module ownership) or admin can update.
 func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
 	if role != "teacher" && role != "admin" {
 		return nil, ErrOnlyStaffCanCreateEvent
@@ -183,12 +183,12 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role strin
 		if err != nil {
 			return nil, err
 		}
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, ErrNotTeacherOfCourse
+			return nil, ErrNotTeacherOfModule
 		}
 	}
 
@@ -218,12 +218,12 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID int64, role strin
 		if err != nil {
 			return err
 		}
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return err
 		}
 		if !teacher {
-			return ErrNotTeacherOfCourse
+			return ErrNotTeacherOfModule
 		}
 	}
 

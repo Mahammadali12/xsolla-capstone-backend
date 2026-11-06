@@ -1,0 +1,26 @@
+info:
+  name: Create module
+  type: http
+  seq: 1
+http:
+  method: POST
+  url: http://localhost:8080/modules
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "title": "CS101",
+        "description": "Introduction to Computer Science"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

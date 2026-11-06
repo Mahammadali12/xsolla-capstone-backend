@@ -1,10 +1,10 @@
 info:
-  name: Unenroll from course
+  name: Unenroll from module
   type: http
   seq: 7
 http:
   method: DELETE
-  url: http://localhost:8080/courses/1/enrollments/2
+  url: http://localhost:8080/modules/1/enrollments/2
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}

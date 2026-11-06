@@ -2,20 +2,20 @@ package dto
 
 import "time"
 
-// CreateCourseRequest is the payload for POST /courses.
-type CreateCourseRequest struct {
+// CreateModuleRequest is the payload for POST /modules.
+type CreateModuleRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 }
 
-// UpdateCourseRequest is the payload for PATCH /courses/:id.
-type UpdateCourseRequest struct {
+// UpdateModuleRequest is the payload for PATCH /modules/:id.
+type UpdateModuleRequest struct {
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
-// CourseResponse is the course object returned in responses.
-type CourseResponse struct {
+// ModuleResponse is the module object returned in responses.
+type ModuleResponse struct {
 	ID          int64     `json:"id"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
@@ -23,7 +23,7 @@ type CourseResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// EnrollRequest is the payload for POST /courses/:courseId/enrollments.
+// EnrollRequest is the payload for POST /modules/:moduleId/enrollments.
 type EnrollRequest struct {
 	UserID int64 `json:"user_id"`
 }
@@ -31,7 +31,7 @@ type EnrollRequest struct {
 // EnrollmentResponse is the enrollment object returned in responses.
 type EnrollmentResponse struct {
 	ID        int64     `json:"id"`
-	CourseID  int64     `json:"course_id"`
+	ModuleID  int64     `json:"module_id"`
 	UserID    int64     `json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 }

@@ -1,11 +1,11 @@
 info:
-  name: List course enrollments
+  name: List modules
   type: http
-  seq: 8
+  seq: 2
 
 http:
   method: GET
-  url: http://localhost:8080/courses/1/enrollments
+  url: http://localhost:8080/modules
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}

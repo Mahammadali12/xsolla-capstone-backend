@@ -120,9 +120,9 @@ Needed by teachers/admins to look up `user_id` before enrolling someone.
 
 ---
 
-## Courses
+## Modules
 
-### POST /courses
+### POST /modules
 
 Auth: required (teacher or admin).
 
@@ -136,13 +136,13 @@ Success 201:
 { "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z" }
 ```
 
-Teacher creating a course is auto-enrolled as teacher of that course.
+Teacher creating a module is auto-enrolled as teacher of that module.
 
 Errors: 403.
 
 ---
 
-### GET /courses
+### GET /modules
 
 Auth: required.
 
@@ -151,13 +151,13 @@ Success 200:
 [ { "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z" } ]
 ```
 
-- Student: enrolled courses only.
+- Student: enrolled modules only.
 - Teacher: enrolled + teaching.
-- Admin: all non-deleted courses.
+- Admin: all non-deleted modules.
 
 ---
 
-### GET /courses/:id
+### GET /modules/:id
 
 Auth: required.
 
@@ -166,28 +166,28 @@ Success 200:
 { "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z" }
 ```
 
-Errors: 404, 403 (not enrolled / not teacher of this course).
+Errors: 404, 403 (not enrolled / not teacher of this module).
 
 ---
 
-### PATCH /courses/:id
+### PATCH /modules/:id
 
-Auth: required (course `created_by` or admin).
+Auth: required (module `created_by` or admin).
 
 Body (partial):
 ```json
 { "title": "CS101 Updated" }
 ```
 
-Success 200: updated course row.
+Success 200: updated module row.
 
 Errors: 403, 404.
 
 ---
 
-### DELETE /courses/:id
+### DELETE /modules/:id
 
-Auth: required (course `created_by` or admin).
+Auth: required (module `created_by` or admin).
 
 Success 204: empty body.
 
@@ -199,7 +199,7 @@ Soft delete: sets `deleted_at`. Storage keys of linked files are collected befor
 
 ## Enrollments
 
-### POST /courses/:courseId/enrollments
+### POST /modules/:moduleId/enrollments
 
 Auth: required.
 
@@ -212,14 +212,14 @@ Body:
 
 Success 201:
 ```json
-{ "id": "100", "course_id": "10", "user_id": "5", "created_at": "2026-11-04T13:45:00Z" }
+{ "id": "100", "module_id": "10", "user_id": "5", "created_at": "2026-11-04T13:45:00Z" }
 ```
 
-Errors: 403 (student enrolling another), 409 (already enrolled — `UNIQUE(course_id, user_id)`).
+Errors: 403 (student enrolling another), 409 (already enrolled — `UNIQUE(module_id, user_id)`).
 
 ---
 
-### DELETE /courses/:courseId/enrollments/:userId
+### DELETE /modules/:moduleId/enrollments/:userId
 
 Auth: required.
 
@@ -229,66 +229,58 @@ Errors: 403, 404.
 
 ---
 
-### GET /courses/:courseId/enrollments
+### GET /modules/:moduleId/enrollments
 
-Auth: required (enrolled / teacher / admin of course).
+Auth: required (enrolled / teacher / admin of module).
 
 Success 200:
 ```json
 [
-  { "id": "100", "course_id": "10", "user_id": "5", "user": { "id": "5", "name": "Bob", "email": "bob@x.com" }, "created_at": "2026-11-04T13:45:00Z" }
+  { "id": "100", "module_id": "10", "user_id": "5", "user": { "id": "5", "name": "Bob", "email": "bob@x.com" }, "created_at": "2026-11-04T13:45:00Z" }
 ]
 ```
 
 ---
 
-## Content Items (sections, files, assignments — one route set)
+## Content Items (files, assignments — one route set)
 
 No separate `/assignments/*` routes. An assignment is `content_items.type = 'assignment'`.
+Section type has been removed — content items are flat (no nesting).
 
-### GET /courses/:courseId/content-items
+### GET /modules/:moduleId/content-items
 
-Auth: required (enrolled / teacher / admin of course).
+Auth: required (enrolled / teacher / admin of module).
 
-Success 200 — nested tree:
+Success 200 — flat list:
 ```json
 [
   {
     "id": "200",
-    "type": "section",
-    "title": "Week 1",
+    "type": "file",
+    "title": "syllabus.pdf",
     "position": 1,
     "is_visible": true,
-    "children": [
-      {
-        "id": "201",
-        "type": "file",
-        "title": "syllabus.pdf",
-        "position": 1,
-        "is_visible": true,
-        "file_id": "300"
-      },
-      {
-        "id": "202",
-        "type": "assignment",
-        "title": "Homework 1",
-        "position": 2,
-        "is_visible": true,
-        "due_at": "2026-11-10T23:59:00Z",
-        "max_points": 100
-      }
-    ]
+    "file_id": "300"
+  },
+  {
+    "id": "202",
+    "type": "assignment",
+    "title": "Homework 1",
+    "position": 2,
+    "is_visible": true,
+    "due_at": "2026-11-10T23:59:00Z",
+    "max_points": 100
   }
 ]
 ```
 
-Students/teachers see only `is_visible=true` and non-deleted items. Admin sees all. `position` gives sibling order under the same parent.
+Students/teachers see only `is_visible=true` and non-deleted items. Admin sees all. `position` gives order.
 
 ---
 
-### POST /courses/:courseId/content-items
+### POST /modules/:moduleId/content-items
 
-Auth: required (teacher or admin enrolled in course).
+Auth: required (teacher or admin enrolled in module).
 
 Body:
 ```json
@@ -306,15 +298,15 @@ Body:
 ```
 
 Rules:
-- `parent_id` null = course root; otherwise must point to a `section` in the same course (cycle rejected).
+- `parent_id` must be null (sections removed — no nesting).
 - `type = 'file'`: `file_id` required, must reference a file uploaded by the caller.
 - `type = 'assignment'`: `due_at` and `max_points` required.
-- `type = 'section'`: `file_id` must be null.
-- `position` defaults to last+1 under the parent.
+- `type = 'section'` is not supported (400).
+- `position` defaults to last+1.
 
 Success 201: created item row (includes `due_at`, `max_points` if assignment).
 
-Errors: 400 (cycle / bad parent / missing fields), 403.
+Errors: 400 (bad type / missing fields), 403.
 
 ---
 
@@ -330,25 +322,25 @@ Errors: 403 (not visible and not authorized), 404.
 
 ### PATCH /content-items/:id
 
-Auth: required (teacher/admin of course or item `created_by`).
+Auth: required (teacher/admin of module or item `created_by`).
 
-Body (partial): any of `title`, `description`, `position`, `is_visible`, `parent_id`, `file_id`, `due_at`, `max_points`.
+Body (partial): any of `title`, `description`, `position`, `is_visible`, `file_id`, `due_at`, `max_points`.
 
 Success 200: updated item row.
 
-Errors: 400 (cycle on `parent_id`), 403, 404.
+Errors: 400, 403, 404.
 
 ---
 
 ### DELETE /content-items/:id
 
-Auth: required (teacher/admin of course).
+Auth: required (teacher/admin of module).
 
 Success 204: empty body.
 
 Errors: 403, 404.
 
-Soft delete: sets `deleted_at`. CASCADE soft-deletes children and the `assignments` row. Submissions are preserved (graded work stays).
+Soft delete: sets `deleted_at`. CASCADE soft-deletes the `assignments` row. Submissions are preserved (graded work stays).
 
 ---
 
@@ -398,9 +390,9 @@ Success 200: file stream with `Content-Disposition: attachment`.
 Errors: 403, 404.
 
 **File read rule** — a file is readable if:
-1. linked to a visible, non-deleted content item in a course you're enrolled in, **or**
+1. linked to a visible, non-deleted content item in a module you're enrolled in, **or**
 2. linked to a submission you own, **or**
-3. linked to a submission you may grade (teacher/admin enrolled in the course).
+3. linked to a submission you may grade (teacher/admin enrolled in the module).
 
 ---
 
@@ -418,9 +410,9 @@ Errors: 403, 404, 409 (file still referenced by a content item or submission —
 
 Single attempt per student per assignment. Resubmit updates the same row.
 
-### POST /courses/:courseId/content-items/:assignmentId/submissions
+### POST /modules/:moduleId/content-items/:assignmentId/submissions
 
-Auth: required (student enrolled in the course).
+Auth: required (student enrolled in the module).
 
 Body:
 ```json
@@ -431,7 +423,7 @@ Success 201:
 ```json
 {
   "id": "400",
-  "assignment_id": "202",
+  "content_item_id": "202",
   "student_id": "1",
   "text_body": "Here is my answer",
   "submitted_at": "2026-11-05T10:00:00Z",
@@ -461,9 +453,9 @@ Success 200: single submission object (same shape as above) or 404 if none submi
 
 ---
 
-### GET /courses/:courseId/content-items/:assignmentId/submissions
+### GET /modules/:moduleId/content-items/:assignmentId/submissions
 
-Auth: required (teacher or admin enrolled in course).
+Auth: required (teacher or admin enrolled in module).
 
 Success 200 — full enrolled roster via LEFT JOIN (missing work shown):
 ```json
@@ -477,7 +469,7 @@ Success 200 — full enrolled roster via LEFT JOIN (missing work shown):
 
 ### POST /submissions/:id/grade
 
-Auth: required (teacher/admin enrolled in the course owning this submission's assignment).
+Auth: required (teacher/admin enrolled in the module owning this submission's assignment).
 
 Body:
 ```json
@@ -491,7 +483,7 @@ Success 200:
 
 Rule: `0 <= grade <= max_points` (enforced in application code).
 
-Errors: 403 (not teacher of this course), 404, 422 (grade out of bounds).
+Errors: 403 (not teacher of this module), 404, 422 (grade out of bounds).
 
 ---
 
@@ -526,6 +518,8 @@ Students see only events from modules that have opened (module lock enforced ser
 
 Errors: 403.
 
+---
+
 ### POST /events
 
 Auth: required (teacher or admin only).
@@ -538,11 +532,13 @@ Body:
 Rules:
 - `kind` must be `lecture`, `meeting`, or `off-campus`.
 - `starts_at` must be before `ends_at`.
-- `module_id`, when provided, must reference a content item in a course the caller teaches.
+- `module_id`, when provided, must reference a content item in a module the caller teaches.
 
 Success 201: created event row.
 
 Errors: 400 (invalid dates / missing fields), 403 (not teacher/admin), 404 (module not found).
+
+---
 
 ### PATCH /events/:id
 
@@ -553,6 +549,8 @@ Body (partial): any of `title`, `kind`, `starts_at`, `ends_at`, `all_day`, `loca
 Success 200: updated event row.
 
 Errors: 400 (invalid dates / cycle), 403, 404.
+
+---
 
 ### DELETE /events/:id
 
@@ -649,19 +647,19 @@ Auth: required.
 Success 200:
 ```json
 [
-  { "assignment_id": "202", "course_id": "10", "course_title": "CS101", "title": "Homework 1", "due_at": "2026-11-10T23:59:00Z", "submitted": true, "grade": 85 }
+  { "assignment_id": "202", "module_id": "10", "module_title": "CS101", "title": "Homework 1", "due_at": "2026-11-10T23:59:00Z", "submitted": true, "grade": 85 }
 ]
 ```
 
-Upcoming assignments across all enrolled courses, sorted by `due_at`, with submission status. One joined query — no query-per-course loop.
+Upcoming assignments across all enrolled modules, sorted by `due_at`, with submission status. One joined query — no query-per-module loop.
 
 ---
 
 ## Gradebook
 
-### GET /courses/:id/gradebook
+### GET /modules/:id/gradebook
 
-Auth: required (teacher or admin enrolled in course; student sees own row only).
+Auth: required (teacher or admin enrolled in module; student sees own row only).
 
 Success 200:
 ```json

@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: http://localhost:8080/courses/1/content-items/4/submissions
+  url: http://localhost:8080/modules/1/content-items/1/submissions
   headers:
     - name: Content-Type
       value: application/json
@@ -16,7 +16,7 @@ http:
     data: |-
       {
         "text_body": "This is my homework for HW-2.",
-        "file_ids": [4]
+        "file_ids": [1]
       }
   auth: inherit
 

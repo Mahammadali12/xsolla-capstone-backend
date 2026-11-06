@@ -47,26 +47,26 @@ func (s *FileService) CanReadFile(ctx context.Context, userID int64, role string
 		return f, nil
 	}
 
-	// Linked to a visible content item in an enrolled/teacher course
+	// Linked to a visible content item in an enrolled/teacher module
 	if ci, err := s.store.GetContentItemForFile(ctx, fileID); err == nil && ci != nil {
-		if enrolled, _ := s.store.IsUserEnrolled(ctx, ci.CourseID, userID); enrolled {
+		if enrolled, _ := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID); enrolled {
 			return f, nil
 		}
 		if role == "teacher" {
-			if teacher, _ := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID); teacher {
+			if teacher, _ := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID); teacher {
 				return f, nil
 			}
 		}
 	}
 
-	// Linked to a submission you own, or may grade (teacher/admin enrolled in course)
+	// Linked to a submission you own, or may grade (teacher/admin enrolled in module)
 	if sub, err := s.store.GetSubmissionForFile(ctx, fileID); err == nil && sub != nil {
 		if sub.StudentID == userID {
 			return f, nil
 		}
 		if role == "teacher" || role == "admin" {
 			if ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID); err == nil && ci != nil {
-				if teacher, _ := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID); teacher {
+				if teacher, _ := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID); teacher {
 					return f, nil
 				}
 			}

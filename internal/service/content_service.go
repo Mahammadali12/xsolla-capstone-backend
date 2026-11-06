@@ -14,47 +14,44 @@ type ContentService struct {
 	store *store.Store
 }
 
+// ErrUnsupportedContentType is returned when an unsupported content item type is used.
+var ErrUnsupportedContentType = errors.New("unsupported content item type")
+
 // NewContentService creates a ContentService backed by the given store.
 func NewContentService(s *store.Store) *ContentService {
 	return &ContentService{store: s}
 }
 
 // CreateContentItem creates a new content item.
-func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, role string, courseID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) (*store.ContentItem, error) {
+// Only file and assignment types are supported (sections are removed).
+func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) (*store.ContentItem, error) {
 	// Only teacher or admin can create content items
 	if role != "teacher" && role != "admin" {
-		return nil, store.ErrNotCourseTeacher
+		return nil, store.ErrNotModuleTeacher
 	}
 
-	// Teacher must be enrolled in/teach the course
+	// Only file and assignment types are supported (sections removed)
+	if itemType == "section" {
+		return nil, ErrUnsupportedContentType
+	}
+
+	// Teacher must be enrolled in/teach the module
 	if role == "teacher" {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, courseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, store.ErrNotCourseTeacher
+			return nil, store.ErrNotModuleTeacher
 		}
 	}
 
-	// If parent_id is set, validate it belongs to the same course and is a section
+	// If parent_id is set, validate it belongs to the same module and is a section (not supported anymore — sections removed)
 	if parentID != nil {
-		parent, err := s.store.GetContentItemByID(ctx, *parentID)
-		if err != nil {
-			if errors.Is(err, store.ErrContentItemNotFound) {
-				return nil, store.ErrContentItemNotFound
-			}
-			return nil, err
-		}
-		if parent.CourseID != courseID {
-			return nil, ErrParentWrongCourse
-		}
-		if parent.Type != "section" {
-			return nil, ErrParentMustBeSection
-		}
+		return nil, errors.New("parent_id is not supported; sections have been removed")
 	}
 
-	ci, err := s.store.CreateContentItem(ctx, courseID, parentID, itemType, title, description, position, isVisible, fileID)
+	ci, err := s.store.CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID)
 	if err != nil {
 		log.Printf("content service: CreateContentItem store error: %v", err)
 		return nil, err
@@ -81,7 +78,7 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 		return ci, nil
 	}
 
-	enrolled, err := s.store.IsUserEnrolled(ctx, ci.CourseID, userID)
+	enrolled, err := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +88,7 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 
 	// If item is not visible, only teacher/admin can see it
 	if !ci.IsVisible && role != "admin" {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -103,18 +100,18 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 	return ci, nil
 }
 
-// GetContentItemsForCourse returns the content tree for a course.
-func (s *ContentService) GetContentItemsForCourse(ctx context.Context, userID int64, role string, courseID int64) ([]store.ContentItem, error) {
+// GetContentItemsForModule returns the content tree for a module.
+func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.ContentItem, error) {
 	if role == "admin" {
-		return s.store.GetContentItemsForCourse(ctx, courseID, false)
+		return s.store.GetContentItemsForModule(ctx, moduleID, false)
 	}
 
-	enrolled, err := s.store.IsUserEnrolled(ctx, courseID, userID)
+	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
 	if err != nil {
 		return nil, err
 	}
 	if !enrolled {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, courseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +120,7 @@ func (s *ContentService) GetContentItemsForCourse(ctx context.Context, userID in
 		}
 	}
 
-	return s.store.GetContentItemsForCourse(ctx, courseID, true)
+	return s.store.GetContentItemsForModule(ctx, moduleID, true)
 }
 
 // UpdateContentItem updates a content item if the user is authorized.
@@ -134,38 +131,12 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 	}
 
 	if role != "admin" {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, store.ErrNotCourseTeacher
-		}
-	}
-
-	// Validate parent change
-	if parentID != nil {
-		if ci.ParentID == nil || *parentID != *ci.ParentID {
-			if ci.Type != "section" {
-				return nil, errors.New("only sections can have children")
-			}
-			parent, err := s.store.GetContentItemByID(ctx, *parentID)
-			if err != nil {
-				if errors.Is(err, store.ErrContentItemNotFound) {
-					return nil, store.ErrContentItemNotFound
-				}
-				return nil, err
-			}
-			if parent.CourseID != ci.CourseID {
-				return nil, errors.New("parent item belongs to a different course")
-			}
-			if parent.Type != "section" {
-				return nil, errors.New("parent item must be a section")
-			}
-			// Cycle prevention: parent cannot be a descendant of this item
-			if isDescendant(ctx, s.store, ci.ID, *parentID) {
-				return nil, errors.New("cannot set parent to a descendant item (cycle)")
-			}
+			return nil, store.ErrNotModuleTeacher
 		}
 	}
 
@@ -180,12 +151,12 @@ func (s *ContentService) DeleteContentItem(ctx context.Context, userID int64, ro
 	}
 
 	if role != "admin" {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return err
 		}
 		if !teacher {
-			return store.ErrNotCourseTeacher
+			return store.ErrNotModuleTeacher
 		}
 	}
 
@@ -200,12 +171,12 @@ func (s *ContentService) GetAssignmentByContentItemID(ctx context.Context, userI
 	}
 
 	if role != "admin" {
-		enrolled, err := s.store.IsUserEnrolled(ctx, ci.CourseID, userID)
+		enrolled, err := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !enrolled {
-			teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+			teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 			if err != nil {
 				return nil, err
 			}
@@ -226,33 +197,14 @@ func (s *ContentService) UpdateAssignment(ctx context.Context, userID int64, rol
 	}
 
 	if role != "admin" {
-		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
 		if !teacher {
-			return nil, store.ErrNotCourseTeacher
+			return nil, store.ErrNotModuleTeacher
 		}
 	}
 
 	return s.store.UpdateAssignment(ctx, contentItemID, dueAt, maxPoints)
-}
-
-// isDescendant checks if descendantID is a descendant of ancestorID (cycle prevention).
-func isDescendant(ctx context.Context, store *store.Store, ancestorID int64, descendantID int64) bool {
-	// Walk up from descendantID to see if we reach ancestorID
-	currentID := descendantID
-	for {
-		ci, err := store.GetContentItemByID(ctx, currentID)
-		if err != nil {
-			return false
-		}
-		if ci.ParentID == nil {
-			return false
-		}
-		if *ci.ParentID == ancestorID {
-			return true
-		}
-		currentID = *ci.ParentID
-	}
 }

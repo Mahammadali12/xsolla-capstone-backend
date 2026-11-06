@@ -362,28 +362,28 @@ const docTemplate = `{
                 }
             }
         },
-        "/courses": {
+        "/modules": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get courses the user is enrolled in (student), teaching (teacher), or all (admin)",
+                "description": "Get modules the user is enrolled in (student), teaching (teacher), or all (admin)",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "courses"
                 ],
-                "summary": "List courses",
+                "summary": "List modules",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/dto.CourseResponse"
+                                "$ref": "#/definitions/dto.ModuleResponse"
                             }
                         }
                     },
@@ -407,7 +407,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new course (teacher or admin only). The creator is auto-enrolled as teacher.",
+                "description": "Create a new module (teacher or admin only). The creator is auto-enrolled as teacher.",
                 "consumes": [
                     "application/json"
                 ],
@@ -417,7 +417,7 @@ const docTemplate = `{
                 "tags": [
                     "courses"
                 ],
-                "summary": "Create course",
+                "summary": "Create module",
                 "parameters": [
                     {
                         "description": "Course details",
@@ -425,7 +425,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CreateCourseRequest"
+                            "$ref": "#/definitions/dto.CreateModuleRequest"
                         }
                     }
                 ],
@@ -433,7 +433,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/dto.CourseResponse"
+                            "$ref": "#/definitions/dto.ModuleResponse"
                         }
                     },
                     "400": {
@@ -457,14 +457,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/courses/{courseId}/content-items": {
+        "/modules/{moduleId}/content-items": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get the content tree for a course (sections, files, assignments)",
+                "description": "Get the content tree for a module (files, assignments)",
                 "produces": [
                     "application/json"
                 ],
@@ -476,7 +476,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Course ID",
-                        "name": "courseId",
+                        "name": "moduleId",
                         "in": "path",
                         "required": true
                     }
@@ -532,7 +532,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Course ID",
-                        "name": "courseId",
+                        "name": "moduleId",
                         "in": "path",
                         "required": true
                     },
@@ -580,26 +580,26 @@ const docTemplate = `{
                 }
             }
         },
-        "/courses/{courseId}/enrollments": {
+        "/modules/{moduleId}/enrollments": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all enrollments for a course (members must be enrolled/teacher/admin)",
+                "description": "Get all enrollments for a module (members must be enrolled/teacher/admin)",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "enrollments"
                 ],
-                "summary": "List course enrollments",
+                "summary": "List module enrollments",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "Course ID",
-                        "name": "courseId",
+                        "name": "moduleId",
                         "in": "path",
                         "required": true
                     }
@@ -640,7 +640,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Enroll a user in a course. Students can only enroll themselves, teachers/admins can enroll anyone",
+                "description": "Enroll a user in a module. Students can only enroll themselves, teachers/admins can enroll anyone",
                 "consumes": [
                     "application/json"
                 ],
@@ -650,12 +650,12 @@ const docTemplate = `{
                 "tags": [
                     "enrollments"
                 ],
-                "summary": "Enroll in course",
+                "summary": "Enroll in module",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "Course ID",
-                        "name": "courseId",
+                        "name": "moduleId",
                         "in": "path",
                         "required": true
                     },
@@ -697,23 +697,23 @@ const docTemplate = `{
                 }
             }
         },
-        "/courses/{courseId}/enrollments/{userId}": {
+        "/modules/{moduleId}/enrollments/{userId}": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Remove a user from a course. Students can only unenroll themselves",
+                "description": "Remove a user from a module. Students can only unenroll themselves",
                 "tags": [
                     "enrollments"
                 ],
-                "summary": "Unenroll from course",
+                "summary": "Unenroll from module",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "Course ID",
-                        "name": "courseId",
+                        "name": "moduleId",
                         "in": "path",
                         "required": true
                     },
@@ -753,21 +753,21 @@ const docTemplate = `{
                 }
             }
         },
-        "/courses/{id}": {
+        "/modules/{id}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get course details if the user is enrolled or is the teacher",
+                "description": "Get module details if the user is enrolled or is the teacher",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "courses"
                 ],
-                "summary": "Get course by ID",
+                "summary": "Get module by ID",
                 "parameters": [
                     {
                         "type": "integer",
@@ -781,7 +781,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.CourseResponse"
+                            "$ref": "#/definitions/dto.ModuleResponse"
                         }
                     },
                     "400": {
@@ -810,11 +810,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Soft-delete a course (teacher or admin only)",
+                "description": "Soft-delete a module (teacher or admin only)",
                 "tags": [
                     "courses"
                 ],
-                "summary": "Delete course",
+                "summary": "Delete module",
                 "parameters": [
                     {
                         "type": "integer",
@@ -857,7 +857,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update course title/description (teacher or admin only)",
+                "description": "Update module title/description (teacher or admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -867,7 +867,7 @@ const docTemplate = `{
                 "tags": [
                     "courses"
                 ],
-                "summary": "Update course",
+                "summary": "Update module",
                 "parameters": [
                     {
                         "type": "integer",
@@ -882,7 +882,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.UpdateCourseRequest"
+                            "$ref": "#/definitions/dto.UpdateModuleRequest"
                         }
                     }
                 ],
@@ -890,7 +890,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.CourseResponse"
+                            "$ref": "#/definitions/dto.ModuleResponse"
                         }
                     },
                     "400": {
@@ -1110,7 +1110,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CourseResponse": {
+        "dto.ModuleResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -1156,7 +1156,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateCourseRequest": {
+        "dto.CreateModuleRequest": {
             "type": "object",
             "properties": {
                 "description": {
@@ -1295,7 +1295,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateCourseRequest": {
+        "dto.UpdateModuleRequest": {
             "type": "object",
             "properties": {
                 "description": {
@@ -1375,7 +1375,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Xsolla School LMS API",
-	Description:      "API for Xsolla School LMS - Courses, Content Items, Submissions, and File Uploads",
+	Description:      "API for Xsolla School LMS - Modules, Content Items, Submissions, and File Uploads",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

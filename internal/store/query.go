@@ -76,150 +76,150 @@ func (q *Query) GetUserByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
-// Course queries
+// Module queries
 
-func (q *Query) CreateCourse(ctx context.Context, title string, description string, createdBy int64) *sql.Row {
+func (q *Query) CreateModule(ctx context.Context, title string, description string, createdBy int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO courses (title, description, created_by) VALUES ($1, $2, $3) RETURNING id, title, description, created_by, created_at`,
+		`INSERT INTO modules (title, description, created_by) VALUES ($1, $2, $3) RETURNING id, title, description, created_by, created_at`,
 		title, description, createdBy,
 	)
 }
 
-func (q *Query) GetCourseByID(ctx context.Context, id int64) *sql.Row {
+func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, title, description, created_by, created_at FROM courses WHERE id = $1 AND deleted_at IS NULL`,
+		`SELECT id, title, description, created_by, created_at FROM modules WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
 }
 
-func (q *Query) GetCoursesForUser(ctx context.Context, userID int64, role string) (*sql.Rows, error) {
+func (q *Query) GetModulesForUser(ctx context.Context, userID int64, role string) (*sql.Rows, error) {
 	if role == "admin" {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT c.id, c.title, c.description, c.created_by, c.created_at
-			 FROM courses c WHERE c.deleted_at IS NULL`,
+			`SELECT m.id, m.title, m.description, m.created_by, m.created_at
+			 FROM modules m WHERE m.deleted_at IS NULL`,
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT c.id, c.title, c.description, c.created_by, c.created_at
-		 FROM courses c
-		 JOIN enrollments e ON e.course_id = c.id
-		 WHERE c.deleted_at IS NULL AND e.user_id = $1`,
+		`SELECT m.id, m.title, m.description, m.created_by, m.created_at
+		 FROM modules m
+		 JOIN enrollments e ON e.module_id = m.id
+		 WHERE m.deleted_at IS NULL AND e.user_id = $1`,
 		userID,
 	)
 }
 
-func (q *Query) PatchCourse(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) *sql.Row {
+func (q *Query) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) *sql.Row {
 	if isAdmin {
 		return q.DBTX.QueryRowContext(ctx,
-			`UPDATE courses SET title = COALESCE($2, title), description = COALESCE($3, description)
+			`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description)
 			 WHERE id = $1 AND deleted_at IS NULL
 			 RETURNING id, title, description, created_by, created_at`,
 			id, title, description,
 		)
 	}
 	return q.DBTX.QueryRowContext(ctx,
-		`UPDATE courses SET title = COALESCE($2, title), description = COALESCE($3, description)
+		`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description)
 		 WHERE id = $1 AND created_by = $4 AND deleted_at IS NULL
 		 RETURNING id, title, description, created_by, created_at`,
 		id, title, description, createdBy,
 	)
 }
 
-func (q *Query) DeleteCourse(ctx context.Context, id int64, createdBy int64, isAdmin bool) (sql.Result, error) {
+func (q *Query) DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) (sql.Result, error) {
 	if isAdmin {
 		return q.DBTX.ExecContext(ctx,
-			`UPDATE courses SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+			`UPDATE modules SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
 			id,
 		)
 	}
 	return q.DBTX.ExecContext(ctx,
-		`UPDATE courses SET deleted_at = NOW() WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+		`UPDATE modules SET deleted_at = NOW() WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
 		id, createdBy,
 	)
 }
 
 // Enrollment queries
 
-func (q *Query) CreateEnrollment(ctx context.Context, courseID int64, userID int64) *sql.Row {
+func (q *Query) CreateEnrollment(ctx context.Context, moduleID int64, userID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO enrollments (course_id, user_id) VALUES ($1, $2) RETURNING id, course_id, user_id, created_at`,
-		courseID, userID,
+		`INSERT INTO enrollments (module_id, user_id) VALUES ($1, $2) RETURNING id, module_id, user_id, created_at`,
+		moduleID, userID,
 	)
 }
 
-func (q *Query) DeleteEnrollment(ctx context.Context, courseID int64, userID int64) (sql.Result, error) {
+func (q *Query) DeleteEnrollment(ctx context.Context, moduleID int64, userID int64) (sql.Result, error) {
 	return q.DBTX.ExecContext(ctx,
-		`DELETE FROM enrollments WHERE course_id = $1 AND user_id = $2`,
-		courseID, userID,
+		`DELETE FROM enrollments WHERE module_id = $1 AND user_id = $2`,
+		moduleID, userID,
 	)
 }
 
-func (q *Query) GetEnrollmentsForCourse(ctx context.Context, courseID int64) (*sql.Rows, error) {
+func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.course_id, e.user_id, e.created_at, u.email, u.name, u.role
+		`SELECT e.id, e.module_id, e.user_id, e.created_at, u.email, u.name, u.role
 		 FROM enrollments e
 		 JOIN users u ON u.id = e.user_id
-		 WHERE e.course_id = $1`,
-		courseID,
+		 WHERE e.module_id = $1`,
+		moduleID,
 	)
 }
 
-func (q *Query) IsUserEnrolled(ctx context.Context, courseID int64, userID int64) *sql.Row {
+func (q *Query) IsUserEnrolled(ctx context.Context, moduleID int64, userID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT 1 FROM enrollments WHERE course_id = $1 AND user_id = $2`,
-		courseID, userID,
+		`SELECT 1 FROM enrollments WHERE module_id = $1 AND user_id = $2`,
+		moduleID, userID,
 	)
 }
 
-func (q *Query) IsUserTeacherOfCourse(ctx context.Context, courseID int64, userID int64) *sql.Row {
+func (q *Query) IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT 1 FROM courses WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
-		courseID, userID,
+		`SELECT 1 FROM modules WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+		moduleID, userID,
 	)
 }
 
 // Content item queries
 
-func (q *Query) CreateContentItem(ctx context.Context, courseID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) *sql.Row {
+func (q *Query) CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO content_items (course_id, parent_id, type, title, description, position, is_visible, file_id)
+		`INSERT INTO content_items (module_id, parent_id, type, title, description, position, is_visible, file_id)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
-		courseID, parentID, itemType, title, description, position, isVisible, fileID,
+		 RETURNING id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
+		moduleID, parentID, itemType, title, description, position, isVisible, fileID,
 	)
 }
 
 func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+		`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
 		 FROM content_items WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
 }
 
-func (q *Query) GetContentItemsForCourse(ctx context.Context, courseID int64, visibleOnly bool) (*sql.Rows, error) {
+func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, visibleOnly bool) (*sql.Rows, error) {
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+			`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
 			 FROM content_items
-			 WHERE course_id = $1 AND is_visible = true AND deleted_at IS NULL
+			 WHERE module_id = $1 AND is_visible = true AND deleted_at IS NULL
 			 ORDER BY position`,
-			courseID,
+			moduleID,
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+		`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
 		 FROM content_items
-			 WHERE course_id = $1 AND deleted_at IS NULL
+			 WHERE module_id = $1 AND deleted_at IS NULL
 		 ORDER BY position`,
-		courseID,
+		moduleID,
 	)
 }
 
 func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visibleOnly bool) (*sql.Rows, error) {
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+			`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
 			 FROM content_items
 			 WHERE parent_id = $1 AND is_visible = true AND deleted_at IS NULL
 			 ORDER BY position`,
@@ -227,7 +227,7 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at
+		`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
 			 FROM content_items
 			 WHERE parent_id = $1 AND deleted_at IS NULL
 		 ORDER BY position`,
@@ -245,7 +245,7 @@ func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, d
 		     parent_id = COALESCE($6, parent_id),
 		     file_id = COALESCE($7, file_id)
 		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, course_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
+		 RETURNING id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
 		id, title, description, position, isVisible, parentID, fileID,
 	)
 }
@@ -329,7 +329,7 @@ func (q *Query) DeleteFile(ctx context.Context, id int64) (sql.Result, error) {
 
 func (q *Query) GetContentItemForFile(ctx context.Context, fileID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, course_id FROM content_items WHERE file_id = $1 AND deleted_at IS NULL LIMIT 1`,
+		`SELECT id, module_id FROM content_items WHERE file_id = $1 AND deleted_at IS NULL LIMIT 1`,
 		fileID,
 	)
 }
@@ -469,7 +469,7 @@ func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 			from, to,
 		)
 	}
-	// Teacher: events for courses they teach
+	// Teacher: events for modules they teach
 	if role == "teacher" {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
@@ -479,14 +479,14 @@ func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 			   AND e.starts_at <= $3
 			   AND e.ends_at >= $2
 			   AND (ci.id IS NULL OR ci.deleted_at IS NULL)
-			   AND (ci.id IS NULL OR ci.course_id IN (
-			     SELECT c.id FROM courses c WHERE c.created_by = $1 AND c.deleted_at IS NULL
+			   AND (ci.id IS NULL OR ci.module_id IN (
+			     SELECT m.id FROM modules m WHERE m.created_by = $1 AND m.deleted_at IS NULL
 			   ))
 			 ORDER BY e.starts_at`,
 			userID, from, to,
 		)
 	}
-	// Student: only events from modules in courses they're enrolled in
+	// Student: only events from modules in modules they're enrolled in
 	return q.DBTX.QueryContext(ctx,
 		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
 		 FROM events e
@@ -495,10 +495,10 @@ func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 		   AND e.starts_at <= $3
 		   AND e.ends_at >= $2
 		   AND (ci.id IS NULL OR ci.deleted_at IS NULL)
-		   AND (ci.id IS NULL OR ci.course_id IN (
-		     SELECT c.id FROM courses c
-		     JOIN enrollments en ON en.course_id = c.id
-		     WHERE c.deleted_at IS NULL AND en.user_id = $1
+		   AND (ci.id IS NULL OR ci.module_id IN (
+		     SELECT m.id FROM modules m
+		     JOIN enrollments en ON en.module_id = m.id
+		     WHERE m.deleted_at IS NULL AND en.user_id = $1
 		   ))
 		 ORDER BY e.starts_at`,
 		userID, from, to,
@@ -535,8 +535,8 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 		 WHERE id = $1 AND deleted_at IS NULL
 		   AND module_id IN (
 		     SELECT ci.id FROM content_items ci
-		     WHERE ci.course_id IN (
-		       SELECT c.id FROM courses c WHERE c.created_by = $10 AND c.deleted_at IS NULL
+		     WHERE ci.module_id IN (
+		       SELECT m.id FROM modules m WHERE m.created_by = $10 AND m.deleted_at IS NULL
 		     )
 		   )
 		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, created_at`,
@@ -555,8 +555,8 @@ func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin
 		`UPDATE events SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
 		 AND module_id IN (
 		   SELECT ci.id FROM content_items ci
-		   WHERE ci.course_id IN (
-		     SELECT c.id FROM courses c WHERE c.created_by = $2 AND c.deleted_at IS NULL
+		   WHERE ci.module_id IN (
+		     SELECT m.id FROM modules m WHERE m.created_by = $2 AND m.deleted_at IS NULL
 		   )
 		 )`,
 		id, userID,

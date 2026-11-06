@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: http://localhost:8080/courses/1/content-items/2/submissions/me
+  url: http://localhost:8080/modules/1/content-items/1/submissions/me
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}

@@ -28,9 +28,9 @@ func NewSubmissionHandlers(svc *service.SubmissionService) *SubmissionHandlers {
 func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 
-	courseID, err := strconv.ParseInt(r.PathValue("courseId"), 10, 64)
+	courseID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
-		writeError(w, 400, "bad_request", "invalid course ID", nil)
+		writeError(w, 400, "bad_request", "invalid module ID", nil)
 		return
 	}
 	contentItemID, err := strconv.ParseInt(r.PathValue("assignmentId"), 10, 64)
@@ -50,7 +50,7 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 		log.Printf("submission handler: CreateSubmission error: %v", err)
 		switch {
 		case errors.Is(err, store.ErrNotEnrolled):
-			writeError(w, 403, "forbidden", "not enrolled in this course", nil)
+			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
 		case errors.Is(err, store.ErrContentItemNotFound):
 			writeError(w, 404, "not_found", "assignment not found", nil)
 		case errors.Is(err, service.ErrAlreadySubmitted):
@@ -94,10 +94,10 @@ func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Requ
 		log.Printf("submission handler: ListSubmissions error: %v", err)
 		if errors.Is(err, store.ErrContentItemNotFound) {
 			writeError(w, 404, "not_found", "assignment not found", nil)
-		} else if errors.Is(err, store.ErrNotCourseTeacher) {
-			writeError(w, 403, "forbidden", "not the teacher of this course", nil)
+		} else if errors.Is(err, store.ErrNotModuleTeacher) {
+			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, store.ErrNotEnrolled) {
-			writeError(w, 403, "forbidden", "not enrolled in this course", nil)
+			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
 		} else {
 			writeError(w, 500, "server_error", "could not list submissions", nil)
 		}
@@ -181,8 +181,8 @@ func (h *SubmissionHandlers) GradeSubmission(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Printf("submission handler: GradeSubmission error: %v", err)
 		switch {
-		case errors.Is(err, store.ErrNotCourseTeacher):
-			writeError(w, 403, "forbidden", "not the teacher of this course", nil)
+		case errors.Is(err, store.ErrNotModuleTeacher):
+			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		case errors.Is(err, store.ErrSubmissionNotFound):
 			writeError(w, 404, "not_found", "submission not found", nil)
 		default:
@@ -228,7 +228,7 @@ func (h *SubmissionHandlers) GetSubmissionFiles(w http.ResponseWriter, r *http.R
 	if err != nil {
 		if errors.Is(err, store.ErrSubmissionNotFound) {
 			writeError(w, 404, "not_found", "submission not found", nil)
-		} else if errors.Is(err, store.ErrNotCourseTeacher) || errors.Is(err, store.ErrNotEnrolled) {
+		} else if errors.Is(err, store.ErrNotModuleTeacher) || errors.Is(err, store.ErrNotEnrolled) {
 			writeError(w, 403, "forbidden", "cannot access this submission", nil)
 		} else {
 			log.Printf("submission handler: GetSubmissionFiles error: %v", err)
