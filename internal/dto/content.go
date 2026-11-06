@@ -2,15 +2,17 @@ package dto
 
 import "time"
 
-// CreateContentItemRequest is the payload for POST /courses/:courseId/content-items.
+// CreateContentItemRequest is the payload for POST /modules/:moduleId/content-items.
 type CreateContentItemRequest struct {
-	ParentID    *int64  `json:"parent_id"`
-	Type        string  `json:"type"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Position    *int    `json:"position"`
-	IsVisible   *bool   `json:"is_visible"`
-	FileID      *int64  `json:"file_id"`
+	ParentID    *int64   `json:"parent_id"`
+	Type        string   `json:"type"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Position    *int     `json:"position"`
+	IsVisible   *bool    `json:"is_visible"`
+	FileID      *int64   `json:"file_id"`
+	DueAt       *time.Time `json:"due_at"`
+	MaxPoints   int      `json:"max_points"`
 }
 
 // UpdateContentItemRequest is the payload for PATCH /content-items/:id.
@@ -34,6 +36,8 @@ type ContentItemResponse struct {
 	FileID      *int64      `json:"file_id"`
 	ParentID    *int64      `json:"parent_id"`
 	CreatedAt   time.Time   `json:"created_at"`
+	DueAt       *time.Time  `json:"due_at,omitempty"`
+	MaxPoints   int         `json:"max_points,omitempty"`
 	Children    []ContentItemResponse `json:"children,omitempty"`
 }
 
@@ -44,7 +48,7 @@ type AssignmentResponse struct {
 	MaxPoints     int       `json:"max_points"`
 }
 
-// ContentTreeResponse is the tree response for GET /courses/:courseId/content-items.
+// ContentTreeResponse is the tree response for GET /modules/:moduleId/content-items.
 type ContentTreeResponse []ContentTreeNode
 
 type ContentTreeNode struct {

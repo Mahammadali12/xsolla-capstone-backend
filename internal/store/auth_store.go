@@ -24,7 +24,7 @@ func IsDuplicateEmail(err error) bool {
 }
 
 // CreateUser inserts a new user and returns the generated ID.
-func (s *Store) CreateUser(ctx context.Context, email string, name string, role string, passwordHash string) (int64, error) {
+func (s *StoreImpl) CreateUser(ctx context.Context, email string, name string, role string, passwordHash string) (int64, error) {
 	var id int64
 	err := s.DB().InsertUser(ctx, email, name, role, passwordHash).Scan(&id)
 	if err != nil {
@@ -37,15 +37,15 @@ func (s *Store) CreateUser(ctx context.Context, email string, name string, role 
 	return id, nil
 }
 
-// CountUsers returns the total number of users.
-func (s *Store) CountUsers(ctx context.Context) (int, error) {
+// GetUserCount returns the total number of users.
+func (s *StoreImpl) GetUserCount(ctx context.Context) (int, error) {
 	var count int
 	err := s.DB().GetUserCount(ctx).Scan(&count)
 	return count, err
 }
 
 // GetUserByEmail looks up a user by email (case-insensitive).
-func (s *Store) GetUserByEmail(ctx context.Context, email string) (int64, string, string, error) {
+func (s *StoreImpl) GetUserByEmail(ctx context.Context, email string) (int64, string, string, error) {
 	var id int64
 	var hash, role string
 	err := s.DB().GetUserByEmail(ctx, email).Scan(&id, &hash, &role)
@@ -59,25 +59,25 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (int64, string
 }
 
 // SaveRefreshToken stores a refresh token hash for a user.
-func (s *Store) SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
+func (s *StoreImpl) SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
 	_, err := s.DB().InsertRefreshToken(ctx, userID, tokenHash, expiresAt)
 	return err
 }
 
 // DeleteRefreshTokensForUser removes all refresh tokens for a user.
-func (s *Store) DeleteRefreshTokensForUser(ctx context.Context, userID int64) error {
+func (s *StoreImpl) DeleteRefreshTokensForUser(ctx context.Context, userID int64) error {
 	_, err := s.DB().DeleteRefreshTokensForUser(ctx, userID)
 	return err
 }
 
 // DeleteRefreshToken removes a refresh token by hash.
-func (s *Store) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
+func (s *StoreImpl) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	_, err := s.DB().DeleteRefreshToken(ctx, tokenHash)
 	return err
 }
 
 // GetUserByID looks up a user by ID.
-func (s *Store) GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error) {
+func (s *StoreImpl) GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error) {
 	var userID int64
 	var email, name, role string
 	var createdAt time.Time
@@ -92,7 +92,7 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (int64, string, strin
 }
 
 // FindRefreshTokenByHash looks up an active refresh token by hash.
-func (s *Store) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error) {
+func (s *StoreImpl) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error) {
 	var userID int64
 	var tokenHashOut string
 	var expiresAt time.Time

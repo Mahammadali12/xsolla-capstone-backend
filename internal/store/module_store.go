@@ -41,7 +41,7 @@ type Enrollment struct {
 }
 
 // CreateModule inserts a new module.
-func (s *Store) CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error) {
+func (s *StoreImpl) CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error) {
 	var m Module
 	err := s.DB().CreateModule(ctx, title, description, createdBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt)
 	if err != nil {
@@ -51,7 +51,7 @@ func (s *Store) CreateModule(ctx context.Context, title string, description stri
 }
 
 // GetModuleByID returns a module by ID if it exists and is not deleted.
-func (s *Store) GetModuleByID(ctx context.Context, id int64) (*Module, error) {
+func (s *StoreImpl) GetModuleByID(ctx context.Context, id int64) (*Module, error) {
 	var m Module
 	err := s.DB().GetModuleByID(ctx, id).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt)
 	if err != nil {
@@ -64,7 +64,7 @@ func (s *Store) GetModuleByID(ctx context.Context, id int64) (*Module, error) {
 }
 
 // GetModulesForUser returns modules accessible to the user based on their role.
-func (s *Store) GetModulesForUser(ctx context.Context, userID int64, role string) ([]Module, error) {
+func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, role string) ([]Module, error) {
 	rows, err := s.DB().GetModulesForUser(ctx, userID, role)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (s *Store) GetModulesForUser(ctx context.Context, userID int64, role string
 }
 
 // PatchModule updates a module title/description if the user is authorized.
-func (s *Store) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error) {
+func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error) {
 	var m Module
 	err := s.DB().PatchModule(ctx, id, title, description, createdBy, isAdmin).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *Store) PatchModule(ctx context.Context, id int64, title string, descrip
 }
 
 // DeleteModule soft-deletes a module if the user is authorized.
-func (s *Store) DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) error {
+func (s *StoreImpl) DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) error {
 	result, err := s.DB().DeleteModule(ctx, id, createdBy, isAdmin)
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func (s *Store) DeleteModule(ctx context.Context, id int64, createdBy int64, isA
 }
 
 // CreateEnrollment creates an enrollment record.
-func (s *Store) CreateEnrollment(ctx context.Context, moduleID int64, userID int64) (*Enrollment, error) {
+func (s *StoreImpl) CreateEnrollment(ctx context.Context, moduleID int64, userID int64) (*Enrollment, error) {
 	var e Enrollment
 	err := s.DB().CreateEnrollment(ctx, moduleID, userID).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt)
 	if err != nil {
@@ -123,7 +123,7 @@ func (s *Store) CreateEnrollment(ctx context.Context, moduleID int64, userID int
 }
 
 // DeleteEnrollment removes an enrollment record.
-func (s *Store) DeleteEnrollment(ctx context.Context, moduleID int64, userID int64) error {
+func (s *StoreImpl) DeleteEnrollment(ctx context.Context, moduleID int64, userID int64) error {
 	result, err := s.DB().DeleteEnrollment(ctx, moduleID, userID)
 	if err != nil {
 		return err
@@ -136,7 +136,7 @@ func (s *Store) DeleteEnrollment(ctx context.Context, moduleID int64, userID int
 }
 
 // GetEnrollmentsForModule returns all enrollments for a module with user details.
-func (s *Store) GetEnrollmentsForModule(ctx context.Context, moduleID int64) ([]Enrollment, error) {
+func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64) ([]Enrollment, error) {
 	rows, err := s.DB().GetEnrollmentsForModule(ctx, moduleID)
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func (s *Store) GetEnrollmentsForModule(ctx context.Context, moduleID int64) ([]
 }
 
 // IsUserEnrolled checks if a user is enrolled in a module.
-func (s *Store) IsUserEnrolled(ctx context.Context, moduleID int64, userID int64) (bool, error) {
+func (s *StoreImpl) IsUserEnrolled(ctx context.Context, moduleID int64, userID int64) (bool, error) {
 	var exists int
 	err := s.DB().IsUserEnrolled(ctx, moduleID, userID).Scan(&exists)
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *Store) IsUserEnrolled(ctx context.Context, moduleID int64, userID int64
 }
 
 // IsUserTeacherOfModule checks if a user created (teaches) a module.
-func (s *Store) IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) (bool, error) {
+func (s *StoreImpl) IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) (bool, error) {
 	var exists int
 	err := s.DB().IsUserTeacherOfModule(ctx, moduleID, userID).Scan(&exists)
 	if err != nil {

@@ -37,7 +37,7 @@ type SubmissionRef struct {
 }
 
 // CreateFile inserts a new file record.
-func (s *Store) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) (*File, error) {
+func (s *StoreImpl) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) (*File, error) {
 	var f File
 	err := s.DB().CreateFile(ctx, uploadedBy, originalName, storageKey, mimeType, sizeBytes).Scan(
 		&f.ID, &f.UploadedBy, &f.OriginalName, &f.StorageKey, &f.MimeType, &f.SizeBytes, &f.CreatedAt,
@@ -49,7 +49,7 @@ func (s *Store) CreateFile(ctx context.Context, uploadedBy int64, originalName, 
 }
 
 // GetFileByID returns a file by ID if it exists and is not deleted.
-func (s *Store) GetFileByID(ctx context.Context, id int64) (*File, error) {
+func (s *StoreImpl) GetFileByID(ctx context.Context, id int64) (*File, error) {
 	var f File
 	err := s.DB().GetFileByID(ctx, id).Scan(
 		&f.ID, &f.UploadedBy, &f.OriginalName, &f.StorageKey, &f.MimeType, &f.SizeBytes, &f.CreatedAt,
@@ -64,7 +64,7 @@ func (s *Store) GetFileByID(ctx context.Context, id int64) (*File, error) {
 }
 
 // GetFilesForUser returns all files uploaded by a user.
-func (s *Store) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]File, error) {
+func (s *StoreImpl) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]File, error) {
 	rows, err := s.DB().GetFilesForUser(ctx, uploadedBy)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (s *Store) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]File, 
 }
 
 // DeleteFile soft-deletes a file record.
-func (s *Store) DeleteFile(ctx context.Context, id int64) error {
+func (s *StoreImpl) DeleteFile(ctx context.Context, id int64) error {
 	result, err := s.DB().DeleteFile(ctx, id)
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func (s *Store) DeleteFile(ctx context.Context, id int64) error {
 }
 
 // GetContentItemForFile returns the content item linked to a file, if any.
-func (s *Store) GetContentItemForFile(ctx context.Context, fileID int64) (*ContentItemRef, error) {
+func (s *StoreImpl) GetContentItemForFile(ctx context.Context, fileID int64) (*ContentItemRef, error) {
 	var ref ContentItemRef
 	err := s.DB().GetContentItemForFile(ctx, fileID).Scan(&ref.ID, &ref.ModuleID)
 	if err != nil {
@@ -109,7 +109,7 @@ func (s *Store) GetContentItemForFile(ctx context.Context, fileID int64) (*Conte
 }
 
 // GetSubmissionForFile returns the submission linked to a file, if any.
-func (s *Store) GetSubmissionForFile(ctx context.Context, fileID int64) (*SubmissionRef, error) {
+func (s *StoreImpl) GetSubmissionForFile(ctx context.Context, fileID int64) (*SubmissionRef, error) {
 	var ref SubmissionRef
 	err := s.DB().GetSubmissionForFile(ctx, fileID).Scan(&ref.ID, &ref.StudentID, &ref.ContentItemID)
 	if err != nil {
@@ -122,7 +122,7 @@ func (s *Store) GetSubmissionForFile(ctx context.Context, fileID int64) (*Submis
 }
 
 // FileReferencedCount returns how many content items/submissions reference this file.
-func (s *Store) FileReferencedCount(ctx context.Context, fileID int64) (int64, error) {
+func (s *StoreImpl) FileReferencedCount(ctx context.Context, fileID int64) (int64, error) {
 	var count int64
 	err := s.DB().FileReferencedCount(ctx, fileID).Scan(&count)
 	if err != nil {
@@ -149,7 +149,7 @@ type Event struct {
 var ErrEventNotFound = errors.New("event not found")
 
 // CreateEvent inserts a new event record.
-func (s *Store) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
+func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
 	var e Event
 	err := s.DB().CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, moduleID).Scan(
 		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.ModuleID, &e.CreatedAt,
@@ -161,7 +161,7 @@ func (s *Store) CreateEvent(ctx context.Context, title string, kind string, star
 }
 
 // GetEventByID returns an event by ID if it exists and is not deleted.
-func (s *Store) GetEventByID(ctx context.Context, id int64) (*Event, error) {
+func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) {
 	var e Event
 	var location *string
 	var description *string
@@ -182,7 +182,7 @@ func (s *Store) GetEventByID(ctx context.Context, id int64) (*Event, error) {
 }
 
 // ListEventsByRange returns events in the given date range, filtered by user access.
-func (s *Store) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]Event, error) {
+func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]Event, error) {
 	rows, err := s.DB().ListEventsByRange(ctx, from, to, userID, role)
 	if err != nil {
 		return nil, err
@@ -207,7 +207,7 @@ func (s *Store) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 }
 
 // UpdateEvent updates an event record.
-func (s *Store) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error) {
+func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error) {
 	var e Event
 	var loc *string
 	var desc *string
@@ -228,7 +228,7 @@ func (s *Store) UpdateEvent(ctx context.Context, id int64, title string, kind st
 }
 
 // DeleteEvent soft-deletes an event record.
-func (s *Store) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error {
+func (s *StoreImpl) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error {
 	result, err := s.DB().DeleteEvent(ctx, id, userID, isAdmin)
 	if err != nil {
 		return err

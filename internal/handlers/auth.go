@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -15,8 +16,18 @@ import (
 	"xsolla-capstone-api/internal/service"
 )
 
+// AuthService is the interface that auth handlers depend on.
+type AuthService interface {
+	Signup(ctx context.Context, email string, name string, password string) (int64, string, error)
+	Login(ctx context.Context, email string, password string) (int64, string, error)
+	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error
+	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error)
+	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
+}
+
 type AuthHandlers struct {
-	svc           *service.AuthService
+	svc           AuthService
 	accessSecret  []byte
 	refreshSecret []byte
 	accessTTL     time.Duration
@@ -24,7 +35,7 @@ type AuthHandlers struct {
 }
 
 // NewAuthHandlers creates auth handlers backed by the given service.
-func NewAuthHandlers(svc *service.AuthService, accessSecret []byte, refreshSecret []byte, accessTTL time.Duration, refreshTTL time.Duration) *AuthHandlers {
+func NewAuthHandlers(svc AuthService, accessSecret []byte, refreshSecret []byte, accessTTL time.Duration, refreshTTL time.Duration) *AuthHandlers {
 	return &AuthHandlers{
 		svc:           svc,
 		accessSecret:  accessSecret,

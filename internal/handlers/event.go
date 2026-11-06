@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -14,13 +15,21 @@ import (
 	"xsolla-capstone-api/internal/store"
 )
 
-// EventHandlers handles event endpoints.
+// EventService is the interface that event handlers depend on.
+type EventService interface {
+	ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]service.Event, error)
+	GetEventByID(ctx context.Context, userID int64, role string, id int64) (*service.Event, error)
+	CreateEvent(ctx context.Context, userID int64, role string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*service.Event, error)
+	UpdateEvent(ctx context.Context, userID int64, role string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*service.Event, error)
+	DeleteEvent(ctx context.Context, userID int64, role string, id int64) error
+}
+
 type EventHandlers struct {
-	svc *service.EventService
+	svc EventService
 }
 
 // NewEventHandlers creates event handlers backed by the given service.
-func NewEventHandlers(svc *service.EventService) *EventHandlers {
+func NewEventHandlers(svc EventService) *EventHandlers {
 	return &EventHandlers{svc: svc}
 }
 

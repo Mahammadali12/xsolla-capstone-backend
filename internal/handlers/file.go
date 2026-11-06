@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -20,12 +21,20 @@ import (
 	"xsolla-capstone-api/internal/store"
 )
 
-type FileHandlers struct {
-	svc *service.FileService
+// FileService is the interface that file handlers depend on.
+type FileService interface {
+	CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) (*store.File, error)
+	GetFileByID(ctx context.Context, id int64) (*store.File, error)
+	CanReadFile(ctx context.Context, userID int64, role string, fileID int64) (*store.File, error)
+	DeleteFile(ctx context.Context, userID int64, role string, id int64) error
 }
 
-// NewFileHandlers creates file handlers.
-func NewFileHandlers(svc *service.FileService) *FileHandlers {
+type FileHandlers struct {
+	svc FileService
+}
+
+// NewFileHandlers creates file handlers backed by the given service.
+func NewFileHandlers(svc FileService) *FileHandlers {
 	return &FileHandlers{svc: svc}
 }
 

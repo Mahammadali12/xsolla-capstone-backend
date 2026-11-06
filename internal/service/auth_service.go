@@ -14,7 +14,7 @@ import (
 
 // UserStore abstracts user persistence for the service layer.
 type UserStore interface {
-	CountUsers(ctx context.Context) (int, error)
+	GetUserCount(ctx context.Context) (int, error)
 	CreateUser(ctx context.Context, email string, name string, role string, passwordHash string) (int64, error)
 	GetUserByEmail(ctx context.Context, email string) (int64, string, string, error)
 	GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error)
@@ -54,7 +54,7 @@ func NewAuthService(userStore UserStore, refreshTokenStore RefreshTokenStore) *A
 // Signup creates a new user.
 // First user becomes admin, @xsolla.com emails become teacher, rest are student.
 func (s *AuthService) Signup(ctx context.Context, email string, name string, password string) (int64, string, error) {
-	count, err := s.userStore.CountUsers(ctx)
+	count, err := s.userStore.GetUserCount(ctx)
 	if err != nil {
 		return 0, "", err
 	}

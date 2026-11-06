@@ -9,15 +9,15 @@ import (
 
 // FileService coordinates file operations.
 type FileService struct {
-	store *store.Store
+	store store.Store
 }
 
 // NewFileService creates a FileService backed by the given store.
-func NewFileService(s *store.Store) *FileService {
+func NewFileService(s store.Store) *FileService {
 	return &FileService{store: s}
 }
 
-// ErrFileReferenced is returned when a file is still referenced and cannot be deleted.
+// ErrFileReferenced is returned when a file is still referenced by a content item or submission.
 var ErrFileReferenced = errors.New("file is still referenced by a content item or submission")
 
 // CreateFile creates a new file record.

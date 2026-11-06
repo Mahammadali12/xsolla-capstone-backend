@@ -8,27 +8,27 @@ import (
 
 // ModuleService coordinates module and enrollment operations.
 type ModuleService struct {
-	store *store.Store
+	store store.Store
 }
 
 // NewModuleService creates a ModuleService backed by the given store.
-func NewModuleService(s *store.Store) *ModuleService {
+func NewModuleService(s store.Store) *ModuleService {
 	return &ModuleService{store: s}
 }
 
 // CreateModule creates a new module with the given user as teacher.
-func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title string, description string) (int64, string, string, error) {
+func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title string, description string) (*store.Module, error) {
 	m, err := s.store.CreateModule(ctx, title, description, userID)
 	if err != nil {
-		return 0, "", "", err
+		return nil, err
 	}
 
 	// Auto-enroll the creator so they can see the module in their list.
 	if _, err := s.store.CreateEnrollment(ctx, m.ID, userID); err != nil {
-		return 0, "", "", err
+		return nil, err
 	}
 
-	return m.ID, m.Title, m.Description, nil
+	return m, nil
 }
 
 // GetModuleByID returns a module if the user is authorized to view it.
@@ -174,7 +174,7 @@ var ErrNotEnrolled = store.ErrNotEnrolled
 // ErrParentMustBeSection is re-exported from the store package for handler use.
 var ErrParentMustBeSection = store.ErrParentMustBeSection
 
-// ErrParentWrongCourse is re-exported from the store package for handler use.
+// ErrParentWrongModule is re-exported from the store package for handler use.
 var ErrParentWrongModule = store.ErrParentWrongModule
 
 // ErrAlreadyEnrolled is re-exported from the store package for handler use.

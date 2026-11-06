@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
@@ -13,12 +15,21 @@ import (
 	"xsolla-capstone-api/internal/store"
 )
 
+// ContentService is the interface that content handlers depend on.
+type ContentService interface {
+	CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error)
+	GetContentItemByID(ctx context.Context, userID int64, role string, itemID int64) (*store.ContentItem, error)
+	GetContentItemsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.ContentItem, error)
+	UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) (*store.ContentItem, error)
+	DeleteContentItem(ctx context.Context, userID int64, role string, itemID int64) error
+}
+
 type ContentHandlers struct {
-	svc *service.ContentService
+	svc ContentService
 }
 
 // NewContentHandlers creates content handlers backed by the given service.
-func NewContentHandlers(svc *service.ContentService) *ContentHandlers {
+func NewContentHandlers(svc ContentService) *ContentHandlers {
 	return &ContentHandlers{svc: svc}
 }
 
@@ -100,12 +111,19 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		isVisible = *req.IsVisible
 	}
 
-	ci, err := h.svc.CreateContentItem(r.Context(), userID, role, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID)
+	var dueAt *time.Time
+	if req.DueAt != nil {
+		dueAt = req.DueAt
+	}
+
+	ci, err := h.svc.CreateContentItem(r.Context(), userID, role, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID, dueAt, req.MaxPoints)
 	if err != nil {
 		log.Printf("content handler: CreateContentItem error: %v", err)
 		if errors.Is(err, service.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, service.ErrUnsupportedContentType) {
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		} else if errors.Is(err, service.ErrAssignmentMissingDueAt) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongModule) {
 			writeError(w, 404, "not_found", "parent item not found", nil)
@@ -127,6 +145,8 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		FileID:      ci.FileID,
 		ParentID:    ci.ParentID,
 		CreatedAt:   ci.CreatedAt,
+		DueAt:       ci.DueAt,
+		MaxPoints:   ci.MaxPoints,
 	})
 }
 
@@ -174,6 +194,8 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 		FileID:      ci.FileID,
 		ParentID:    ci.ParentID,
 		CreatedAt:   ci.CreatedAt,
+		DueAt:       ci.DueAt,
+		MaxPoints:   ci.MaxPoints,
 	})
 }
 
@@ -232,6 +254,8 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 		FileID:      ci.FileID,
 		ParentID:    ci.ParentID,
 		CreatedAt:   ci.CreatedAt,
+		DueAt:       ci.DueAt,
+		MaxPoints:   ci.MaxPoints,
 	})
 }
 
@@ -284,6 +308,8 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			Position:    ci.Position,
 			IsVisible:   ci.IsVisible,
 			FileID:      ci.FileID,
+			DueAt:       ci.DueAt,
+			MaxPoints:   ci.MaxPoints,
 			Children:    []*dto.ContentTreeNode{},
 		}
 		itemMap[ci.ID] = &node

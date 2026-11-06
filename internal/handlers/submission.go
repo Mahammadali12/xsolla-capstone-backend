@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -13,17 +14,26 @@ import (
 	"xsolla-capstone-api/internal/store"
 )
 
-// SubmissionHandlers handles submission endpoints.
+// SubmissionService is the interface that submission handlers depend on.
+type SubmissionService interface {
+	CreateSubmission(ctx context.Context, studentID int64, courseID int64, contentItemID int64, textBody string, fileIDs []int64) (*store.Submission, error)
+	GetSubmissionByID(ctx context.Context, userID int64, role string, submissionID int64) (*store.Submission, error)
+	GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*store.Submission, error)
+	GetSubmissionsForAssignment(ctx context.Context, userID int64, role string, contentItemID int64) ([]store.Submission, error)
+	UpdateSubmissionGrade(ctx context.Context, userID int64, role string, submissionID int64, grade *float64, feedback string) (*store.Submission, error)
+	DeleteSubmission(ctx context.Context, userID int64, role string, submissionID int64) error
+}
+
 type SubmissionHandlers struct {
-	svc *service.SubmissionService
+	svc SubmissionService
 }
 
 // NewSubmissionHandlers creates submission handlers backed by the given service.
-func NewSubmissionHandlers(svc *service.SubmissionService) *SubmissionHandlers {
+func NewSubmissionHandlers(svc SubmissionService) *SubmissionHandlers {
 	return &SubmissionHandlers{svc: svc}
 }
 
-// POST /courses/:courseId/content-items/:assignmentId/submissions
+// POST /modules/:moduleId/content-items/:assignmentId/submissions
 // For students to create a submission into assignment
 func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
@@ -78,7 +88,7 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// GET /courses/:courseId/content-items/:assignmentId/submissions
+// GET /modules/:moduleId/content-items/:assignmentId/submissions
 func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	role := middleware.CtxRole(r.Context())
@@ -123,7 +133,7 @@ func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, 200, resp)
 }
 
-// GET /courses/:courseId/content-items/:assignmentId/submissions/me
+// GET /modules/:moduleId/content-items/:assignmentId/submissions/me
 func (h *SubmissionHandlers) GetMySubmission(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 

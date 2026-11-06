@@ -10,11 +10,11 @@ import (
 
 // EventService coordinates event operations.
 type EventService struct {
-	store *store.Store
+	store store.Store
 }
 
 // NewEventService creates an EventService backed by the given store.
-func NewEventService(s *store.Store) *EventService {
+func NewEventService(s store.Store) *EventService {
 	return &EventService{store: s}
 }
 

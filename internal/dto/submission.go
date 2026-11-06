@@ -2,7 +2,7 @@ package dto
 
 import "time"
 
-// CreateSubmissionRequest is the payload for POST /courses/:courseId/content-items/:assignmentId/submissions.
+// CreateSubmissionRequest is the payload for POST /modules/:moduleId/content-items/:assignmentId/submissions.
 type CreateSubmissionRequest struct {
 	TextBody string  `json:"text_body"`
 	FileIDs  []int64 `json:"file_ids"`

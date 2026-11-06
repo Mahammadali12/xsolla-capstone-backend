@@ -9,11 +9,11 @@ import (
 
 // SubmissionService coordinates submission operations.
 type SubmissionService struct {
-	store *store.Store
+	store store.Store
 }
 
 // NewSubmissionService creates a SubmissionService backed by the given store.
-func NewSubmissionService(s *store.Store) *SubmissionService {
+func NewSubmissionService(s store.Store) *SubmissionService {
 	return &SubmissionService{store: s}
 }
 

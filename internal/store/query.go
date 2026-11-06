@@ -191,8 +191,11 @@ func (q *Query) CreateContentItem(ctx context.Context, moduleID int64, parentID 
 
 func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
-		 FROM content_items WHERE id = $1 AND deleted_at IS NULL`,
+		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
+			 a.due_at, COALESCE(a.max_points, 0)
+		 FROM content_items ci
+		 LEFT JOIN assignments a ON a.content_item_id = ci.id
+		 WHERE ci.id = $1 AND ci.deleted_at IS NULL`,
 		id,
 	)
 }
@@ -200,18 +203,22 @@ func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
 func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, visibleOnly bool) (*sql.Rows, error) {
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
-			 FROM content_items
-			 WHERE module_id = $1 AND is_visible = true AND deleted_at IS NULL
-			 ORDER BY position`,
+			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
+			 a.due_at, COALESCE(a.max_points, 0)
+			 FROM content_items ci
+			 LEFT JOIN assignments a ON a.content_item_id = ci.id
+			 WHERE ci.module_id = $1 AND ci.is_visible = true AND ci.deleted_at IS NULL
+			 ORDER BY ci.position`,
 			moduleID,
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
-		 FROM content_items
-			 WHERE module_id = $1 AND deleted_at IS NULL
-		 ORDER BY position`,
+		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
+			 a.due_at, COALESCE(a.max_points, 0)
+			 FROM content_items ci
+			 LEFT JOIN assignments a ON a.content_item_id = ci.id
+			 WHERE ci.module_id = $1 AND ci.deleted_at IS NULL
+		 ORDER BY ci.position`,
 		moduleID,
 	)
 }
@@ -219,18 +226,22 @@ func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, vi
 func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visibleOnly bool) (*sql.Rows, error) {
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
-			 FROM content_items
-			 WHERE parent_id = $1 AND is_visible = true AND deleted_at IS NULL
-			 ORDER BY position`,
+			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
+			 a.due_at, COALESCE(a.max_points, 0)
+			 FROM content_items ci
+			 LEFT JOIN assignments a ON a.content_item_id = ci.id
+			 WHERE ci.parent_id = $1 AND ci.is_visible = true AND ci.deleted_at IS NULL
+			 ORDER BY ci.position`,
 			parentID,
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at
-			 FROM content_items
-			 WHERE parent_id = $1 AND deleted_at IS NULL
-		 ORDER BY position`,
+		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
+			 a.due_at, COALESCE(a.max_points, 0)
+			 FROM content_items ci
+			 LEFT JOIN assignments a ON a.content_item_id = ci.id
+			 WHERE ci.parent_id = $1 AND ci.deleted_at IS NULL
+		 ORDER BY ci.position`,
 		parentID,
 	)
 }
@@ -245,7 +256,8 @@ func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, d
 		     parent_id = COALESCE($6, parent_id),
 		     file_id = COALESCE($7, file_id)
 		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, module_id, parent_id, type, title, description, position, is_visible, file_id, created_at`,
+		 RETURNING ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
+			 a.due_at, COALESCE(a.max_points, 0)`,
 		id, title, description, position, isVisible, parentID, fileID,
 	)
 }

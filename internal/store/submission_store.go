@@ -39,7 +39,7 @@ type SubmissionFile struct {
 }
 
 // CreateSubmission inserts a new submission row.
-func (s *Store) CreateSubmission(ctx context.Context, contentItemID int64, studentID int64, textBody string) (*Submission, error) {
+func (s *StoreImpl) CreateSubmission(ctx context.Context, contentItemID int64, studentID int64, textBody string) (*Submission, error) {
 	var sub Submission
 	err := s.DB().CreateSubmission(ctx, contentItemID, studentID, textBody).Scan(
 		&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
@@ -60,7 +60,7 @@ func (s *Store) CreateSubmission(ctx context.Context, contentItemID int64, stude
 }
 
 // GetSubmissionByID returns a submission by ID if it exists and is not deleted.
-func (s *Store) GetSubmissionByID(ctx context.Context, id int64) (*Submission, error) {
+func (s *StoreImpl) GetSubmissionByID(ctx context.Context, id int64) (*Submission, error) {
 	var sub Submission
 	var gradedBy *int64
 	var gradedAt *time.Time
@@ -80,7 +80,7 @@ func (s *Store) GetSubmissionByID(ctx context.Context, id int64) (*Submission, e
 }
 
 // GetSubmissionByStudentAndAssignment returns a student's submission for an assignment.
-func (s *Store) GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*Submission, error) {
+func (s *StoreImpl) GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*Submission, error) {
 	var sub Submission
 	var gradedBy *int64
 	var gradedAt *time.Time
@@ -100,7 +100,7 @@ func (s *Store) GetSubmissionByStudentAndAssignment(ctx context.Context, student
 }
 
 // GetSubmissionsForAssignment returns all submissions for an assignment with student info.
-func (s *Store) GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) ([]Submission, error) {
+func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) ([]Submission, error) {
 	rows, err := s.DB().GetSubmissionsForAssignment(ctx, contentItemID)
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (s *Store) GetSubmissionsForAssignment(ctx context.Context, contentItemID i
 }
 
 // UpdateSubmissionGrade updates a submission's grade and feedback.
-func (s *Store) UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) (*Submission, error) {
+func (s *StoreImpl) UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) (*Submission, error) {
 	var sub Submission
 	var gradedByPtr *int64
 	var gradedAt *time.Time
@@ -147,7 +147,7 @@ func (s *Store) UpdateSubmissionGrade(ctx context.Context, id int64, grade *floa
 }
 
 // DeleteSubmission soft-deletes a submission.
-func (s *Store) DeleteSubmission(ctx context.Context, id int64) error {
+func (s *StoreImpl) DeleteSubmission(ctx context.Context, id int64) error {
 	result, err := s.DB().DeleteSubmission(ctx, id)
 	if err != nil {
 		return err
@@ -160,17 +160,17 @@ func (s *Store) DeleteSubmission(ctx context.Context, id int64) error {
 }
 
 // CreateSubmissionFile links a file to a submission.
-func (s *Store) CreateSubmissionFile(ctx context.Context, submissionID int64, fileID int64) (sql.Result, error) {
+func (s *StoreImpl) CreateSubmissionFile(ctx context.Context, submissionID int64, fileID int64) (sql.Result, error) {
 	return s.DB().CreateSubmissionFile(ctx, submissionID, fileID)
 }
 
 // DeleteSubmissionFiles removes all file links from a submission.
-func (s *Store) DeleteSubmissionFiles(ctx context.Context, submissionID int64) (sql.Result, error) {
+func (s *StoreImpl) DeleteSubmissionFiles(ctx context.Context, submissionID int64) (sql.Result, error) {
 	return s.DB().DeleteSubmissionFiles(ctx, submissionID)
 }
 
 // GetSubmissionFiles returns files attached to a submission.
-func (s *Store) GetSubmissionFiles(ctx context.Context, submissionID int64) ([]File, error) {
+func (s *StoreImpl) GetSubmissionFiles(ctx context.Context, submissionID int64) ([]File, error) {
 	rows, err := s.DB().GetSubmissionFiles(ctx, submissionID)
 	if err != nil {
 		return nil, err

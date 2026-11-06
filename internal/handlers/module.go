@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,14 +10,27 @@ import (
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/store"
 )
 
+// ModuleService is the interface that module handlers depend on.
+type ModuleService interface {
+	CreateModule(ctx context.Context, userID int64, title string, description string) (*store.Module, error)
+	GetModuleByID(ctx context.Context, userID int64, role string, moduleID int64) (*store.Module, error)
+	GetModulesForUser(ctx context.Context, userID int64, role string) ([]store.Module, error)
+	PatchModule(ctx context.Context, userID int64, role string, moduleID int64, title string, description string) (*store.Module, error)
+	DeleteModule(ctx context.Context, userID int64, role string, moduleID int64) error
+	CreateEnrollment(ctx context.Context, actorID int64, actorRole string, moduleID int64, userID int64) (*store.Enrollment, error)
+	DeleteEnrollment(ctx context.Context, actorID int64, actorRole string, moduleID int64, userID int64) error
+	GetEnrollmentsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.Enrollment, error)
+}
+
 type ModuleHandlers struct {
-	svc *service.ModuleService
+	svc ModuleService
 }
 
 // NewModuleHandlers creates module handlers backed by the given service.
-func NewModuleHandlers(svc *service.ModuleService) *ModuleHandlers {
+func NewModuleHandlers(svc ModuleService) *ModuleHandlers {
 	return &ModuleHandlers{svc: svc}
 }
 
@@ -51,17 +65,18 @@ func (h *ModuleHandlers) CreateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, title, description, err := h.svc.CreateModule(r.Context(), userID, req.Title, req.Description)
+	m, err := h.svc.CreateModule(r.Context(), userID, req.Title, req.Description)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not create module", nil)
 		return
 	}
 
 	writeJSON(w, 201, dto.ModuleResponse{
-		ID:          id,
-		Title:       title,
-		Description: description,
-		CreatedBy:   userID,
+		ID:          m.ID,
+		Title:       m.Title,
+		Description: m.Description,
+		CreatedBy:   m.CreatedBy,
+		CreatedAt:   m.CreatedAt,
 	})
 }
 

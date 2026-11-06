@@ -11,20 +11,24 @@ import (
 
 // ContentService coordinates content item and assignment operations.
 type ContentService struct {
-	store *store.Store
+	store store.Store
 }
 
 // ErrUnsupportedContentType is returned when an unsupported content item type is used.
 var ErrUnsupportedContentType = errors.New("unsupported content item type")
 
+// ErrAssignmentMissingDueAt is returned when an assignment is created without a due_at.
+var ErrAssignmentMissingDueAt = errors.New("assignment requires a due_at")
+
 // NewContentService creates a ContentService backed by the given store.
-func NewContentService(s *store.Store) *ContentService {
+func NewContentService(s store.Store) *ContentService {
 	return &ContentService{store: s}
 }
 
 // CreateContentItem creates a new content item.
 // Only file and assignment types are supported (sections are removed).
-func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) (*store.ContentItem, error) {
+// Assignments require a non-nil due_at.
+func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error) {
 	// Only teacher or admin can create content items
 	if role != "teacher" && role != "admin" {
 		return nil, store.ErrNotModuleTeacher
@@ -51,6 +55,11 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 		return nil, errors.New("parent_id is not supported; sections have been removed")
 	}
 
+	// Assignments require a due_at
+	if itemType == "assignment" && dueAt == nil {
+		return nil, ErrAssignmentMissingDueAt
+	}
+
 	ci, err := s.store.CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID)
 	if err != nil {
 		log.Printf("content service: CreateContentItem store error: %v", err)
@@ -59,7 +68,7 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 
 	// If type is assignment, create the assignment extension
 	if itemType == "assignment" {
-		if _, err := s.store.CreateAssignment(ctx, ci.ID, nil, 0); err != nil {
+		if _, err := s.store.CreateAssignment(ctx, ci.ID, dueAt, maxPoints); err != nil {
 			return nil, err
 		}
 	}
