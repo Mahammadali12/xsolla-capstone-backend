@@ -5,7 +5,7 @@ info:
 
 http:
   method: POST
-  url: http://localhost:8080/submissions/1/grade
+  url: http://localhost:8080/submissions/2/grade
   headers:
     - name: Content-Type
       value: application/json
@@ -15,8 +15,8 @@ http:
     type: json
     data: |-
       {
-        "grade": 85,
-        "feedback": "Good work, well done!"
+        "grade": 100,
+        "feedback": "GOOD JOB!"
       }
   auth: inherit
 

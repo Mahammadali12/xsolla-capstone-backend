@@ -86,6 +86,12 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 		}
 	}
 
+	// Reload files so the create response includes them
+	sub.Files, err = s.store.GetSubmissionFiles(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	return sub, nil
 }
 
@@ -97,25 +103,28 @@ func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64,
 	}
 
 	if role == "admin" {
-		return sub, nil
+		// Admin can view any submission
+	} else if sub.StudentID == userID {
+		// Student can only view their own submission
+	} else {
+		// Teacher must be enrolled in the course
+		ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
+		if err != nil {
+			return nil, err
+		}
+		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !teacher {
+			return nil, store.ErrNotEnrolled
+		}
 	}
 
-	// Student can only view their own submission
-	if sub.StudentID == userID {
-		return sub, nil
-	}
-
-	// Teacher must be enrolled in the course
-	ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
+	// Load attached files
+	sub.Files, err = s.store.GetSubmissionFiles(ctx, sub.ID)
 	if err != nil {
 		return nil, err
-	}
-	teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !teacher {
-		return nil, store.ErrNotEnrolled
 	}
 
 	return sub, nil
@@ -123,7 +132,15 @@ func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64,
 
 // GetSubmissionByStudentAndAssignment returns a student's submission for an assignment.
 func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*store.Submission, error) {
-	return s.store.GetSubmissionByStudentAndAssignment(ctx, studentID, contentItemID)
+	sub, err := s.store.GetSubmissionByStudentAndAssignment(ctx, studentID, contentItemID)
+	if err != nil {
+		return nil, err
+	}
+	sub.Files, err = s.store.GetSubmissionFiles(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 // GetSubmissionsForAssignment returns all submissions for an assignment.
@@ -137,11 +154,14 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 		return nil, err
 	}
 
-	if role == "admin" {
-		return s.store.GetSubmissionsForAssignment(ctx, contentItemID)
-	}
+	var submissions []store.Submission
 
-	if role == "teacher" {
+	if role == "admin" {
+		submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
+		if err != nil {
+			return nil, err
+		}
+	} else if role == "teacher" {
 		teacher, err := s.store.IsUserTeacherOfCourse(ctx, ci.CourseID, userID)
 		if err != nil {
 			return nil, err
@@ -149,18 +169,31 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 		if !teacher {
 			return nil, store.ErrNotCourseTeacher
 		}
-		return s.store.GetSubmissionsForAssignment(ctx, contentItemID)
+		submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Student: return only their own submission
+		sub, err := s.store.GetSubmissionByStudentAndAssignment(ctx, userID, contentItemID)
+		if err != nil {
+			if errors.Is(err, store.ErrSubmissionNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		submissions = []store.Submission{*sub}
 	}
 
-	// Student: return only their own submission
-	sub, err := s.store.GetSubmissionByStudentAndAssignment(ctx, userID, contentItemID)
-	if err != nil {
-		if errors.Is(err, store.ErrSubmissionNotFound) {
-			return nil, nil
+	// Load attached files for each submission
+	for i := range submissions {
+		submissions[i].Files, err = s.store.GetSubmissionFiles(ctx, submissions[i].ID)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
 	}
-	return []store.Submission{*sub}, nil
+
+	return submissions, nil
 }
 
 // UpdateSubmissionGrade updates a submission's grade and feedback.
@@ -187,7 +220,18 @@ func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID in
 		}
 	}
 
-	return s.store.UpdateSubmissionGrade(ctx, submissionID, grade, feedback, userID)
+	updated, err := s.store.UpdateSubmissionGrade(ctx, submissionID, grade, feedback, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Reload attached files
+	updated.Files, err = s.store.GetSubmissionFiles(ctx, updated.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return updated, nil
 }
 
 // DeleteSubmission soft-deletes a submission.

@@ -212,3 +212,30 @@ func feedbackString(s *string) string {
 	}
 	return *s
 }
+
+// GET /submissions/:id/files — list files attached to a submission
+func (h *SubmissionHandlers) GetSubmissionFiles(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	role := middleware.CtxRole(r.Context())
+
+	submissionID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid submission ID", nil)
+		return
+	}
+
+	sub, err := h.svc.GetSubmissionByID(r.Context(), userID, role, submissionID)
+	if err != nil {
+		if errors.Is(err, store.ErrSubmissionNotFound) {
+			writeError(w, 404, "not_found", "submission not found", nil)
+		} else if errors.Is(err, store.ErrNotCourseTeacher) || errors.Is(err, store.ErrNotEnrolled) {
+			writeError(w, 403, "forbidden", "cannot access this submission", nil)
+		} else {
+			log.Printf("submission handler: GetSubmissionFiles error: %v", err)
+			writeError(w, 500, "server_error", "could not get submission files", nil)
+		}
+		return
+	}
+
+	writeJSON(w, 200, dto.FileList(sub.Files))
+}
