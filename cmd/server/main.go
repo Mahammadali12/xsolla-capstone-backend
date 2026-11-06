@@ -26,6 +26,7 @@ import (
 	"xsolla-capstone-api/internal/handlers"
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/storage"
 	"xsolla-capstone-api/internal/store"
 
 	"github.com/swaggo/http-swagger"
@@ -51,9 +52,15 @@ func main() {
 	authSvc := service.NewAuthService(store, store)
 	moduleSvc := service.NewModuleService(store)
 	contentSvc := service.NewContentService(store)
-	fileSvc := service.NewFileService(store)
 	submissionSvc := service.NewSubmissionService(store)
 	eventSvc := service.NewEventService(store)
+
+	// S3 object storage
+	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)
+	if err != nil {
+		log.Fatalf("s3 storage: %v", err)
+	}
+	fileSvc := service.NewFileService(store, s3Storage)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,

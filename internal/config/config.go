@@ -18,6 +18,13 @@ type Config struct {
 	JWTRefreshSecret []byte
 	CORSOrigin      string
 	MigrationsDir   string
+
+	// S3 object storage
+	S3Endpoint     string
+	S3Bucket       string
+	S3Region       string
+	S3AccessKey    string
+	S3SecretKey    string
 }
 
 // defaults for optional values when not set in .env or environment.
@@ -27,6 +34,11 @@ var defaults = map[string]string{
 	"MIGRATIONS_DIR":   "internal/db/migrations",
 	"JWT_ACCESS_SECRET": "dev-access-secret-change-me-in-production",
 	"JWT_REFRESH_SECRET": "dev-refresh-secret-change-me-in-production",
+	"S3_ENDPOINT":      "",
+	"S3_BUCKET":        "",
+	"S3_REGION":        "us-east-1",
+	"S3_ACCESS_KEY":    "",
+	"S3_SECRET_KEY":    "",
 }
 
 // Load reads .env (if present), applies environment variables, and returns a Config.
@@ -41,6 +53,13 @@ func Load() (*Config, error) {
 		JWTRefreshSecret: []byte(getenv("JWT_REFRESH_SECRET", defaults["JWT_REFRESH_SECRET"])),
 		CORSOrigin:      getenv("CORS_ORIGIN", defaults["CORS_ORIGIN"]),
 		MigrationsDir:   getenv("MIGRATIONS_DIR", defaults["MIGRATIONS_DIR"]),
+
+		// S3 object storage
+		S3Endpoint:     getenv("S3_ENDPOINT", defaults["S3_ENDPOINT"]),
+		S3Bucket:       getenv("S3_BUCKET", defaults["S3_BUCKET"]),
+		S3Region:       getenv("S3_REGION", defaults["S3_REGION"]),
+		S3AccessKey:    getenv("S3_ACCESS_KEY", defaults["S3_ACCESS_KEY"]),
+		S3SecretKey:    getenv("S3_SECRET_KEY", defaults["S3_SECRET_KEY"]),
 	}
 
 	if cfg.DatabaseURL == "" {

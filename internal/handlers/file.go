@@ -23,7 +23,7 @@ import (
 
 // FileService is the interface that file handlers depend on.
 type FileService interface {
-	CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) (*store.File, error)
+	CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64, reader io.Reader) (*store.File, error)
 	GetFileByID(ctx context.Context, id int64) (*store.File, error)
 	CanReadFile(ctx context.Context, userID int64, role string, fileID int64) (*store.File, error)
 	DeleteFile(ctx context.Context, userID int64, role string, id int64) error
@@ -105,34 +105,10 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	storageKey := filepath.Join("users", fmt.Sprintf("%d", userID), base64.RawURLEncoding.EncodeToString(randBytes)+ext)
 
-	// Ensure directory exists
-	storageDir := filepath.Dir(storageKey)
-	if err := os.MkdirAll(filepath.Join("uploads", storageDir), 0755); err != nil {
-		log.Printf("file handler: MkdirAll error: %v", err)
-		writeError(w, 500, "server_error", "could not create storage directory", nil)
-		return
-	}
-
-	// Save file to disk
-	outFile, err := os.Create(filepath.Join("uploads", storageKey))
-	if err != nil {
-		log.Printf("file handler: Create error: %v", err)
-		writeError(w, 500, "server_error", "could not save file", nil)
-		return
-	}
-	defer outFile.Close()
-
-	fileSize, err := io.Copy(outFile, file)
-	if err != nil {
-		log.Printf("file handler: copy error: %v", err)
-		writeError(w, 500, "server_error", "could not write file", nil)
-		return
-	}
-
-	f, err := h.svc.CreateFile(r.Context(), userID, header.Filename, storageKey, mimeType, fileSize)
+	f, err := h.svc.CreateFile(r.Context(), userID, header.Filename, storageKey, mimeType, header.Size, file)
 	if err != nil {
 		log.Printf("file handler: CreateFile error: %v", err)
-		writeError(w, 500, "server_error", "could not save file metadata", nil)
+		writeError(w, 500, "server_error", "could not save file", nil)
 		return
 	}
 

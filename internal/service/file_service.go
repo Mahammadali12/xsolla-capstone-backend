@@ -3,25 +3,47 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 
 	"xsolla-capstone-api/internal/store"
 )
 
 // FileService coordinates file operations.
 type FileService struct {
-	store store.Store
+	store  store.Store
+	storeS Storage
 }
 
-// NewFileService creates a FileService backed by the given store.
-func NewFileService(s store.Store) *FileService {
-	return &FileService{store: s}
+// Storage is the interface for object storage operations.
+type Storage interface {
+	// Upload stores a file in object storage.
+	Upload(ctx context.Context, fileID int64, originalName, storageKey, mimeType string, sizeBytes int64, reader io.Reader) error
+	// Download retrieves a file from object storage.
+	Download(ctx context.Context, storageKey string) (io.ReadCloser, error)
+	// Delete removes a file from object storage.
+	Delete(ctx context.Context, storageKey string) error
+	// PublicURL returns a public URL for accessing the file.
+	PublicURL(storageKey string) string
+}
+
+// NewFileService creates a FileService backed by the given store and storage.
+func NewFileService(s store.Store, st Storage) *FileService {
+	return &FileService{store: s, storeS: st}
 }
 
 // ErrFileReferenced is returned when a file is still referenced by a content item or submission.
 var ErrFileReferenced = errors.New("file is still referenced by a content item or submission")
 
 // CreateFile creates a new file record.
-func (s *FileService) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64) (*store.File, error) {
+func (s *FileService) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64, reader io.Reader) (*store.File, error) {
+	// First upload to object storage
+	if s.storeS != nil {
+		if err := s.storeS.Upload(ctx, uploadedBy, originalName, storageKey, mimeType, sizeBytes, reader); err != nil {
+			return nil, err
+		}
+	}
+
+	// Then create DB record
 	return s.store.CreateFile(ctx, uploadedBy, originalName, storageKey, mimeType, sizeBytes)
 }
 
@@ -93,6 +115,13 @@ func (s *FileService) DeleteFile(ctx context.Context, userID int64, role string,
 	}
 	if count > 0 {
 		return ErrFileReferenced
+	}
+
+	// Delete from object storage first
+	if s.storeS != nil {
+		if err := s.storeS.Delete(ctx, f.StorageKey); err != nil {
+			return err
+		}
 	}
 
 	return s.store.DeleteFile(ctx, id)
