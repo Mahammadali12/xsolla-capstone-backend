@@ -506,6 +506,140 @@ Success 200:
 
 ---
 
+## Calendar Events
+
+### GET /events?from=&to=
+
+Auth: required.
+
+Query: `from` and `to` as ISO 8601 timestamps defining the date range.
+
+Success 200:
+```json
+[
+  { "id": "100", "title": "Weekly Lecture", "kind": "lecture", "starts_at": "2026-11-09T10:00:00Z", "ends_at": "2026-11-09T12:00:00Z", "all_day": false, "location": "Main hall", "description": "Weekly lecture for the current module.", "module_id": "200" },
+  { "id": "101", "title": "Off-campus day", "kind": "off-campus", "starts_at": "2026-11-20T00:00:00Z", "ends_at": "2026-11-20T23:59:00Z", "all_day": true, "description": "No classes - the school is closed." }
+]
+```
+
+Students see only events from modules that have opened (module lock enforced server-side). Teacher/admin see all events for courses they teach.
+
+Errors: 403.
+
+### POST /events
+
+Auth: required (teacher or admin only).
+
+Body:
+```json
+{ "title": "Weekly Lecture", "kind": "lecture", "starts_at": "2026-11-09T10:00:00Z", "ends_at": "2026-11-09T12:00:00Z", "location": "Main hall", "description": "...", "module_id": "200" }
+```
+
+Rules:
+- `kind` must be `lecture`, `meeting`, or `off-campus`.
+- `starts_at` must be before `ends_at`.
+- `module_id`, when provided, must reference a content item in a course the caller teaches.
+
+Success 201: created event row.
+
+Errors: 400 (invalid dates / missing fields), 403 (not teacher/admin), 404 (module not found).
+
+### PATCH /events/:id
+
+Auth: required (teacher or admin only — creator of the event or admin).
+
+Body (partial): any of `title`, `kind`, `starts_at`, `ends_at`, `all_day`, `location`, `description`, `module_id`.
+
+Success 200: updated event row.
+
+Errors: 400 (invalid dates / cycle), 403, 404.
+
+### DELETE /events/:id
+
+Auth: required (teacher or admin only — creator of the event or admin).
+
+Success 204: empty body.
+
+Errors: 403, 404.
+
+Soft delete: sets `deleted_at`.
+
+---
+
+## Mentor Slots (1:1 meetings)
+
+### GET /mentor-slots
+
+Auth: required.
+
+- Student: sees their own mentor's available slots.
+- Teacher/admin: sees their own slots.
+- Only future slots (not started yet) are returned.
+
+Success 200:
+```json
+[
+  { "id": "s-1", "mentor_id": "1", "mentor_name": "Mentor Name", "starts_at": "2026-11-12T15:00:00Z", "ends_at": "2026-11-12T15:30:00Z", "booked": false, "booked_by": null },
+  { "id": "s-2", "mentor_id": "1", "mentor_name": "Mentor Name", "starts_at": "2026-11-12T15:30:00Z", "ends_at": "2026-11-12T16:00:00Z", "booked": true, "booked_by": { "id": "5", "name": "Student Name" } }
+]
+```
+
+Students never learn who booked another student's slot — `booked_by` is omitted for bookings they don't own.
+
+Errors: 403.
+
+### POST /mentor-slots
+
+Auth: required (teacher or admin only).
+
+Body:
+```json
+{ "date": "2026-11-12", "start": "15:00", "end": "18:00", "slot_minutes": 30 }
+```
+
+Rules:
+- `date` as `YYYY-MM-DD`, `start`/`end` as `HH:MM` (local time).
+- Window must be at least `slot_minutes` long (default 30).
+- Window must be in the future.
+- Backend cuts the window into back-to-back slots, skipping any that clash with existing slots.
+
+Success 201: array of created slot rows.
+
+Errors: 400 (invalid window / too short / past date), 403.
+
+### DELETE /mentor-slots/:id
+
+Auth: required (teacher or admin only — owner of the slot).
+
+Success 204: empty body.
+
+Errors: 403, 404, 409 (slot is booked — cancel the booking first).
+
+### POST /mentor-slots/:id/book
+
+Auth: required (student only).
+
+Success 200: updated slot (`booked: true`, `booked_by` set to the student).
+
+Rules:
+- Student may have at most one upcoming booking at a time.
+- 409 if the slot is already taken, already started, or the student already holds a booking.
+
+Errors: 403, 404, 409.
+
+### DELETE /mentor-slots/:id/book
+
+Auth: required.
+
+- Student: cancels their own booking.
+- Teacher/admin: cancels any booking.
+
+Success 204: empty body.
+
+Errors: 403, 404.
+
+---
+
 ## Deadlines
 
 ### GET /users/me/deadlines

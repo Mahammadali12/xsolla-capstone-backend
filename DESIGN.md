@@ -83,7 +83,14 @@ Extensions: `CREATE EXTENSION citext;`
 **submission_files**
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK`
 
-Indexes on every FK column used for filtering: `enrollments(course_id, user_id)`, `content_items(course_id, parent_id, file_id)`, `files(uploaded_by)`, `submissions(assignment_id, student_id, graded_by)`, `submission_files(submission_id, file_id)`.
+**events** (calendar events: lectures, meetings, off-campus days)
+- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES content_items(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+
+**mentor_slots** (1:1 meeting availability + bookings)
+- `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
+- Constraint: `ends_at > starts_at`
+
+Indexes on every FK column used for filtering: `enrollments(course_id, user_id)`, `content_items(course_id, parent_id, file_id)`, `files(uploaded_by)`, `submissions(assignment_id, student_id, graded_by)`, `submission_files(submission_id, file_id)`, `mentor_slots(mentor_id, booked_by)`, `events(module_id)`.
 
 ---
 
@@ -131,6 +138,15 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | GET /courses/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / teacher (all) | any | LEFT JOIN enrollments |
 | POST /submissions/:id/grade | — | if enrolled as teacher | any | teacher/admin AND enrolled in course |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
+| GET /events?from=&to= | if modules open | if enrolled/teacher | any | date range filter |
+| POST /events | — | create | create | lecturer/admin only |
+| PATCH /events/:id | — | if created | any | lecturer/admin only |
+| DELETE /events/:id | — | if created | any | soft delete |
+| GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
+| POST /mentor-slots | — | open window | open window | mentor creates slots |
+| DELETE /mentor-slots/:id | — | own slot | own slot | only if free |
+| POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
+| DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
 | GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled courses |
 | GET /courses/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
 
@@ -169,6 +185,10 @@ A teacher cannot download a random student's upload unless it's attached to a su
 **Content items** (single route set; no separate `/assignments/*`): tree (with `is_visible` server-side filter), create, get, patch, delete (soft)
 
 **Submissions:** create/resubmit (single attempt), get mine, get roster (left join — missing work shown), grade, list files
+
+**Calendar events:** list (date range), create, patch, delete (soft)
+
+**1:1 mentor slots:** list, open window, delete, book, cancel booking
 
 **Deadlines:** `GET /users/me/deadlines` — upcoming assignments across enrolled courses, one joined query
 
@@ -217,6 +237,9 @@ Auth: store tokens (memory or `localStorage` — document XSS tradeoff), send `A
 | Single submission attempt | No graded re-attempts | Add `attempt_number`, keep history |
 | Resubmit replaces files (old ones orphan) | Storage bloat over a semester | Nightly orphan cleanup job |
 | JWT in localStorage | XSS token theft | httpOnly cookies + refresh rotation |
+| Calendar events stored in same DB (no external calendar sync) | No Google Calendar / Outlook sync | Add iCal export / sync later |
+| 30-min fixed slot length | All slots are 30 minutes | Configurable `slot_minutes` per window |
+| Module lock by `opens_at` on sections only | Events not tied to modules for locking | Full module-date-range enforcement |
 
 ---
 

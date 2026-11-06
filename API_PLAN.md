@@ -42,6 +42,13 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 **SUBMISSION_FILES**
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK` — no duplicate file links on one submission
 
+**EVENTS** (calendar events: lectures, meetings, off-campus days)
+- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES content_items(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+
+**MENTOR_SLOTS** (1:1 meeting availability + bookings)
+- `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
+- Constraint: `ends_at > starts_at`
+
 **Grade bound**: `CHECK (grade IS NULL OR grade <= (SELECT max_points FROM assignments WHERE content_item_id = submission.assignment_id))` — enforced in application code (cross-table check not possible in Postgres CHECK).
 
 ## Permission matrix
@@ -76,6 +83,15 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | GET /courses/:id/submissions | if enrolled (own only) | if enrolled / teacher (all roster) | any | LEFT JOIN enrollments — missing work shown |
 | POST /submissions/:id/grade | — | if enrolled as teacher | any | one line: teacher/admin AND enrolled in course |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
+| GET /events?from=&to= | if modules open | if enrolled/teacher | any | date range filter |
+| POST /events | — | create | create | lecturer/admin only |
+| PATCH /events/:id | — | if created | any | lecturer/admin only |
+| DELETE /events/:id | — | if created | any | soft delete |
+| GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
+| POST /mentor-slots | — | open window | open window | mentor creates slots |
+| DELETE /mentor-slots/:id | — | own slot | own slot | only if free |
+| POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
+| DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
 | GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled courses |
 | GET /courses/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
 
@@ -238,6 +254,41 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **GET /submissions/:id/files**
 - List of files attached to this submission. Access: owner or grader.
+
+### Calendar Events
+
+**GET /events?from=&to=**
+- Returns events in date range. Students see only events from open modules (module lock enforced server-side).
+- One query with date range filter.
+
+**POST /events** (teacher/admin only)
+- Body: `{ title, kind, starts_at, ends_at, all_day?, location?, description?, module_id? }`
+- Creates a calendar event. `kind` in `lecture | meeting | off-campus`.
+
+**PATCH /events/:id** (teacher/admin only)
+- Body: partial event fields
+- Updates event. Creator or admin.
+
+**DELETE /events/:id** (teacher/admin only)
+- Soft delete.
+
+### Mentor Slots (1:1 meetings)
+
+**GET /mentor-slots**
+- Student: own mentor's slots. Teacher/admin: own slots. Future slots only.
+
+**POST /mentor-slots** (teacher/admin only)
+- Body: `{ date, start, end, slot_minutes? }` — date as `YYYY-MM-DD`, times as `HH:MM`.
+- Backend cuts window into back-to-back slots (default 30 min), skipping clashes with existing slots.
+
+**DELETE /mentor-slots/:id** (teacher/admin only)
+- Only if free (not booked). Otherwise 409.
+
+**POST /mentor-slots/:id/book** (student only)
+- Locks the slot. 409 if taken or student already has an upcoming booking.
+
+**DELETE /mentor-slots/:id/book**
+- Student cancels own booking; teacher/admin cancels any booking.
 
 ### Deadlines (requirement 2)
 
