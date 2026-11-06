@@ -53,6 +53,7 @@ func main() {
 	contentSvc := service.NewContentService(store)
 	fileSvc := service.NewFileService(store)
 	submissionSvc := service.NewSubmissionService(store)
+	eventSvc := service.NewEventService(store)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -65,6 +66,7 @@ func main() {
 	contentH := handlers.NewContentHandlers(contentSvc)
 	fileH := handlers.NewFileHandlers(fileSvc)
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
+	eventH := handlers.NewEventHandlers(eventSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -96,6 +98,11 @@ func main() {
 	mux.Handle("GET /courses/{courseId}/content-items/{assignmentId}/submissions/me", authenticator.Middleware(http.HandlerFunc(submissionH.GetMySubmission)))
 	mux.Handle("POST /submissions/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeSubmission)))
 	mux.Handle("GET /submissions/{id}/files", authenticator.Middleware(http.HandlerFunc(submissionH.GetSubmissionFiles)))
+
+	mux.Handle("GET /events", authenticator.Middleware(http.HandlerFunc(eventH.ListEvents)))
+	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))
+	mux.Handle("PATCH /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.UpdateEvent)))
+	mux.Handle("DELETE /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.DeleteEvent)))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
 	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))

@@ -1,0 +1,27 @@
+info:
+  name: Update event
+  type: http
+  seq: 3
+
+http:
+  method: PATCH
+  url: http://localhost:8080/events/4
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Updated Lecture",
+        "location": "Building A"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

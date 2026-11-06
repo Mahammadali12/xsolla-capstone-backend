@@ -1,0 +1,32 @@
+info:
+  name: Create event
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/events
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Weekly Lecture",
+        "kind": "lecture",
+        "starts_at": "2026-11-09T10:00:00Z",
+        "ends_at": "2026-11-09T11:00:00Z",
+        "location": "Main hall",
+        "description": "Weekly lecture for the current module",
+        "module_id": null
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

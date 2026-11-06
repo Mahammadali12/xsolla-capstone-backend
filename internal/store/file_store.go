@@ -130,3 +130,112 @@ func (s *Store) FileReferencedCount(ctx context.Context, fileID int64) (int64, e
 	}
 	return count, nil
 }
+
+// Event represents an event row from the database.
+type Event struct {
+	ID          int64
+	Title       string
+	Kind        string
+	StartsAt    time.Time
+	EndsAt      time.Time
+	AllDay      bool
+	Location    *string
+	Description *string
+	ModuleID    *int64
+	CreatedAt   time.Time
+}
+
+// ErrEventNotFound is returned when an event does not exist or is deleted.
+var ErrEventNotFound = errors.New("event not found")
+
+// CreateEvent inserts a new event record.
+func (s *Store) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
+	var e Event
+	err := s.DB().CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, moduleID).Scan(
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.ModuleID, &e.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// GetEventByID returns an event by ID if it exists and is not deleted.
+func (s *Store) GetEventByID(ctx context.Context, id int64) (*Event, error) {
+	var e Event
+	var location *string
+	var description *string
+	var moduleID *int64
+	err := s.DB().GetEventByID(ctx, id).Scan(
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &e.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrEventNotFound
+		}
+		return nil, err
+	}
+	e.Location = location
+	e.Description = description
+	e.ModuleID = moduleID
+	return &e, nil
+}
+
+// ListEventsByRange returns events in the given date range, filtered by user access.
+func (s *Store) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]Event, error) {
+	rows, err := s.DB().ListEventsByRange(ctx, from, to, userID, role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		var location *string
+		var description *string
+		var moduleID *int64
+		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		e.Location = location
+		e.Description = description
+		e.ModuleID = moduleID
+		events = append(events, e)
+	}
+	return events, nil
+}
+
+// UpdateEvent updates an event record.
+func (s *Store) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error) {
+	var e Event
+	var loc *string
+	var desc *string
+	var modID *int64
+	err := s.DB().UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID, isAdmin).Scan(
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &modID, &e.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrEventNotFound
+		}
+		return nil, err
+	}
+	e.Location = loc
+	e.Description = desc
+	e.ModuleID = modID
+	return &e, nil
+}
+
+// DeleteEvent soft-deletes an event record.
+func (s *Store) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error {
+	result, err := s.DB().DeleteEvent(ctx, id, userID, isAdmin)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return ErrEventNotFound
+	}
+	return nil
+}

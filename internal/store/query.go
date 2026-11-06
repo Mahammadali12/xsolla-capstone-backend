@@ -438,3 +438,128 @@ func (q *Query) GetSubmissionFiles(ctx context.Context, submissionID int64) (*sq
 	)
 }
 
+// Event queries
+
+func (q *Query) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO events (title, kind, starts_at, ends_at, all_day, location, description, module_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, created_at`,
+		title, kind, startsAt, endsAt, allDay, location, description, moduleID,
+	)
+}
+
+func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, title, kind, starts_at, ends_at, all_day, location, description, module_id, created_at
+		 FROM events WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) (*sql.Rows, error) {
+	if role == "admin" {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
+			 FROM events e
+			 WHERE e.deleted_at IS NULL
+			   AND e.starts_at <= $2
+			   AND e.ends_at >= $1
+			 ORDER BY e.starts_at`,
+			from, to,
+		)
+	}
+	// Teacher: events for courses they teach
+	if role == "teacher" {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
+			 FROM events e
+			 LEFT JOIN content_items ci ON ci.id = e.module_id
+			 WHERE e.deleted_at IS NULL
+			   AND e.starts_at <= $3
+			   AND e.ends_at >= $2
+			   AND (ci.id IS NULL OR ci.deleted_at IS NULL)
+			   AND (ci.id IS NULL OR ci.course_id IN (
+			     SELECT c.id FROM courses c WHERE c.created_by = $1 AND c.deleted_at IS NULL
+			   ))
+			 ORDER BY e.starts_at`,
+			userID, from, to,
+		)
+	}
+	// Student: only events from modules in courses they're enrolled in
+	return q.DBTX.QueryContext(ctx,
+		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
+		 FROM events e
+		 LEFT JOIN content_items ci ON ci.id = e.module_id
+		 WHERE e.deleted_at IS NULL
+		   AND e.starts_at <= $3
+		   AND e.ends_at >= $2
+		   AND (ci.id IS NULL OR ci.deleted_at IS NULL)
+		   AND (ci.id IS NULL OR ci.course_id IN (
+		     SELECT c.id FROM courses c
+		     JOIN enrollments en ON en.course_id = c.id
+		     WHERE c.deleted_at IS NULL AND en.user_id = $1
+		   ))
+		 ORDER BY e.starts_at`,
+		userID, from, to,
+	)
+}
+
+func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) *sql.Row {
+	if isAdmin {
+		return q.DBTX.QueryRowContext(ctx,
+			`UPDATE events
+			 SET title = COALESCE($2, title),
+			     kind = COALESCE($3, kind),
+			     starts_at = COALESCE($4, starts_at),
+			     ends_at = COALESCE($5, ends_at),
+			     all_day = COALESCE($6, all_day),
+			     location = COALESCE($7, location),
+			     description = COALESCE($8, description),
+			     module_id = COALESCE($9, module_id)
+			 WHERE id = $1 AND deleted_at IS NULL
+			 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, created_at`,
+			id, title, kind, startsAt, endsAt, allDay, location, description, moduleID,
+		)
+	}
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE events
+		 SET title = COALESCE($2, title),
+		     kind = COALESCE($3, kind),
+		     starts_at = COALESCE($4, starts_at),
+		     ends_at = COALESCE($5, ends_at),
+		     all_day = COALESCE($6, all_day),
+		     location = COALESCE($7, location),
+		     description = COALESCE($8, description),
+		     module_id = COALESCE($9, module_id)
+		 WHERE id = $1 AND deleted_at IS NULL
+		   AND module_id IN (
+		     SELECT ci.id FROM content_items ci
+		     WHERE ci.course_id IN (
+		       SELECT c.id FROM courses c WHERE c.created_by = $10 AND c.deleted_at IS NULL
+		     )
+		   )
+		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, created_at`,
+		id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID,
+	)
+}
+
+func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) (sql.Result, error) {
+	if isAdmin {
+		return q.DBTX.ExecContext(ctx,
+			`UPDATE events SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+			id,
+		)
+	}
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE events SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
+		 AND module_id IN (
+		   SELECT ci.id FROM content_items ci
+		   WHERE ci.course_id IN (
+		     SELECT c.id FROM courses c WHERE c.created_by = $2 AND c.deleted_at IS NULL
+		   )
+		 )`,
+		id, userID,
+	)
+}
+
