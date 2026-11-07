@@ -35,9 +35,9 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 **FILES**
 - `id bigint PK`, `uploaded_by bigint FK` (index), `original_name text`, `storage_key text`, `mime_type text`, `size_bytes bigint`, `deleted_at timestamptz NULL` (soft delete), `created_at timestamptz`
 
-**SUBMISSIONS** (single attempt per student per assignment)
+**SUBMISSIONS** (multiple attempts per student per assignment)
 - `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `grade numeric CHECK grade >= 0`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
-- `UNIQUE (assignment_id, student_id)` — resubmit updates the same row (text_body, submitted_at; grade/feedback are NOT reset — only the grader clears them)
+- Each POST inserts a new row; a student may have many submissions for one assignment. `GET /me` returns the latest attempt; the roster/list returns all attempts.
 
 **SUBMISSION_FILES**
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK` — no duplicate file links on one submission
@@ -77,7 +77,7 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | GET /files/:id | if accessible via link | if accessible via link | any | — |
 | GET /files/:id/download | if accessible via link | if accessible via link | any | link rule below |
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
-| POST /modules/:id/content-items/:assignmentId/submissions | self only | — | — | single attempt; file ownership check |
+| POST /modules/:id/content-items/:assignmentId/submissions | self only | — | — | multiple attempts allowed; file ownership check |
 | GET /content-items/:assignmentId/submissions/me | self only | — | — | own submission |
 | GET /modules/:id/submissions | if enrolled (own only) | if enrolled / lecturer (all roster) | any | LEFT JOIN enrollments — missing work shown |
 | POST /submissions/:id/grade | — | if enrolled as mentor | any | one line: mentor/admin AND enrolled in module |
@@ -316,7 +316,6 @@ Codes: 400 bad body, 401 invalid credentials, 403 forbidden, 404 missing, 409 du
 
 - PDF preview (future feature 1.1)
 - Interactive game — nothing in ER covers it; no endpoints until defined
-- Multiple submission attempts — single attempt documented above; revisit after capstone
 - Storage backend — S3-compatible (Supabase) via interface-based `Storage` layer; local disk removed
 - Section nesting — content items are flat (files/assignments only); sections removed
 

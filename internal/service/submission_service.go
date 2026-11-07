@@ -18,12 +18,8 @@ func NewSubmissionService(s store.Store) *SubmissionService {
 	return &SubmissionService{store: s}
 }
 
-// ErrAlreadySubmitted is returned when a student has already submitted.
-var ErrAlreadySubmitted = errors.New("student has already submitted to this assignment")
-
 // CreateSubmission creates a new submission for a student on an assignment.
-// The student must be enrolled in the module, the content item must be an
-// assignment that is visible, and the student must not already have a submission.
+// Multiple attempts are allowed: each POST inserts a new submission row.
 func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int64, courseID int64, contentItemID int64, textBody string, fileIDs []int64) (*store.Submission, error) {
 	// Verify the content item exists and is an assignment
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
@@ -47,17 +43,6 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 	}
 	if !enrolled {
 		return nil, store.ErrNotEnrolled
-	}
-
-	// Check the student hasn't already submitted (single attempt)
-	existing, err := s.store.GetSubmissionByStudentAndAssignment(ctx, studentID, contentItemID)
-	if err != nil {
-		if !errors.Is(err, store.ErrSubmissionNotFound) {
-			return nil, err
-		}
-	}
-	if existing != nil {
-		return nil, ErrAlreadySubmitted
 	}
 
 	// Verify all file IDs belong to the student
@@ -175,15 +160,11 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 			return nil, err
 		}
 	} else {
-		// Student: return only their own submission
-		sub, err := s.store.GetSubmissionByStudentAndAssignment(ctx, userID, contentItemID)
+		// Student: return all of their own attempts, most recent first
+		submissions, err = s.store.GetSubmissionsByStudentAndAssignment(ctx, userID, contentItemID)
 		if err != nil {
-			if errors.Is(err, store.ErrSubmissionNotFound) {
-				return nil, nil
-			}
 			return nil, err
 		}
-		submissions = []store.Submission{*sub}
 	}
 
 	// Load attached files for each submission

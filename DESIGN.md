@@ -77,9 +77,9 @@ Extensions: `CREATE EXTENSION citext;`
 **files**
 - `id bigint PK`, `uploaded_by bigint FK` (index), `original_name text`, `storage_key text`, `mime_type text`, `size_bytes bigint`, `deleted_at timestamptz NULL` (soft delete), `created_at timestamptz`
 
-**submissions** (single attempt per student per assignment)
+**submissions** (multiple attempts per student per assignment)
 - `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `grade numeric CHECK grade >= 0`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
-- `UNIQUE (assignment_id, student_id)` — resubmit updates the same row; grade/feedback are NOT reset (only the grader clears them)
+- Each POST inserts a new row; a student may have many submissions for one assignment. `GET /me` returns the latest attempt; each attempt keeps its own grade/feedback.
 - `grade <= max_points` enforced in application code
 
 **submission_files**
@@ -135,7 +135,7 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | GET /files/:id | if accessible via link | if accessible via link | any | — |
 | GET /files/:id/download | if accessible via link | if accessible via link | any | link rule below |
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
-| POST /content-items/:id/submissions | self only | — | — | single attempt; file ownership check |
+| POST /content-items/:id/submissions | self only | — | — | multiple attempts allowed; file ownership check |
 | GET /content-items/:id/submissions/me | self only | — | — | own submission |
 | GET /modules/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / lecturer (all) | any | LEFT JOIN enrollments |
 | POST /submissions/:id/grade | — | if enrolled as mentor | any | mentor/admin AND enrolled in module |
@@ -186,7 +186,7 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **Content items** (single route set; no separate `/assignments/*`): list (with `is_visible` server-side filter), create, get, patch, delete (soft). Sections removed — flat list of files and assignments.
 
-**Submissions:** create/resubmit (single attempt), get mine, get roster (left join — missing work shown), grade, list files
+**Submissions:** create (multiple attempts allowed), get mine (latest), get roster (left join — missing work shown), grade, list files
 
 **Calendar events:** list (date range), create, patch, delete (soft)
 

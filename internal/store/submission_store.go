@@ -99,6 +99,33 @@ func (s *StoreImpl) GetSubmissionByStudentAndAssignment(ctx context.Context, stu
 	return &sub, nil
 }
 
+// GetSubmissionsByStudentAndAssignment returns all of a student's submissions
+// for an assignment, most recent first.
+func (s *StoreImpl) GetSubmissionsByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) ([]Submission, error) {
+	rows, err := s.DB().GetSubmissionsByStudentAndAssignment(ctx, studentID, contentItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var submissions []Submission
+	for rows.Next() {
+		var sub Submission
+		var gradedBy *int64
+		var gradedAt *time.Time
+		if err := rows.Scan(
+			&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
+			&sub.Grade, &sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		sub.GradedBy = gradedBy
+		sub.GradedAt = gradedAt
+		submissions = append(submissions, sub)
+	}
+	return submissions, nil
+}
+
 // GetSubmissionsForAssignment returns all submissions for an assignment with student info.
 func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) ([]Submission, error) {
 	rows, err := s.DB().GetSubmissionsForAssignment(ctx, contentItemID)

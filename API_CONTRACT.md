@@ -447,11 +447,11 @@ Success 201:
 
 Rules:
 - `student_id` is the authenticated user.
-- `UNIQUE(assignment_id, student_id)` — resubmit replaces this row (text_body, submitted_at updated; `SUBMISSION_FILES` rows replaced; grade/feedback are NOT reset).
+- Multiple attempts are allowed — each POST inserts a new submission row (new `id`, new `submitted_at`).
 - File ownership: student may only attach `file_ids` they uploaded.
 - Allowed only while ungraded and before `due_at` (after that: 422).
 
-Errors: 400 (file not owned by student), 403, 409 (already submitted — this endpoint is both create and resubmit), 422 (after deadline or already graded).
+Errors: 400 (file not owned by student), 403, 422 (after deadline or already graded).
 
 ---
 

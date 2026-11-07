@@ -62,6 +62,7 @@ type Store interface {
 	CreateSubmission(ctx context.Context, contentItemID int64, studentID int64, textBody string) (*Submission, error)
 	GetSubmissionByID(ctx context.Context, id int64) (*Submission, error)
 	GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*Submission, error)
+	GetSubmissionsByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) ([]Submission, error)
 	GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) ([]Submission, error)
 	UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) (*Submission, error)
 	DeleteSubmission(ctx context.Context, id int64) error

@@ -10,7 +10,6 @@ import (
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
-	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -63,8 +62,6 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
 		case errors.Is(err, store.ErrContentItemNotFound):
 			writeError(w, 404, "not_found", "assignment not found", nil)
-		case errors.Is(err, service.ErrAlreadySubmitted):
-			writeError(w, 409, "conflict", "already submitted to this assignment", nil)
 		case errors.Is(err, errors.New("file does not belong to student")):
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		default:
