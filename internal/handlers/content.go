@@ -17,10 +17,10 @@ import (
 
 // ContentService is the interface that content handlers depend on.
 type ContentService interface {
-	CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error)
+	CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int, url *string) (*store.ContentItem, error)
 	GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error)
 	GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error)
-	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error)
+	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
 	DeleteContentItem(ctx context.Context, userID int64, roles []string, itemID int64) error
 }
 
@@ -116,7 +116,12 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		dueAt = req.DueAt
 	}
 
-	ci, err := h.svc.CreateContentItem(r.Context(), userID, roles, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID, dueAt, req.MaxPoints)
+	var url *string
+	if req.Url != nil {
+		url = req.Url
+	}
+
+	ci, err := h.svc.CreateContentItem(r.Context(), userID, roles, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID, dueAt, req.MaxPoints, url)
 	if err != nil {
 		log.Printf("content handler: CreateContentItem error: %v", err)
 		if errors.Is(err, service.ErrNotModuleTeacher) {
@@ -144,6 +149,7 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		IsVisible:   ci.IsVisible,
 		FileID:      ci.FileID,
 		ParentID:    ci.ParentID,
+		Url:         ci.Url,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
 		MaxPoints:   ci.MaxPoints,
@@ -231,8 +237,9 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 	position := req.Position
 	isVisible := req.IsVisible
 	dueAt := req.DueAt
+	url := req.Url
 
-	ci, err := h.svc.UpdateContentItem(r.Context(), userID, roles, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID, dueAt)
+	ci, err := h.svc.UpdateContentItem(r.Context(), userID, roles, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID, dueAt, url)
 	if err != nil {
 		log.Printf("content handler: UpdateContentItem error: %v", err)
 		if errors.Is(err, store.ErrNotModuleTeacher) {
@@ -254,6 +261,7 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 		IsVisible:   ci.IsVisible,
 		FileID:      ci.FileID,
 		ParentID:    ci.ParentID,
+		Url:         ci.Url,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
 		MaxPoints:   ci.MaxPoints,

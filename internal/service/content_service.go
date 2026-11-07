@@ -27,15 +27,15 @@ func NewContentService(s store.Store) *ContentService {
 }
 
 // CreateContentItem creates a new content item.
-// Only file and assignment types are supported (sections are removed).
-// Assignments require a non-nil due_at.
-func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error) {
+// Only file, assignment, and link types are supported (sections are removed).
+// Assignments require a non-nil due_at. Links require a non-nil url.
+func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int, url *string) (*store.ContentItem, error) {
 	// Only lecturer or admin can create content items
 	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, store.ErrNotModuleTeacher
 	}
 
-	// Only file and assignment types are supported (sections removed)
+	// Only file, assignment, and link types are supported (sections removed)
 	if itemType == "section" {
 		return nil, ErrUnsupportedContentType
 	}
@@ -56,12 +56,19 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 		return nil, errors.New("parent_id is not supported; sections have been removed")
 	}
 
-	// Assignments require a due_at
-	if itemType == "assignment" && dueAt == nil {
-		return nil, ErrAssignmentMissingDueAt
+	// Type-specific validation
+	switch itemType {
+	case "assignment":
+		if dueAt == nil {
+			return nil, ErrAssignmentMissingDueAt
+		}
+	case "link":
+		if url == nil || *url == "" {
+			return nil, errors.New("link requires a url")
+		}
 	}
 
-	ci, err := s.store.CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID)
+	ci, err := s.store.CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID, url)
 	if err != nil {
 		log.Printf("content service: CreateContentItem store error: %v", err)
 		return nil, err
@@ -129,8 +136,9 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 
 // UpdateContentItem updates a content item if the user is authorized.
 // If the item is an assignment and due_at is provided, the assignment's
-// deadline is updated too.
-func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error) {
+// deadline is updated too. If the item is a link and url is provided, the link
+// url is updated too.
+func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error) {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
 	if err != nil {
 		return nil, err
@@ -152,7 +160,7 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 		}
 	}
 
-	return s.store.UpdateContentItem(ctx, itemID, title, description, position, isVisible, parentID, fileID, dueAt)
+	return s.store.UpdateContentItem(ctx, itemID, title, description, position, isVisible, parentID, fileID, dueAt, url)
 }
 
 // DeleteContentItem soft-deletes a content item if the user is authorized.

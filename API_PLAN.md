@@ -22,9 +22,9 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `id bigint PK`, `module_id bigint FK` (index, CASCADE with module), `user_id bigint FK` (index, CASCADE with user), `created_at timestamptz`
 - `UNIQUE (module_id, user_id)` — no double enrolls, no app-level check-then-insert race
 
-**CONTENT_ITEMS** (files / assignments, flat — no sections, no nesting)
-- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `deleted_at timestamptz NULL`, `created_at timestamptz`
-- `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type != 'file' AND file_id IS NULL)` — both directions
+**CONTENT_ITEMS** (files / assignments / links, flat — no sections, no nesting)
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment','link')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `url text NULL`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type IN ('assignment','link') AND file_id IS NULL)` — both directions
 - `parent_id` is always null (sections removed — no parent-child nesting)
 - `UNIQUE (module_id, parent_id, position)` — no duplicate positions under the same parent
 
@@ -192,9 +192,10 @@ A lecturer cannot download a random student's upload unless it's attached to a s
   ```
 
 **POST /modules/:moduleId/content-items**
-- Body: `{ parent_id?, type, title, description?, position?, is_visible?, file_id?, due_at?, max_points? }`
+- Body: `{ parent_id?, type, title, description?, position?, is_visible?, file_id?, url?, due_at?, max_points? }`
 - `parent_id` must be null (sections removed); cycle rejected
 - `type = 'file'` requires `file_id`; `type = 'assignment'` inserts ASSIGNMENTS row in same transaction (`due_at`, `max_points`)
+- `type = 'link'` requires `url`
 - `type = 'section'` returns 400 (not supported)
 - `position` defaults to last+1 under parent
 - Returns: created item (+ assignment fields if type=assignment)

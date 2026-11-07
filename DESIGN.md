@@ -64,9 +64,9 @@ Extensions: `CREATE EXTENSION citext;`
 - `id bigint PK`, `module_id bigint FK` (index, CASCADE), `user_id bigint FK` (index, CASCADE), `created_at timestamptz`
 - `UNIQUE (module_id, user_id)` — no double enrolls, no app-level check-then-insert race
 
-**content_items** (files / assignments, flat — sections removed, no nesting)
-- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `deleted_at timestamptz NULL`, `created_at timestamptz`
-- `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type != 'file' AND file_id IS NULL)`
+**content_items** (files / assignments / links, flat — sections removed, no nesting)
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment','link')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `url text NULL`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type IN ('assignment','link') AND file_id IS NULL)`
 - `parent_id` is always null (sections removed — no parent-child nesting)
 - `UNIQUE (module_id, parent_id, position)`
 

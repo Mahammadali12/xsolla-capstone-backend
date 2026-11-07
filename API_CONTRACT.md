@@ -244,7 +244,7 @@ Success 200:
 
 ## Content Items (files, assignments — one route set)
 
-No separate `/assignments/*` routes. An assignment is `content_items.type = 'assignment'`.
+No separate `/assignments/*` routes. An assignment is `content_items.type = 'assignment'`. A link is `content_items.type = 'link'`.
 Section type has been removed — content items are flat (no nesting).
 
 ### GET /modules/:moduleId/content-items
@@ -270,6 +270,14 @@ Success 200 — flat list:
     "is_visible": true,
     "due_at": "2026-11-10T23:59:00Z",
     "max_points": 100
+  },
+  {
+    "id": "203",
+    "type": "link",
+    "title": "External Resource",
+    "position": 3,
+    "is_visible": true,
+    "url": "https://example.com/resource"
   }
 ]
 ```
@@ -292,6 +300,7 @@ Body:
   "position": 1,
   "is_visible": true,
   "file_id": null,
+  "url": null,
   "due_at": "2026-11-10T23:59:00Z",
   "max_points": 100
 }
@@ -301,10 +310,11 @@ Rules:
 - `parent_id` must be null (sections removed — no nesting).
 - `type = 'file'`: `file_id` required, must reference a file uploaded by the caller.
 - `type = 'assignment'`: `due_at` and `max_points` required.
+- `type = 'link'`: `url` required.
 - `type = 'section'` is not supported (400).
 - `position` defaults to last+1.
 
-Success 201: created item row (includes `due_at`, `max_points` if assignment).
+Success 201: created item row (includes `due_at`, `max_points` if assignment, `url` if link).
 
 Errors: 400 (bad type / missing fields), 403.
 
@@ -324,7 +334,7 @@ Errors: 403 (not visible and not authorized), 404.
 
 Auth: required (lecturer/admin of module or item `created_by`).
 
-Body (partial): any of `title`, `description`, `position`, `is_visible`, `file_id`, `due_at`, `max_points`.
+Body (partial): any of `title`, `description`, `position`, `is_visible`, `file_id`, `url`, `due_at`, `max_points`.
 
 Success 200: updated item row.
 
