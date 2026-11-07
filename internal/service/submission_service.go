@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -96,18 +97,18 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 }
 
 // GetSubmissionByID returns a submission if the user is authorized to view it.
-func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64, role string, submissionID int64) (*store.Submission, error) {
+func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64, roles []string, submissionID int64) (*store.Submission, error) {
 	sub, err := s.store.GetSubmissionByID(ctx, submissionID)
 	if err != nil {
 		return nil, err
 	}
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		// Admin can view any submission
 	} else if sub.StudentID == userID {
 		// Student can only view their own submission
 	} else {
-		// Teacher must be enrolled in the module
+		// Lecturer/mentor must be the teacher of the module
 		ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
 		if err != nil {
 			return nil, err
@@ -145,7 +146,7 @@ func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Cont
 
 // GetSubmissionsForAssignment returns all submissions for an assignment.
 // Teachers see all students; students see only their own.
-func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, userID int64, role string, contentItemID int64) ([]store.Submission, error) {
+func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64) ([]store.Submission, error) {
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
 	if err != nil {
 		if errors.Is(err, store.ErrContentItemNotFound) {
@@ -156,12 +157,12 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 
 	var submissions []store.Submission
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
 		if err != nil {
 			return nil, err
 		}
-	} else if role == "teacher" {
+	} else if auth.HasRole(roles, "lecturer") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -197,27 +198,18 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 }
 
 // UpdateSubmissionGrade updates a submission's grade and feedback.
-// Only the teacher of the module or an admin can grade.
-func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID int64, role string, submissionID int64, grade *float64, feedback string) (*store.Submission, error) {
-	sub, err := s.store.GetSubmissionByID(ctx, submissionID)
-	if err != nil {
+// Only the mentor of the module or an admin can grade. Lecturers cannot grade.
+func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID int64, roles []string, submissionID int64, grade *float64, feedback string) (*store.Submission, error) {
+	if _, err := s.store.GetSubmissionByID(ctx, submissionID); err != nil {
 		return nil, err
 	}
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		// Admin can grade any submission
+	} else if auth.HasRole(roles, "mentor") {
+		// Mentor can grade
 	} else {
-		ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
-		if err != nil {
-			return nil, err
-		}
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if !teacher {
-			return nil, store.ErrNotModuleTeacher
-		}
+		return nil, store.ErrNotModuleTeacher
 	}
 
 	updated, err := s.store.UpdateSubmissionGrade(ctx, submissionID, grade, feedback, userID)
@@ -235,13 +227,13 @@ func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID in
 }
 
 // DeleteSubmission soft-deletes a submission.
-func (s *SubmissionService) DeleteSubmission(ctx context.Context, userID int64, role string, submissionID int64) error {
+func (s *SubmissionService) DeleteSubmission(ctx context.Context, userID int64, roles []string, submissionID int64) error {
 	sub, err := s.store.GetSubmissionByID(ctx, submissionID)
 	if err != nil {
 		return err
 	}
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		return s.store.DeleteSubmission(ctx, submissionID)
 	}
 

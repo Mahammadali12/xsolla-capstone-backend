@@ -16,13 +16,13 @@ import (
 // ModuleService is the interface that module handlers depend on.
 type ModuleService interface {
 	CreateModule(ctx context.Context, userID int64, title string, description string) (*store.Module, error)
-	GetModuleByID(ctx context.Context, userID int64, role string, moduleID int64) (*store.Module, error)
-	GetModulesForUser(ctx context.Context, userID int64, role string) ([]store.Module, error)
-	PatchModule(ctx context.Context, userID int64, role string, moduleID int64, title string, description string) (*store.Module, error)
-	DeleteModule(ctx context.Context, userID int64, role string, moduleID int64) error
-	CreateEnrollment(ctx context.Context, actorID int64, actorRole string, moduleID int64, userID int64) (*store.Enrollment, error)
-	DeleteEnrollment(ctx context.Context, actorID int64, actorRole string, moduleID int64, userID int64) error
-	GetEnrollmentsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.Enrollment, error)
+	GetModuleByID(ctx context.Context, userID int64, roles []string, moduleID int64) (*store.Module, error)
+	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error)
+	PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string) (*store.Module, error)
+	DeleteModule(ctx context.Context, userID int64, roles []string, moduleID int64) error
+	CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error)
+	DeleteEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) error
+	GetEnrollmentsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.Enrollment, error)
 }
 
 type ModuleHandlers struct {
@@ -48,10 +48,9 @@ func NewModuleHandlers(svc ModuleService) *ModuleHandlers {
 // @Router      /modules [post]
 func (h *ModuleHandlers) CreateModule(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
 
-	if role != "teacher" && role != "admin" {
-		writeError(w, 403, "forbidden", "only teachers and admins can create modules", nil)
+	if !middleware.HasAnyRole(r, "lecturer", "admin") {
+		writeError(w, 403, "forbidden", "only lecturers and admins can create modules", nil)
 		return
 	}
 
@@ -91,9 +90,9 @@ func (h *ModuleHandlers) CreateModule(w http.ResponseWriter, r *http.Request) {
 // @Router      /modules [get]
 func (h *ModuleHandlers) ListModules(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
-	modules, err := h.svc.GetModulesForUser(r.Context(), userID, role)
+	modules, err := h.svc.GetModulesForUser(r.Context(), userID, roles)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not list modules", nil)
 		return
@@ -125,7 +124,7 @@ func (h *ModuleHandlers) ListModules(w http.ResponseWriter, r *http.Request) {
 // @Router      /modules/{id} [get]
 func (h *ModuleHandlers) GetModule(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -133,7 +132,7 @@ func (h *ModuleHandlers) GetModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m, err := h.svc.GetModuleByID(r.Context(), userID, role, moduleID)
+	m, err := h.svc.GetModuleByID(r.Context(), userID, roles, moduleID)
 	if err != nil {
 		if errors.Is(err, service.ErrNotEnrolled) {
 			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
@@ -169,7 +168,7 @@ func (h *ModuleHandlers) GetModule(w http.ResponseWriter, r *http.Request) {
 // @Router      /modules/{id} [patch]
 func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -183,7 +182,7 @@ func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m, err := h.svc.PatchModule(r.Context(), userID, role, moduleID, req.Title, req.Description)
+	m, err := h.svc.PatchModule(r.Context(), userID, roles, moduleID, req.Title, req.Description)
 	if err != nil {
 		if errors.Is(err, service.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
@@ -216,7 +215,7 @@ func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 // @Router      /modules/{id} [delete]
 func (h *ModuleHandlers) DeleteModule(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -224,7 +223,7 @@ func (h *ModuleHandlers) DeleteModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeleteModule(r.Context(), userID, role, moduleID); err != nil {
+	if err := h.svc.DeleteModule(r.Context(), userID, roles, moduleID); err != nil {
 		if errors.Is(err, service.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, service.ErrModuleNotFound) {
@@ -253,7 +252,7 @@ func (h *ModuleHandlers) DeleteModule(w http.ResponseWriter, r *http.Request) {
 // @Router      /modules/{moduleId}/enrollments [post]
 func (h *ModuleHandlers) CreateEnrollment(w http.ResponseWriter, r *http.Request) {
 	actorID := middleware.CtxUserID(r.Context())
-	actorRole := middleware.CtxRole(r.Context())
+	actorRoles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
@@ -268,7 +267,7 @@ func (h *ModuleHandlers) CreateEnrollment(w http.ResponseWriter, r *http.Request
 	}
 	userID := req.UserID
 
-	e, err := h.svc.CreateEnrollment(r.Context(), actorID, actorRole, moduleID, userID)
+	e, err := h.svc.CreateEnrollment(r.Context(), actorID, actorRoles, moduleID, userID)
 	if err != nil {
 		if errors.Is(err, service.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
@@ -303,7 +302,7 @@ func (h *ModuleHandlers) CreateEnrollment(w http.ResponseWriter, r *http.Request
 // @Router      /modules/{moduleId}/enrollments/{userId} [delete]
 func (h *ModuleHandlers) DeleteEnrollment(w http.ResponseWriter, r *http.Request) {
 	actorID := middleware.CtxUserID(r.Context())
-	actorRole := middleware.CtxRole(r.Context())
+	actorRoles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
@@ -316,7 +315,7 @@ func (h *ModuleHandlers) DeleteEnrollment(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.svc.DeleteEnrollment(r.Context(), actorID, actorRole, moduleID, userID); err != nil {
+	if err := h.svc.DeleteEnrollment(r.Context(), actorID, actorRoles, moduleID, userID); err != nil {
 		if errors.Is(err, service.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, service.ErrNotEnrolled) {
@@ -343,7 +342,7 @@ func (h *ModuleHandlers) DeleteEnrollment(w http.ResponseWriter, r *http.Request
 // @Router      /modules/{moduleId}/enrollments [get]
 func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
@@ -351,7 +350,7 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	enrollments, err := h.svc.GetEnrollmentsForModule(r.Context(), userID, role, moduleID)
+	enrollments, err := h.svc.GetEnrollmentsForModule(r.Context(), userID, roles, moduleID)
 	if err != nil {
 		if errors.Is(err, service.ErrNotEnrolled) {
 			writeError(w, 403, "forbidden", "not enrolled in this module", nil)

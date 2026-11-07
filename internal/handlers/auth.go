@@ -18,11 +18,11 @@ import (
 
 // AuthService is the interface that auth handlers depend on.
 type AuthService interface {
-	Signup(ctx context.Context, email string, name string, password string) (int64, string, error)
-	Login(ctx context.Context, email string, password string) (int64, string, error)
+	Signup(ctx context.Context, email string, name string, password string) (int64, []string, error)
+	Login(ctx context.Context, email string, password string) (int64, []string, error)
 	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
-	GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error)
+	GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error)
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 }
 
@@ -68,7 +68,7 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, role, err := h.svc.Signup(r.Context(), req.Email, req.Name, req.Password)
+	id, roles, err := h.svc.Signup(r.Context(), req.Email, req.Name, req.Password)
 	if err != nil {
 		if errors.Is(err, service.ErrEmailTaken) {
 			writeError(w, 409, "conflict", "email already exists", nil)
@@ -78,7 +78,7 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := auth.AccessToken(id, role, h.accessSecret, h.accessTTL)
+	access, err := auth.AccessToken(id, roles, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
@@ -99,7 +99,7 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 			ID:         id,
 			Email:      req.Email,
 			Name:       req.Name,
-			Role:       role,
+			Roles:      roles,
 			CreatedAt:  time.Now().UTC(),
 		},
 		AccessToken:  access,
@@ -125,7 +125,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Login = strings.ToLower(strings.TrimSpace(req.Login))
 
-	id, role, err := h.svc.Login(r.Context(), req.Login, req.Password)
+	id, roles, err := h.svc.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) || errors.Is(err, service.ErrInvalidCredentials) {
 			writeError(w, 401, "invalid_credentials", "invalid email or password", nil)
@@ -135,7 +135,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := auth.AccessToken(id, role, h.accessSecret, h.accessTTL)
+	access, err := auth.AccessToken(id, roles, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
@@ -155,7 +155,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		User: dto.UserResponse{
 			ID:    id,
 			Email: req.Login,
-			Role:  role,
+			Roles: roles,
 		},
 		AccessToken:  access,
 		RefreshToken: refresh,
@@ -185,13 +185,13 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _, _, role, _, err := h.svc.GetUserByID(r.Context(), userID)
+	_, _, _, roles, _, err := h.svc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		writeError(w, 500, "server_error", "user lookup failed", nil)
 		return
 	}
 
-	access, err := auth.AccessToken(userID, role, h.accessSecret, h.accessTTL)
+	access, err := auth.AccessToken(userID, roles, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
@@ -254,7 +254,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized", "missing user context", nil)
 		return
 	}
-	_, email, name, role, _, err := h.svc.GetUserByID(r.Context(), userID)
+	_, email, name, roles, _, err := h.svc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
 			writeError(w, 404, "not_found", "user not found", nil)
@@ -267,7 +267,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		ID:         userID,
 		Email:      email,
 		Name:       name,
-		Role:       role,
+		Roles:      roles,
 		CreatedAt:  time.Now().UTC(),
 	})
 }

@@ -182,8 +182,8 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 }
 
 // ListEventsByRange returns events in the given date range, filtered by user access.
-func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]Event, error) {
-	rows, err := s.DB().ListEventsByRange(ctx, from, to, userID, role)
+func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error) {
+	rows, err := s.DB().ListEventsByRange(ctx, from, to, userID, roles)
 	if err != nil {
 		return nil, err
 	}

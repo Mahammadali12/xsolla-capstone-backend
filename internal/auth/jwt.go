@@ -20,9 +20,9 @@ var (
 )
 
 type Claims struct {
-	UserID int64  `json:"sub"`
-	Role   string `json:"role"`
-	Exp    int64  `json:"exp"`
+	UserID int64    `json:"sub"`
+	Roles  []string `json:"roles"`
+	Exp    int64    `json:"exp"`
 }
 
 // accessSecret and refreshSecret are set from environment at startup.
@@ -49,18 +49,18 @@ func sign(secret []byte, header, payload []byte) (string, error) {
 }
 
 // AccessToken signs a short-lived access token (15 minutes default).
-func AccessToken(userID int64, role string, secret []byte, ttl time.Duration) (string, error) {
+func AccessToken(userID int64, roles []string, secret []byte, ttl time.Duration) (string, error) {
 	now := time.Now()
 	h := map[string]any{"alg": "HS256", "typ": "JWT"}
 	header, _ := json.Marshal(h)
-	p := Claims{UserID: userID, Role: role, Exp: now.Add(ttl).Unix()}
+	p := Claims{UserID: userID, Roles: roles, Exp: now.Add(ttl).Unix()}
 	payload, _ := json.Marshal(p)
 	return sign(secret, header, payload)
 }
 
 // RefreshToken signs a long-lived refresh token (7 days default).
 func RefreshToken(userID int64, secret []byte, ttl time.Duration) (string, error) {
-	return AccessToken(userID, "", secret, ttl) // role unused for refresh
+	return AccessToken(userID, nil, secret, ttl) // roles unused for refresh
 }
 
 // Verify parses and verifies a token, returning its claims.

@@ -15,9 +15,9 @@ import (
 // UserStore abstracts user persistence for the service layer.
 type UserStore interface {
 	GetUserCount(ctx context.Context) (int, error)
-	CreateUser(ctx context.Context, email string, name string, role string, passwordHash string) (int64, error)
-	GetUserByEmail(ctx context.Context, email string) (int64, string, string, error)
-	GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error)
+	CreateUser(ctx context.Context, email string, name string, roles []string, passwordHash string) (int64, error)
+	GetUserByEmail(ctx context.Context, email string) (int64, string, []string, error)
+	GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error)
 }
 
 // ErrEmailTaken is re-exported from the store package for handler use.
@@ -52,49 +52,49 @@ func NewAuthService(userStore UserStore, refreshTokenStore RefreshTokenStore) *A
 }
 
 // Signup creates a new user.
-// First user becomes admin, @xsolla.com emails become teacher, rest are student.
-func (s *AuthService) Signup(ctx context.Context, email string, name string, password string) (int64, string, error) {
+// First user becomes admin, @xsolla.com emails become lecturer, rest are student.
+func (s *AuthService) Signup(ctx context.Context, email string, name string, password string) (int64, []string, error) {
 	count, err := s.userStore.GetUserCount(ctx)
 	if err != nil {
-		return 0, "", err
+		return 0, nil, err
 	}
 
-	role := "student"
+	roles := []string{"student"}
 	if count == 0 {
-		role = "admin"
+		roles = []string{"admin"}
 	} else if strings.HasSuffix(email, "@xsolla.com") {
-		role = "teacher"
+		roles = []string{"lecturer"}
 	}
 
 	hash, err := auth.Hash(password)
 	if err != nil {
-		return 0, "", err
+		return 0, nil, err
 	}
 
-	id, err := s.userStore.CreateUser(ctx, email, name, role, hash)
+	id, err := s.userStore.CreateUser(ctx, email, name, roles, hash)
 	if err != nil {
 		if errors.Is(err, store.ErrEmailTaken) {
-			return 0, "", store.ErrEmailTaken
+			return 0, nil, store.ErrEmailTaken
 		}
-		return 0, "", err
+		return 0, nil, err
 	}
-	return id, role, nil
+	return id, roles, nil
 }
 
-// Login validates credentials and returns the user ID and role.
-func (s *AuthService) Login(ctx context.Context, email string, password string) (int64, string, error) {
-	id, hash, role, err := s.userStore.GetUserByEmail(ctx, email)
+// Login validates credentials and returns the user ID and roles.
+func (s *AuthService) Login(ctx context.Context, email string, password string) (int64, []string, error) {
+	id, hash, roles, err := s.userStore.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, store.ErrUserNotFound) {
-			return 0, "", err
+			return 0, nil, err
 		}
-		return 0, "", err
+		return 0, nil, err
 	}
 
 	if err := auth.Compare(hash, password); err != nil {
-		return 0, "", ErrInvalidCredentials
+		return 0, nil, ErrInvalidCredentials
 	}
-	return id, role, nil
+	return id, roles, nil
 }
 
 // SaveRefreshToken persists a refresh token for a user.
@@ -126,6 +126,6 @@ func (s *AuthService) DeleteRefreshToken(ctx context.Context, tokenHash string) 
 }
 
 // GetUserByID looks up a user by ID.
-func (s *AuthService) GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error) {
+func (s *AuthService) GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error) {
 	return s.userStore.GetUserByID(ctx, id)
 }

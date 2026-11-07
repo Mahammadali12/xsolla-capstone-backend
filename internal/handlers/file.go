@@ -25,8 +25,8 @@ import (
 type FileService interface {
 	CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64, reader io.Reader) (*store.File, error)
 	GetFileByID(ctx context.Context, id int64) (*store.File, error)
-	CanReadFile(ctx context.Context, userID int64, role string, fileID int64) (*store.File, error)
-	DeleteFile(ctx context.Context, userID int64, role string, id int64) error
+	CanReadFile(ctx context.Context, userID int64, roles []string, fileID int64) (*store.File, error)
+	DeleteFile(ctx context.Context, userID int64, roles []string, id int64) error
 }
 
 type FileHandlers struct {
@@ -125,7 +125,7 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 // GET /files/:id
 func (h *FileHandlers) GetFile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	fileID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -133,7 +133,7 @@ func (h *FileHandlers) GetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := h.svc.CanReadFile(r.Context(), userID, role, fileID)
+	f, err := h.svc.CanReadFile(r.Context(), userID, roles, fileID)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
 			writeError(w, 404, "not_found", "file not found", nil)
@@ -156,7 +156,7 @@ func (h *FileHandlers) GetFile(w http.ResponseWriter, r *http.Request) {
 // GET /files/:id/download
 func (h *FileHandlers) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	fileID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -164,7 +164,7 @@ func (h *FileHandlers) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := h.svc.CanReadFile(r.Context(), userID, role, fileID)
+	f, err := h.svc.CanReadFile(r.Context(), userID, roles, fileID)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
 			writeError(w, 404, "not_found", "file not found", nil)
@@ -191,7 +191,7 @@ func (h *FileHandlers) DownloadFile(w http.ResponseWriter, r *http.Request) {
 // DELETE /files/:id
 func (h *FileHandlers) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	fileID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -199,7 +199,7 @@ func (h *FileHandlers) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.svc.DeleteFile(r.Context(), userID, role, fileID)
+	err = h.svc.DeleteFile(r.Context(), userID, roles, fileID)
 	if err != nil {
 		if errors.Is(err, store.ErrFileNotFound) {
 			writeError(w, 404, "not_found", "file not found", nil)

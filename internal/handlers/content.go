@@ -17,11 +17,11 @@ import (
 
 // ContentService is the interface that content handlers depend on.
 type ContentService interface {
-	CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error)
-	GetContentItemByID(ctx context.Context, userID int64, role string, itemID int64) (*store.ContentItem, error)
-	GetContentItemsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.ContentItem, error)
-	UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error)
-	DeleteContentItem(ctx context.Context, userID int64, role string, itemID int64) error
+	CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error)
+	GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error)
+	GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error)
+	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error)
+	DeleteContentItem(ctx context.Context, userID int64, roles []string, itemID int64) error
 }
 
 type ContentHandlers struct {
@@ -46,7 +46,7 @@ func NewContentHandlers(svc ContentService) *ContentHandlers {
 // @Router      /modules/{moduleId}/content-items [get]
 func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
@@ -54,7 +54,7 @@ func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	items, err := h.svc.GetContentItemsForModule(r.Context(), userID, role, moduleID)
+	items, err := h.svc.GetContentItemsForModule(r.Context(), userID, roles, moduleID)
 	if err != nil {
 		log.Printf("content handler: ListContentItems error: %v", err)
 		if errors.Is(err, store.ErrNotEnrolled) {
@@ -84,7 +84,7 @@ func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Reques
 // @Router      /modules/{moduleId}/content-items [post]
 func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
 	if err != nil {
@@ -116,7 +116,7 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		dueAt = req.DueAt
 	}
 
-	ci, err := h.svc.CreateContentItem(r.Context(), userID, role, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID, dueAt, req.MaxPoints)
+	ci, err := h.svc.CreateContentItem(r.Context(), userID, roles, moduleID, req.ParentID, req.Type, req.Title, req.Description, position, isVisible, req.FileID, dueAt, req.MaxPoints)
 	if err != nil {
 		log.Printf("content handler: CreateContentItem error: %v", err)
 		if errors.Is(err, service.ErrNotModuleTeacher) {
@@ -163,7 +163,7 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 // @Router      /content-items/{id} [get]
 func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	itemID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -171,7 +171,7 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ci, err := h.svc.GetContentItemByID(r.Context(), userID, role, itemID)
+	ci, err := h.svc.GetContentItemByID(r.Context(), userID, roles, itemID)
 	if err != nil {
 		log.Printf("content handler: GetContentItem error: %v", err)
 		if errors.Is(err, store.ErrNotEnrolled) {
@@ -214,7 +214,7 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 // @Router      /content-items/{id} [patch]
 func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	itemID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -232,7 +232,7 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 	isVisible := req.IsVisible
 	dueAt := req.DueAt
 
-	ci, err := h.svc.UpdateContentItem(r.Context(), userID, role, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID, dueAt)
+	ci, err := h.svc.UpdateContentItem(r.Context(), userID, roles, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID, dueAt)
 	if err != nil {
 		log.Printf("content handler: UpdateContentItem error: %v", err)
 		if errors.Is(err, store.ErrNotModuleTeacher) {
@@ -272,7 +272,7 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 // @Router      /content-items/{id} [delete]
 func (h *ContentHandlers) DeleteContentItem(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	itemID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -280,7 +280,7 @@ func (h *ContentHandlers) DeleteContentItem(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.svc.DeleteContentItem(r.Context(), userID, role, itemID); err != nil {
+	if err := h.svc.DeleteContentItem(r.Context(), userID, roles, itemID); err != nil {
 		log.Printf("content handler: DeleteContentItem error: %v", err)
 		if errors.Is(err, store.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)

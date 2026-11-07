@@ -18,16 +18,16 @@ type Query struct {
 	DBTX DBTX
 }
 
-func (q *Query) InsertUser(ctx context.Context, email string, name string, role string, passwordHash string) *sql.Row {
+func (q *Query) InsertUser(ctx context.Context, email string, name string, roles []string, passwordHash string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO users (email, name, role, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
-		email, name, role, passwordHash,
+		`INSERT INTO users (email, name, roles, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
+		email, name, roles, passwordHash,
 	)
 }
 
 func (q *Query) GetUserByEmail(ctx context.Context, email string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, password_hash, role FROM users WHERE lower(email) = $1`,
+		`SELECT id, password_hash, roles FROM users WHERE lower(email) = $1`,
 		email,
 	)
 }
@@ -71,7 +71,7 @@ func (q *Query) CountRefreshTokens(ctx context.Context) *sql.Row {
 
 func (q *Query) GetUserByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, email, name, role, created_at FROM users WHERE id = $1`,
+		`SELECT id, email, name, roles, created_at FROM users WHERE id = $1`,
 		id,
 	)
 }
@@ -92,8 +92,15 @@ func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
-func (q *Query) GetModulesForUser(ctx context.Context, userID int64, role string) (*sql.Rows, error) {
-	if role == "admin" {
+func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []string) (*sql.Rows, error) {
+	isAdmin := false
+	for _, r := range roles {
+		if r == "admin" {
+			isAdmin = true
+			break
+		}
+	}
+	if isAdmin {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT m.id, m.title, m.description, m.created_by, m.created_at
 			 FROM modules m WHERE m.deleted_at IS NULL`,
@@ -470,8 +477,18 @@ func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
-func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) (*sql.Rows, error) {
-	if role == "admin" {
+func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) (*sql.Rows, error) {
+	isAdmin := false
+	isLecturer := false
+	for _, r := range roles {
+		if r == "admin" {
+			isAdmin = true
+		}
+		if r == "lecturer" {
+			isLecturer = true
+		}
+	}
+	if isAdmin {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
 			 FROM events e
@@ -482,8 +499,8 @@ func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 			from, to,
 		)
 	}
-	// Teacher: events for modules they teach
-	if role == "teacher" {
+	// Lecturer: events for modules they teach
+	if isLecturer {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
 			 FROM events e

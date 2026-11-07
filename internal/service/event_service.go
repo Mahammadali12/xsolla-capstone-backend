@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -64,10 +65,10 @@ func eventFromStore(e store.Event) Event {
 
 // ListEvents returns events in the given date range.
 // Students see only events from modules in courses they're enrolled in.
-// Teachers see events for courses they create.
+// Lecturers see events for modules they create.
 // Admins see all events.
-func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]Event, error) {
-	storeEvents, err := s.store.ListEventsByRange(ctx, from, to, userID, role)
+func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error) {
+	storeEvents, err := s.store.ListEventsByRange(ctx, from, to, userID, roles)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +80,13 @@ func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.T
 }
 
 // GetEventByID returns an event by ID with authorization check.
-func (s *EventService) GetEventByID(ctx context.Context, userID int64, role string, id int64) (*Event, error) {
+func (s *EventService) GetEventByID(ctx context.Context, userID int64, roles []string, id int64) (*Event, error) {
 	e, err := s.store.GetEventByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		return eventFromStorePtr(e), nil
 	}
 
@@ -118,10 +119,10 @@ func eventFromStorePtr(e *store.Event) *Event {
 }
 
 // CreateEvent creates a new calendar event.
-// Only teachers and admins can create events. module_id must reference a
+// Only lecturers and admins can create events. module_id must reference a
 // module the caller teaches (or be nil).
-func (s *EventService) CreateEvent(ctx context.Context, userID int64, role string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
-	if role != "teacher" && role != "admin" {
+func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
+	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, ErrOnlyStaffCanCreateEvent
 	}
 
@@ -138,7 +139,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, role strin
 			}
 			return nil, err
 		}
-		if role != "admin" {
+		if !auth.HasRole(roles, "admin") {
 			teacher, err := s.store.IsUserTeacherOfModule(ctx, *moduleID, userID)
 			if err != nil {
 				return nil, err
@@ -159,8 +160,8 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, role strin
 
 // UpdateEvent updates an event.
 // Only the creator (via module ownership) or admin can update.
-func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
-	if role != "teacher" && role != "admin" {
+func (s *EventService) UpdateEvent(ctx context.Context, userID int64, roles []string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
+	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, ErrOnlyStaffCanCreateEvent
 	}
 
@@ -174,7 +175,7 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role strin
 		return nil, err
 	}
 
-	if role != "admin" && existing.ModuleID != nil {
+	if !auth.HasRole(roles, "admin") && existing.ModuleID != nil {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, *existing.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -184,7 +185,7 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role strin
 		}
 	}
 
-	storeEvent, err := s.store.UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID, role == "admin")
+	storeEvent, err := s.store.UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID, auth.HasRole(roles, "admin"))
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +195,8 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role strin
 
 // DeleteEvent soft-deletes an event.
 // Only the creator or admin can delete.
-func (s *EventService) DeleteEvent(ctx context.Context, userID int64, role string, id int64) error {
-	if role != "teacher" && role != "admin" {
+func (s *EventService) DeleteEvent(ctx context.Context, userID int64, roles []string, id int64) error {
+	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return ErrOnlyStaffCanCreateEvent
 	}
 
@@ -205,7 +206,7 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID int64, role strin
 		return err
 	}
 
-	if role != "admin" && existing.ModuleID != nil {
+	if !auth.HasRole(roles, "admin") && existing.ModuleID != nil {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, *existing.ModuleID, userID)
 		if err != nil {
 			return err
@@ -215,5 +216,5 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID int64, role strin
 		}
 	}
 
-	return s.store.DeleteEvent(ctx, id, userID, role == "admin")
+	return s.store.DeleteEvent(ctx, id, userID, auth.HasRole(roles, "admin"))
 }

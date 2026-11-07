@@ -64,8 +64,8 @@ func (s *StoreImpl) GetModuleByID(ctx context.Context, id int64) (*Module, error
 }
 
 // GetModulesForUser returns modules accessible to the user based on their role.
-func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, role string) ([]Module, error) {
-	rows, err := s.DB().GetModulesForUser(ctx, userID, role)
+func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]Module, error) {
+	rows, err := s.DB().GetModulesForUser(ctx, userID, roles)
 	if err != nil {
 		return nil, err
 	}

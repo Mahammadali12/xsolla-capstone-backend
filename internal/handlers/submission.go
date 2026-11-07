@@ -17,11 +17,11 @@ import (
 // SubmissionService is the interface that submission handlers depend on.
 type SubmissionService interface {
 	CreateSubmission(ctx context.Context, studentID int64, courseID int64, contentItemID int64, textBody string, fileIDs []int64) (*store.Submission, error)
-	GetSubmissionByID(ctx context.Context, userID int64, role string, submissionID int64) (*store.Submission, error)
+	GetSubmissionByID(ctx context.Context, userID int64, roles []string, submissionID int64) (*store.Submission, error)
 	GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*store.Submission, error)
-	GetSubmissionsForAssignment(ctx context.Context, userID int64, role string, contentItemID int64) ([]store.Submission, error)
-	UpdateSubmissionGrade(ctx context.Context, userID int64, role string, submissionID int64, grade *float64, feedback string) (*store.Submission, error)
-	DeleteSubmission(ctx context.Context, userID int64, role string, submissionID int64) error
+	GetSubmissionsForAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64) ([]store.Submission, error)
+	UpdateSubmissionGrade(ctx context.Context, userID int64, roles []string, submissionID int64, grade *float64, feedback string) (*store.Submission, error)
+	DeleteSubmission(ctx context.Context, userID int64, roles []string, submissionID int64) error
 }
 
 type SubmissionHandlers struct {
@@ -91,7 +91,7 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 // GET /modules/:moduleId/content-items/:assignmentId/submissions
 func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	contentItemID, err := strconv.ParseInt(r.PathValue("assignmentId"), 10, 64)
 	if err != nil {
@@ -99,7 +99,7 @@ func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	submissions, err := h.svc.GetSubmissionsForAssignment(r.Context(), userID, role, contentItemID)
+	submissions, err := h.svc.GetSubmissionsForAssignment(r.Context(), userID, roles, contentItemID)
 	if err != nil {
 		log.Printf("submission handler: ListSubmissions error: %v", err)
 		if errors.Is(err, store.ErrContentItemNotFound) {
@@ -172,7 +172,7 @@ func (h *SubmissionHandlers) GetMySubmission(w http.ResponseWriter, r *http.Requ
 // POST /submissions/:id/grade
 func (h *SubmissionHandlers) GradeSubmission(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	submissionID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -187,7 +187,7 @@ func (h *SubmissionHandlers) GradeSubmission(w http.ResponseWriter, r *http.Requ
 	}
 
 	grade := req.Grade
-	s, err := h.svc.UpdateSubmissionGrade(r.Context(), userID, role, submissionID, &grade, req.Feedback)
+	s, err := h.svc.UpdateSubmissionGrade(r.Context(), userID, roles, submissionID, &grade, req.Feedback)
 	if err != nil {
 		log.Printf("submission handler: GradeSubmission error: %v", err)
 		switch {
@@ -226,7 +226,7 @@ func feedbackString(s *string) string {
 // GET /submissions/:id/files — list files attached to a submission
 func (h *SubmissionHandlers) GetSubmissionFiles(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
-	role := middleware.CtxRole(r.Context())
+	roles := middleware.CtxRoles(r.Context())
 
 	submissionID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -234,7 +234,7 @@ func (h *SubmissionHandlers) GetSubmissionFiles(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	sub, err := h.svc.GetSubmissionByID(r.Context(), userID, role, submissionID)
+	sub, err := h.svc.GetSubmissionByID(r.Context(), userID, roles, submissionID)
 	if err != nil {
 		if errors.Is(err, store.ErrSubmissionNotFound) {
 			writeError(w, 404, "not_found", "submission not found", nil)

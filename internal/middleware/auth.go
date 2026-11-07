@@ -23,6 +23,7 @@ func UserID(r *http.Request) int64 {
 }
 
 // Role returns the authenticated user role from the request context.
+// Deprecated: use CtxRoles instead.
 func Role(r *http.Request) string {
 	v, _ := r.Context().Value(roleKey).(string)
 	return v
@@ -34,10 +35,30 @@ func CtxUserID(ctx context.Context) int64 {
 	return v
 }
 
-// CtxRole returns the role stored in context by Authenticator.Middleware.
+// CtxRoles returns the authenticated user's roles from request context.
+func CtxRoles(ctx context.Context) []string {
+	v, _ := ctx.Value(roleKey).([]string)
+	return v
+}
+
+// CtxRole returns a single role stored in context by Authenticator.Middleware.
+// Deprecated: use CtxRoles instead.
 func CtxRole(ctx context.Context) string {
 	v, _ := ctx.Value(roleKey).(string)
 	return v
+}
+
+// HasAnyRole reports whether the request context carries any of the given roles.
+func HasAnyRole(r *http.Request, roles ...string) bool {
+	userRoles := middlewareRoleSlice(r)
+	for _, wanted := range roles {
+		for _, ur := range userRoles {
+			if ur == wanted {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Authenticator wraps JWT verification and sets user context.
@@ -59,7 +80,7 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
-		ctx = context.WithValue(ctx, roleKey, claims.Role)
+		ctx = context.WithValue(ctx, roleKey, claims.Roles)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -75,7 +96,7 @@ func (a *Authenticator) OptionalAuth(next http.Handler) http.Handler {
 			if token != authHeader {
 				if claims, err := auth.Verify(token, a.Secret); err == nil {
 					ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
-					ctx = context.WithValue(ctx, roleKey, claims.Role)
+					ctx = context.WithValue(ctx, roleKey, claims.Roles)
 					r = r.WithContext(ctx)
 				}
 			}
@@ -84,10 +105,10 @@ func (a *Authenticator) OptionalAuth(next http.Handler) http.Handler {
 	})
 }
 
-// RequireRole wraps a handler so only users with the given role may pass.
-func (a *Authenticator) RequireRole(role string, next http.Handler) http.Handler {
+// RequireRole wraps a handler so only users with any of the given roles may pass.
+func (a *Authenticator) RequireRole(next http.Handler, roles ...string) http.Handler {
 	return a.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if middlewareRole(r) != role {
+		if !HasAnyRole(r, roles...) {
 			http.Error(w, `{"error":"forbidden","message":"insufficient role","status":403}`, http.StatusForbidden)
 			return
 		}
@@ -95,7 +116,7 @@ func (a *Authenticator) RequireRole(role string, next http.Handler) http.Handler
 	}))
 }
 
-func middlewareRole(r *http.Request) string {
-	v, _ := r.Context().Value(roleKey).(string)
+func middlewareRoleSlice(r *http.Request) []string {
+	v, _ := r.Context().Value(roleKey).([]string)
 	return v
 }

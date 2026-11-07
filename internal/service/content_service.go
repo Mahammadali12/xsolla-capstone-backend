@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -28,9 +29,9 @@ func NewContentService(s store.Store) *ContentService {
 // CreateContentItem creates a new content item.
 // Only file and assignment types are supported (sections are removed).
 // Assignments require a non-nil due_at.
-func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error) {
-	// Only teacher or admin can create content items
-	if role != "teacher" && role != "admin" {
+func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error) {
+	// Only lecturer or admin can create content items
+	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, store.ErrNotModuleTeacher
 	}
 
@@ -40,7 +41,7 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 	}
 
 	// Teacher must be enrolled in/teach the module
-	if role == "teacher" {
+	if auth.HasRole(roles, "lecturer") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
 		if err != nil {
 			return nil, err
@@ -77,13 +78,13 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 }
 
 // GetContentItemByID returns a content item if the user is authorized to view it.
-func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, role string, itemID int64) (*store.ContentItem, error) {
+func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error) {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		return ci, nil
 	}
 
@@ -95,23 +96,17 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 		return nil, store.ErrNotEnrolled
 	}
 
-	// If item is not visible, only teacher/admin can see it
-	if !ci.IsVisible && role != "admin" {
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if !teacher {
-			return nil, store.ErrNotEnrolled
-		}
+	// If item is not visible, only admin can see it
+	if !ci.IsVisible && !auth.HasRole(roles, "admin") {
+		return nil, store.ErrNotEnrolled
 	}
 
 	return ci, nil
 }
 
 // GetContentItemsForModule returns the content tree for a module.
-func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.ContentItem, error) {
-	if role == "admin" {
+func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error) {
+	if auth.HasRole(roles, "admin") {
 		return s.store.GetContentItemsForModule(ctx, moduleID, false)
 	}
 
@@ -135,13 +130,13 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 // UpdateContentItem updates a content item if the user is authorized.
 // If the item is an assignment and due_at is provided, the assignment's
 // deadline is updated too.
-func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error) {
+func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error) {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
 
-	if role != "admin" {
+	if !auth.HasRole(roles, "admin") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -161,13 +156,13 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 }
 
 // DeleteContentItem soft-deletes a content item if the user is authorized.
-func (s *ContentService) DeleteContentItem(ctx context.Context, userID int64, role string, itemID int64) error {
+func (s *ContentService) DeleteContentItem(ctx context.Context, userID int64, roles []string, itemID int64) error {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
 	if err != nil {
 		return err
 	}
 
-	if role != "admin" {
+	if !auth.HasRole(roles, "admin") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return err
@@ -181,13 +176,13 @@ func (s *ContentService) DeleteContentItem(ctx context.Context, userID int64, ro
 }
 
 // GetAssignmentByContentItemID returns the assignment for a content item.
-func (s *ContentService) GetAssignmentByContentItemID(ctx context.Context, userID int64, role string, contentItemID int64) (*store.Assignment, error) {
+func (s *ContentService) GetAssignmentByContentItemID(ctx context.Context, userID int64, roles []string, contentItemID int64) (*store.Assignment, error) {
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
 	if err != nil {
 		return nil, err
 	}
 
-	if role != "admin" {
+	if !auth.HasRole(roles, "admin") {
 		enrolled, err := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -207,13 +202,13 @@ func (s *ContentService) GetAssignmentByContentItemID(ctx context.Context, userI
 }
 
 // UpdateAssignment updates an assignment if the user is authorized.
-func (s *ContentService) UpdateAssignment(ctx context.Context, userID int64, role string, contentItemID int64, dueAt *time.Time, maxPoints int) (*store.Assignment, error) {
+func (s *ContentService) UpdateAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64, dueAt *time.Time, maxPoints int) (*store.Assignment, error) {
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
 	if err != nil {
 		return nil, err
 	}
 
-	if role != "admin" {
+	if !auth.HasRole(roles, "admin") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err

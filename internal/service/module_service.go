@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -32,13 +33,13 @@ func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title st
 }
 
 // GetModuleByID returns a module if the user is authorized to view it.
-func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, role string, moduleID int64) (*store.Module, error) {
+func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles []string, moduleID int64) (*store.Module, error) {
 	m, err := s.store.GetModuleByID(ctx, moduleID)
 	if err != nil {
 		return nil, err
 	}
 
-	if role == "admin" {
+	if auth.HasRole(roles, "admin") {
 		return m, nil
 	}
 
@@ -62,13 +63,13 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, role st
 }
 
 // GetModulesForUser returns modules accessible to the user.
-func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, role string) ([]store.Module, error) {
-	return s.store.GetModulesForUser(ctx, userID, role)
+func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
+	return s.store.GetModulesForUser(ctx, userID, roles)
 }
 
 // PatchModule updates a module if the user is authorized.
-func (s *ModuleService) PatchModule(ctx context.Context, userID int64, role string, moduleID int64, title string, description string) (*store.Module, error) {
-	if role == "admin" {
+func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string) (*store.Module, error) {
+	if auth.HasRole(roles, "admin") {
 		return s.store.PatchModule(ctx, moduleID, title, description, userID, true)
 	}
 
@@ -84,8 +85,8 @@ func (s *ModuleService) PatchModule(ctx context.Context, userID int64, role stri
 }
 
 // DeleteModule soft-deletes a module if the user is authorized.
-func (s *ModuleService) DeleteModule(ctx context.Context, userID int64, role string, moduleID int64) error {
-	if role == "admin" {
+func (s *ModuleService) DeleteModule(ctx context.Context, userID int64, roles []string, moduleID int64) error {
+	if auth.HasRole(roles, "admin") {
 		return s.store.DeleteModule(ctx, moduleID, userID, true)
 	}
 
@@ -101,19 +102,19 @@ func (s *ModuleService) DeleteModule(ctx context.Context, userID int64, role str
 }
 
 // CreateEnrollment enrolls a user in a module.
-func (s *ModuleService) CreateEnrollment(ctx context.Context, actorID int64, actorRole string, moduleID int64, userID int64) (*store.Enrollment, error) {
+func (s *ModuleService) CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error) {
 	// Students can only enroll themselves
-	if actorRole == "student" && actorID != userID {
+	if auth.HasRole(actorRoles, "student") && actorID != userID {
 		return nil, ErrNotEnrolled
 	}
 
-	// Teacher/admin can enroll anyone, but must be authorized for the module
-	if actorRole == "teacher" || actorRole == "admin" {
+	// Lecturer/admin can enroll anyone, but must be authorized for the module
+	if auth.HasRole(actorRoles, "lecturer") || auth.HasRole(actorRoles, "admin") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, actorID)
 		if err != nil {
 			return nil, err
 		}
-		if !teacher && actorRole == "teacher" {
+		if !teacher && auth.HasRole(actorRoles, "lecturer") {
 			return nil, ErrNotModuleTeacher
 		}
 	}
@@ -126,19 +127,19 @@ func (s *ModuleService) CreateEnrollment(ctx context.Context, actorID int64, act
 }
 
 // DeleteEnrollment removes a user from a module.
-func (s *ModuleService) DeleteEnrollment(ctx context.Context, actorID int64, actorRole string, moduleID int64, userID int64) error {
+func (s *ModuleService) DeleteEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) error {
 	// Students can only unenroll themselves
-	if actorRole == "student" && actorID != userID {
+	if auth.HasRole(actorRoles, "student") && actorID != userID {
 		return ErrNotEnrolled
 	}
 
-	// Teacher/admin can unenroll anyone, but must be authorized for the module
-	if actorRole == "teacher" || actorRole == "admin" {
+	// Lecturer/admin can unenroll anyone, but must be authorized for the module
+	if auth.HasRole(actorRoles, "lecturer") || auth.HasRole(actorRoles, "admin") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, actorID)
 		if err != nil {
 			return err
 		}
-		if !teacher && actorRole == "teacher" {
+		if !teacher && auth.HasRole(actorRoles, "lecturer") {
 			return ErrNotModuleTeacher
 		}
 	}
@@ -147,7 +148,7 @@ func (s *ModuleService) DeleteEnrollment(ctx context.Context, actorID int64, act
 }
 
 // GetEnrollmentsForModule returns all enrollments for a module if authorized.
-func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.Enrollment, error) {
+func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.Enrollment, error) {
 	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
 	if err != nil {
 		return nil, err
@@ -157,7 +158,7 @@ func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int6
 		if err != nil {
 			return nil, err
 		}
-		if !teacher && role != "admin" {
+		if !teacher && !auth.HasRole(roles, "admin") {
 			return nil, ErrNotEnrolled
 		}
 	}

@@ -7,7 +7,7 @@ type User struct {
 	ID          int64
 	Email       string
 	Name        string
-	Role        string
+	Roles       []string
 	PasswordHash string
 	CreatedAt   time.Time
 }

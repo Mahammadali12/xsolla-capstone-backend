@@ -24,9 +24,9 @@ func IsDuplicateEmail(err error) bool {
 }
 
 // CreateUser inserts a new user and returns the generated ID.
-func (s *StoreImpl) CreateUser(ctx context.Context, email string, name string, role string, passwordHash string) (int64, error) {
+func (s *StoreImpl) CreateUser(ctx context.Context, email string, name string, roles []string, passwordHash string) (int64, error) {
 	var id int64
-	err := s.DB().InsertUser(ctx, email, name, role, passwordHash).Scan(&id)
+	err := s.DB().InsertUser(ctx, email, name, roles, passwordHash).Scan(&id)
 	if err != nil {
 		var pgErr *pq.Error
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -45,17 +45,18 @@ func (s *StoreImpl) GetUserCount(ctx context.Context) (int, error) {
 }
 
 // GetUserByEmail looks up a user by email (case-insensitive).
-func (s *StoreImpl) GetUserByEmail(ctx context.Context, email string) (int64, string, string, error) {
+func (s *StoreImpl) GetUserByEmail(ctx context.Context, email string) (int64, string, []string, error) {
 	var id int64
-	var hash, role string
-	err := s.DB().GetUserByEmail(ctx, email).Scan(&id, &hash, &role)
+	var hash string
+	var roles []string
+	err := s.DB().GetUserByEmail(ctx, email).Scan(&id, &hash, &roles)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, "", "", ErrUserNotFound
+			return 0, "", nil, ErrUserNotFound
 		}
-		return 0, "", "", err
+		return 0, "", nil, err
 	}
-	return id, hash, role, nil
+	return id, hash, roles, nil
 }
 
 // SaveRefreshToken stores a refresh token hash for a user.
@@ -77,18 +78,19 @@ func (s *StoreImpl) DeleteRefreshToken(ctx context.Context, tokenHash string) er
 }
 
 // GetUserByID looks up a user by ID.
-func (s *StoreImpl) GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error) {
+func (s *StoreImpl) GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error) {
 	var userID int64
-	var email, name, role string
+	var email, name string
+	var roles []string
 	var createdAt time.Time
-	err := s.DB().GetUserByID(ctx, id).Scan(&userID, &email, &name, &role, &createdAt)
+	err := s.DB().GetUserByID(ctx, id).Scan(&userID, &email, &name, &roles, &createdAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, "", "", "", time.Time{}, ErrUserNotFound
+			return 0, "", "", nil, time.Time{}, ErrUserNotFound
 		}
-		return 0, "", "", "", time.Time{}, err
+		return 0, "", "", nil, time.Time{}, err
 	}
-	return userID, email, name, role, createdAt, nil
+	return userID, email, name, roles, createdAt, nil
 }
 
 // FindRefreshTokenByHash looks up an active refresh token by hash.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -58,14 +59,14 @@ func (s *FileService) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]
 }
 
 // CanReadFile checks the link-rule access and returns the file if readable.
-func (s *FileService) CanReadFile(ctx context.Context, userID int64, role string, fileID int64) (*store.File, error) {
+func (s *FileService) CanReadFile(ctx context.Context, userID int64, roles []string, fileID int64) (*store.File, error) {
 	f, err := s.store.GetFileByID(ctx, fileID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Owner or admin can always read
-	if f.UploadedBy == userID || role == "admin" {
+	if f.UploadedBy == userID || auth.HasRole(roles, "admin") {
 		return f, nil
 	}
 
@@ -74,19 +75,19 @@ func (s *FileService) CanReadFile(ctx context.Context, userID int64, role string
 		if enrolled, _ := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID); enrolled {
 			return f, nil
 		}
-		if role == "teacher" {
+		if auth.HasRole(roles, "lecturer") {
 			if teacher, _ := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID); teacher {
 				return f, nil
 			}
 		}
 	}
 
-	// Linked to a submission you own, or may grade (teacher/admin enrolled in module)
+	// Linked to a submission you own, or may grade (lecturer/admin enrolled in module)
 	if sub, err := s.store.GetSubmissionForFile(ctx, fileID); err == nil && sub != nil {
 		if sub.StudentID == userID {
 			return f, nil
 		}
-		if role == "teacher" || role == "admin" {
+		if auth.HasRole(roles, "lecturer") || auth.HasRole(roles, "admin") {
 			if ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID); err == nil && ci != nil {
 				if teacher, _ := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID); teacher {
 					return f, nil
@@ -99,13 +100,13 @@ func (s *FileService) CanReadFile(ctx context.Context, userID int64, role string
 }
 
 // DeleteFile soft-deletes a file if authorized and not referenced.
-func (s *FileService) DeleteFile(ctx context.Context, userID int64, role string, id int64) error {
+func (s *FileService) DeleteFile(ctx context.Context, userID int64, roles []string, id int64) error {
 	f, err := s.store.GetFileByID(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	if f.UploadedBy != userID && role != "admin" {
+	if f.UploadedBy != userID && !auth.HasRole(roles, "admin") {
 		return errors.New("forbidden")
 	}
 

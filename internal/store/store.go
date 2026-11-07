@@ -10,10 +10,10 @@ import (
 // Concrete implementation is *StoreImpl in this package.
 type Store interface {
 	// User methods
-	CreateUser(ctx context.Context, email string, name string, role string, passwordHash string) (int64, error)
-	GetUserByEmail(ctx context.Context, email string) (int64, string, string, error)
+	CreateUser(ctx context.Context, email string, name string, roles []string, passwordHash string) (int64, error)
+	GetUserByEmail(ctx context.Context, email string) (int64, string, []string, error)
 	GetUserCount(ctx context.Context) (int, error)
-	GetUserByID(ctx context.Context, id int64) (int64, string, string, string, time.Time, error)
+	GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error)
 
 	// Refresh token methods
 	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error
@@ -25,7 +25,7 @@ type Store interface {
 	// Module methods
 	CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error)
 	GetModuleByID(ctx context.Context, id int64) (*Module, error)
-	GetModulesForUser(ctx context.Context, userID int64, role string) ([]Module, error)
+	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]Module, error)
 	PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error)
 	DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) error
 
@@ -72,7 +72,7 @@ type Store interface {
 	// Event methods
 	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error)
 	GetEventByID(ctx context.Context, id int64) (*Event, error)
-	ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, role string) ([]Event, error)
+	ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error)
 	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
 	DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error
 }

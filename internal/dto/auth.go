@@ -30,7 +30,7 @@ type UserResponse struct {
 	ID         int64     `json:"id"`
 	Email      string    `json:"email"`
 	Name       string    `json:"name"`
-	Role       string    `json:"role"`
+	Roles      []string  `json:"roles"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
