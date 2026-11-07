@@ -20,7 +20,7 @@ type ContentService interface {
 	CreateContentItem(ctx context.Context, userID int64, role string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int) (*store.ContentItem, error)
 	GetContentItemByID(ctx context.Context, userID int64, role string, itemID int64) (*store.ContentItem, error)
 	GetContentItemsForModule(ctx context.Context, userID int64, role string, moduleID int64) ([]store.ContentItem, error)
-	UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) (*store.ContentItem, error)
+	UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error)
 	DeleteContentItem(ctx context.Context, userID int64, role string, itemID int64) error
 }
 
@@ -230,8 +230,9 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 
 	position := req.Position
 	isVisible := req.IsVisible
+	dueAt := req.DueAt
 
-	ci, err := h.svc.UpdateContentItem(r.Context(), userID, role, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID)
+	ci, err := h.svc.UpdateContentItem(r.Context(), userID, role, itemID, req.Title, req.Description, position, isVisible, req.ParentID, req.FileID, dueAt)
 	if err != nil {
 		log.Printf("content handler: UpdateContentItem error: %v", err)
 		if errors.Is(err, store.ErrNotModuleTeacher) {

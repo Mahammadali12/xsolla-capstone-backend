@@ -87,9 +87,9 @@ func (s *StoreImpl) GetContentItemsForModule(ctx context.Context, moduleID int64
 }
 
 // UpdateContentItem updates a content item.
-func (s *StoreImpl) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) (*ContentItem, error) {
+func (s *StoreImpl) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*ContentItem, error) {
 	var ci ContentItem
-	err := s.DB().UpdateContentItem(ctx, id, title, description, position, isVisible, parentID, fileID).Scan(
+	err := s.DB().UpdateContentItem(ctx, id, title, description, position, isVisible, parentID, fileID, dueAt).Scan(
 		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.CreatedAt,
 		&ci.DueAt, &ci.MaxPoints,
 	)

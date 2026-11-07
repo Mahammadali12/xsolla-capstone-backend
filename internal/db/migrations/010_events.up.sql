@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS events (
     all_day     BOOL NOT NULL DEFAULT FALSE,
     location    TEXT NULL,
     description TEXT NULL,
-    module_id   BIGINT NULL REFERENCES content_items(id),
+    module_id   BIGINT NULL REFERENCES modules(id),
     deleted_at  TIMESTAMPTZ NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

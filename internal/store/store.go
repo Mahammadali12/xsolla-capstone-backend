@@ -40,7 +40,7 @@ type Store interface {
 	CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64) (*ContentItem, error)
 	GetContentItemByID(ctx context.Context, id int64) (*ContentItem, error)
 	GetContentItemsForModule(ctx context.Context, moduleID int64, visibleOnly bool) ([]ContentItem, error)
-	UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) (*ContentItem, error)
+	UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*ContentItem, error)
 	DeleteContentItem(ctx context.Context, id int64) error
 
 	// Assignment methods

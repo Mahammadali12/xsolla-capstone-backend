@@ -246,18 +246,19 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 	)
 }
 
-func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) *sql.Row {
+func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`UPDATE content_items
+		`UPDATE content_items AS ci
 		 SET title = COALESCE($2, title),
 		     description = COALESCE($3, description),
 		     position = COALESCE($4, position),
 		     is_visible = COALESCE($5, is_visible),
 		     parent_id = COALESCE($6, parent_id),
 		     file_id = COALESCE($7, file_id)
-		 WHERE id = $1 AND deleted_at IS NULL
+		 WHERE ci.id = $1 AND ci.deleted_at IS NULL
 		 RETURNING ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.created_at,
-			 a.due_at, COALESCE(a.max_points, 0)`,
+		     (SELECT a.due_at FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL),
+		     COALESCE((SELECT a.max_points FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL), 0)`,
 		id, title, description, position, isVisible, parentID, fileID,
 	)
 }
@@ -486,12 +487,12 @@ func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 		return q.DBTX.QueryContext(ctx,
 			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
 			 FROM events e
-			 LEFT JOIN content_items ci ON ci.id = e.module_id
+			 LEFT JOIN modules m ON m.id = e.module_id
 			 WHERE e.deleted_at IS NULL
 			   AND e.starts_at <= $3
 			   AND e.ends_at >= $2
-			   AND (ci.id IS NULL OR ci.deleted_at IS NULL)
-			   AND (ci.id IS NULL OR ci.module_id IN (
+			   AND (m.id IS NULL OR m.deleted_at IS NULL)
+			   AND (m.id IS NULL OR m.id IN (
 			     SELECT m.id FROM modules m WHERE m.created_by = $1 AND m.deleted_at IS NULL
 			   ))
 			 ORDER BY e.starts_at`,
@@ -502,12 +503,12 @@ func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.T
 	return q.DBTX.QueryContext(ctx,
 		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.created_at
 		 FROM events e
-		 LEFT JOIN content_items ci ON ci.id = e.module_id
+		 LEFT JOIN modules m ON m.id = e.module_id
 		 WHERE e.deleted_at IS NULL
 		   AND e.starts_at <= $3
 		   AND e.ends_at >= $2
-		   AND (ci.id IS NULL OR ci.deleted_at IS NULL)
-		   AND (ci.id IS NULL OR ci.module_id IN (
+		   AND (m.id IS NULL OR m.deleted_at IS NULL)
+		   AND (m.id IS NULL OR m.id IN (
 		     SELECT m.id FROM modules m
 		     JOIN enrollments en ON en.module_id = m.id
 		     WHERE m.deleted_at IS NULL AND en.user_id = $1
@@ -546,10 +547,7 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 		     module_id = COALESCE($9, module_id)
 		 WHERE id = $1 AND deleted_at IS NULL
 		   AND module_id IN (
-		     SELECT ci.id FROM content_items ci
-		     WHERE ci.module_id IN (
-		       SELECT m.id FROM modules m WHERE m.created_by = $10 AND m.deleted_at IS NULL
-		     )
+		     SELECT m.id FROM modules m WHERE m.created_by = $10 AND m.deleted_at IS NULL
 		   )
 		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, created_at`,
 		id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID,
@@ -566,10 +564,7 @@ func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin
 	return q.DBTX.ExecContext(ctx,
 		`UPDATE events SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
 		 AND module_id IN (
-		   SELECT ci.id FROM content_items ci
-		   WHERE ci.module_id IN (
-		     SELECT m.id FROM modules m WHERE m.created_by = $2 AND m.deleted_at IS NULL
-		   )
+		   SELECT m.id FROM modules m WHERE m.created_by = $2 AND m.deleted_at IS NULL
 		 )`,
 		id, userID,
 	)

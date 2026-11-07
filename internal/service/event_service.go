@@ -90,11 +90,7 @@ func (s *EventService) GetEventByID(ctx context.Context, userID int64, role stri
 	}
 
 	if e.ModuleID != nil {
-		ci, err := s.store.GetContentItemByID(ctx, *e.ModuleID)
-		if err != nil {
-			return nil, err
-		}
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, *e.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +119,7 @@ func eventFromStorePtr(e *store.Event) *Event {
 
 // CreateEvent creates a new calendar event.
 // Only teachers and admins can create events. module_id must reference a
-// content item in a module the caller teaches (or be nil).
+// module the caller teaches (or be nil).
 func (s *EventService) CreateEvent(ctx context.Context, userID int64, role string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
 	if role != "teacher" && role != "admin" {
 		return nil, ErrOnlyStaffCanCreateEvent
@@ -133,17 +129,17 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, role strin
 		return nil, ErrEndsBeforeStarts
 	}
 
-	// Validate module_id references a content item in a module the caller teaches
+	// Validate module_id references a module the caller teaches
 	if moduleID != nil {
-		ci, err := s.store.GetContentItemByID(ctx, *moduleID)
+		_, err := s.store.GetModuleByID(ctx, *moduleID)
 		if err != nil {
-			if errors.Is(err, store.ErrContentItemNotFound) {
+			if errors.Is(err, store.ErrModuleNotFound) {
 				return nil, ErrModuleNotFound
 			}
 			return nil, err
 		}
 		if role != "admin" {
-			teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
+			teacher, err := s.store.IsUserTeacherOfModule(ctx, *moduleID, userID)
 			if err != nil {
 				return nil, err
 			}
@@ -179,11 +175,7 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, role strin
 	}
 
 	if role != "admin" && existing.ModuleID != nil {
-		ci, err := s.store.GetContentItemByID(ctx, *existing.ModuleID)
-		if err != nil {
-			return nil, err
-		}
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, *existing.ModuleID, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -214,11 +206,7 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID int64, role strin
 	}
 
 	if role != "admin" && existing.ModuleID != nil {
-		ci, err := s.store.GetContentItemByID(ctx, *existing.ModuleID)
-		if err != nil {
-			return err
-		}
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
+		teacher, err := s.store.IsUserTeacherOfModule(ctx, *existing.ModuleID, userID)
 		if err != nil {
 			return err
 		}

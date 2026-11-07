@@ -133,7 +133,9 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 }
 
 // UpdateContentItem updates a content item if the user is authorized.
-func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64) (*store.ContentItem, error) {
+// If the item is an assignment and due_at is provided, the assignment's
+// deadline is updated too.
+func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, role string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time) (*store.ContentItem, error) {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
 	if err != nil {
 		return nil, err
@@ -149,7 +151,13 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 		}
 	}
 
-	return s.store.UpdateContentItem(ctx, itemID, title, description, position, isVisible, parentID, fileID)
+	if ci.Type == "assignment" && dueAt != nil {
+		if _, err := s.store.UpdateAssignment(ctx, itemID, dueAt, 0); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.store.UpdateContentItem(ctx, itemID, title, description, position, isVisible, parentID, fileID, dueAt)
 }
 
 // DeleteContentItem soft-deletes a content item if the user is authorized.

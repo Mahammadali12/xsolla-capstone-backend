@@ -2,6 +2,7 @@ info:
   name: Create module
   type: http
   seq: 1
+
 http:
   method: POST
   url: http://localhost:8080/modules
@@ -14,7 +15,7 @@ http:
     type: json
     data: |-
       {
-        "title": "CS101",
+        "title": "CS202",
         "description": "Introduction to Computer Science"
       }
   auth: inherit
