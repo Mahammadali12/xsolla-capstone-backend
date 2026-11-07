@@ -146,9 +146,11 @@ func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64)
 	var enrollments []Enrollment
 	for rows.Next() {
 		var e Enrollment
-		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Email, &e.Name, &e.Role); err != nil {
+		var role sql.NullString
+		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Email, &e.Name, &role); err != nil {
 			return nil, err
 		}
+		e.Role = role.String
 		enrollments = append(enrollments, e)
 	}
 	return enrollments, nil

@@ -19,12 +19,16 @@ definitions:
         type: string
       description:
         type: string
+      due_at:
+        type: string
       file_id:
         type: integer
       id:
         type: integer
       is_visible:
         type: boolean
+      max_points:
+        type: integer
       parent_id:
         type: integer
       position:
@@ -59,27 +63,18 @@ definitions:
       type:
         type: string
     type: object
-  dto.ModuleResponse:
-    properties:
-      created_at:
-        type: string
-      created_by:
-        type: integer
-      description:
-        type: string
-      id:
-        type: integer
-      title:
-        type: string
-    type: object
   dto.CreateContentItemRequest:
     properties:
       description:
+        type: string
+      due_at:
         type: string
       file_id:
         type: integer
       is_visible:
         type: boolean
+      max_points:
+        type: integer
       parent_id:
         type: integer
       position:
@@ -103,11 +98,11 @@ definitions:
     type: object
   dto.EnrollmentResponse:
     properties:
-      course_id:
-        type: integer
       created_at:
         type: string
       id:
+        type: integer
+      module_id:
         type: integer
       user_id:
         type: integer
@@ -141,6 +136,19 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.ModuleResponse:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      description:
+        type: string
+      id:
+        type: integer
+      title:
+        type: string
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
@@ -168,6 +176,8 @@ definitions:
   dto.UpdateContentItemRequest:
     properties:
       description:
+        type: string
+      due_at:
         type: string
       file_id:
         type: integer
@@ -197,8 +207,10 @@ definitions:
         type: integer
       name:
         type: string
-      role:
-        type: string
+      roles:
+        items:
+          type: string
+        type: array
     type: object
   handlers.ErrorDetail:
     properties:
@@ -455,362 +467,6 @@ paths:
       summary: Update content item
       tags:
       - content-items
-  /modules:
-    get:
-      description: Get modules the user is enrolled in (student), teaching (teacher),
-        or all (admin)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/dto.ModuleResponse'
-            type: array
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List modules
-      tags:
-      - modules
-    post:
-      consumes:
-      - application/json
-      description: Create a new module (teacher or admin only). The creator is auto-enrolled
-        as teacher.
-      parameters:
-      - description: Course details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateModuleRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.ModuleResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create module
-      tags:
-      - modules
-  /modules/{moduleId}/content-items:
-    get:
-      description: Get the content tree for a course (sections, files, assignments)
-      parameters:
-      - description: Course ID
-        in: path
-        name: moduleId
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/dto.ContentTreeNode'
-            type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List content items
-      tags:
-      - content-items
-    post:
-      consumes:
-      - application/json
-      description: Create a section, file, or assignment (teacher or admin only)
-      parameters:
-      - description: Course ID
-        in: path
-        name: moduleId
-        required: true
-        type: integer
-      - description: Content item details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateContentItemRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.ContentItemResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create content item
-      tags:
-      - content-items
-  /modules/{moduleId}/enrollments:
-    get:
-      description: Get all enrollments for a course (members must be enrolled/teacher/admin)
-      parameters:
-      - description: Course ID
-        in: path
-        name: moduleId
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/dto.EnrollmentResponse'
-            type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List module enrollments
-      tags:
-      - enrollments
-    post:
-      consumes:
-      - application/json
-      description: Enroll a user in a course. Students can only enroll themselves,
-        teachers/admins can enroll anyone
-      parameters:
-      - description: Course ID
-        in: path
-        name: moduleId
-        required: true
-        type: integer
-      - description: User ID to enroll
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.EnrollRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.EnrollmentResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Enroll in module
-      tags:
-      - enrollments
-  /modules/{moduleId}/enrollments/{userId}:
-    delete:
-      description: Remove a user from a course. Students can only unenroll themselves
-      parameters:
-      - description: Course ID
-        in: path
-        name: moduleId
-        required: true
-        type: integer
-      - description: User ID
-        in: path
-        name: userId
-        required: true
-        type: integer
-      responses:
-        "204":
-          description: No content
-          schema:
-            type: string
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Unenroll from module
-      tags:
-      - enrollments
-  /modules/{id}:
-    delete:
-      description: Soft-delete a module (teacher or admin only)
-      parameters:
-      - description: Course ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      responses:
-        "204":
-          description: No content
-          schema:
-            type: string
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete module
-      tags:
-      - modules
-    get:
-      description: Get module details if the user is enrolled or is the teacher
-      parameters:
-      - description: Course ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ModuleResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get module by ID
-      tags:
-      - modules
-    patch:
-      consumes:
-      - application/json
-      description: Update module title/description (teacher or admin only)
-      parameters:
-      - description: Course ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Course details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateModuleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.ModuleResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update module
-      tags:
-      - modules
   /files:
     post:
       consumes:
@@ -854,6 +510,362 @@ paths:
       summary: Upload file
       tags:
       - files
+  /modules:
+    get:
+      description: Get modules the user is enrolled in (student), teaching (teacher),
+        or all (admin)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.ModuleResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List modules
+      tags:
+      - modules
+    post:
+      consumes:
+      - application/json
+      description: Create a new module (teacher or admin only). The creator is auto-enrolled
+        as teacher.
+      parameters:
+      - description: Module details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateModuleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ModuleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create module
+      tags:
+      - modules
+  /modules/{id}:
+    delete:
+      description: Soft-delete a module (teacher or admin only)
+      parameters:
+      - description: Module ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete module
+      tags:
+      - modules
+    get:
+      description: Get module details if the user is enrolled or is the teacher
+      parameters:
+      - description: Module ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ModuleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get module by ID
+      tags:
+      - modules
+    patch:
+      consumes:
+      - application/json
+      description: Update module title/description (teacher or admin only)
+      parameters:
+      - description: Module ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Module details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateModuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ModuleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update module
+      tags:
+      - modules
+  /modules/{moduleId}/content-items:
+    get:
+      description: Get the content tree for a module (files, assignments)
+      parameters:
+      - description: Module ID
+        in: path
+        name: moduleId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.ContentTreeNode'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List content items
+      tags:
+      - content-items
+    post:
+      consumes:
+      - application/json
+      description: Create a file or assignment (teacher or admin only)
+      parameters:
+      - description: Module ID
+        in: path
+        name: moduleId
+        required: true
+        type: integer
+      - description: Content item details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateContentItemRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ContentItemResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create content item
+      tags:
+      - content-items
+  /modules/{moduleId}/enrollments:
+    get:
+      description: Get all enrollments for a module (members must be enrolled/teacher/admin)
+      parameters:
+      - description: Module ID
+        in: path
+        name: moduleId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.EnrollmentResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List module enrollments
+      tags:
+      - enrollments
+    post:
+      consumes:
+      - application/json
+      description: Enroll a user in a module. Students can only enroll themselves,
+        teachers/admins can enroll anyone
+      parameters:
+      - description: Module ID
+        in: path
+        name: moduleId
+        required: true
+        type: integer
+      - description: User ID to enroll
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EnrollRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.EnrollmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Enroll in module
+      tags:
+      - enrollments
+  /modules/{moduleId}/enrollments/{userId}:
+    delete:
+      description: Remove a user from a module. Students can only unenroll themselves
+      parameters:
+      - description: Module ID
+        in: path
+        name: moduleId
+        required: true
+        type: integer
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unenroll from module
+      tags:
+      - enrollments
   /users/me:
     get:
       description: Get the currently authenticated user profile

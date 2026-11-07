@@ -12,8 +12,8 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `CREATE EXTENSION citext;` — case-insensitive, unique email. No lowercasing needed before write.
 
 **USERS**
-- `id bigint PK`, `email citext UK`, `name text`, `role text CHECK role IN ('student','teacher','admin')`, `password_hash text NOT NULL`, `created_at timestamptz`
-- Signup defaults role to `student`. First registered user becomes `admin` (bootstrap); after that only an admin can create teacher accounts. No role-change endpoint for capstone.
+- `id bigint PK`, `email citext UK`, `name text`, `roles TEXT[] NOT NULL DEFAULT '{}'`, `password_hash text NOT NULL`, `created_at timestamptz`
+- Signup defaults roles to `["student"]`. First registered user becomes `admin` (bootstrap); after that only an admin can create lecturer accounts. No role-change endpoint for capstone.
 
 **MODULES** (renamed from courses — frontend refers to them as modules)
 - `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
@@ -43,7 +43,7 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK` — no duplicate file links on one submission
 
 **EVENTS** (calendar events: lectures, meetings, off-campus days)
-- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES content_items(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
 
 **MENTOR_SLOTS** (1:1 meeting availability + bookings)
 - `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
@@ -53,38 +53,38 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 
 ## Permission matrix
 
-| Endpoint | student | teacher | admin | Condition |
+| Endpoint | student | lecturer | admin | Condition |
 |---|---|---|---|---|
 | POST /auth/signup | any | any | any | — |
 | POST /auth/login | any | any | any | — |
 | POST /auth/logout | any | any | any | — |
 | GET /users/me | self | self | self | — |
 | GET /users?search= | — | — | any | admin only |
-| POST /modules | — | create + auto-enroll as teacher | create | — |
-| GET /modules | enrolled | enrolled / teacher | any | — |
-| GET /modules/:id | if enrolled | if enrolled / teacher | any | 403 otherwise |
+| POST /modules | — | create + auto-enroll as lecturer | create | — |
+| GET /modules | enrolled | enrolled / lecturer | any | — |
+| GET /modules/:id | if enrolled | if enrolled / lecturer | any | 403 otherwise |
 | PATCH /modules/:id | — | if created_by | if created_by | — |
 | DELETE /modules/:id | — | if created_by | any | soft delete; collect storage keys first |
 | POST /modules/:id/enrollments | self only | any user | any | 409 duplicate |
 | DELETE /modules/:id/enrollments/:userId | self only | any | any | — |
-| GET /modules/:id/enrollments | if enrolled | if enrolled / teacher | any | — |
-| GET /modules/:id/content-items | if enrolled | if enrolled / teacher | any | `is_visible` filtered server-side |
-| POST /modules/:id/content-items | — | if enrolled / teacher | any | parent rules enforced |
-| GET /content-items/:id | if enrolled + visible | if enrolled / teacher | any | 403/404 |
-| PATCH /content-items/:id | — | if enrolled / teacher | any | cycle check on parent_id |
-| DELETE /content-items/:id | — | if enrolled / teacher | any | soft delete |
+| GET /modules/:id/enrollments | if enrolled | if enrolled / lecturer | any | — |
+| GET /modules/:id/content-items | if enrolled | if enrolled / lecturer | any | `is_visible` filtered server-side |
+| POST /modules/:id/content-items | — | if enrolled / lecturer | any | parent rules enforced |
+| GET /content-items/:id | if enrolled + visible | if enrolled / lecturer | any | 403/404 |
+| PATCH /content-items/:id | — | if enrolled / lecturer | any | cycle check on parent_id |
+| DELETE /content-items/:id | — | if enrolled / lecturer | any | soft delete |
 | POST /files | any authenticated | any authenticated | any | size + type allowlist |
 | GET /files/:id | if accessible via link | if accessible via link | any | — |
 | GET /files/:id/download | if accessible via link | if accessible via link | any | link rule below |
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
 | POST /modules/:id/content-items/:assignmentId/submissions | self only | — | — | single attempt; file ownership check |
 | GET /content-items/:assignmentId/submissions/me | self only | — | — | own submission |
-| GET /modules/:id/submissions | if enrolled (own only) | if enrolled / teacher (all roster) | any | LEFT JOIN enrollments — missing work shown |
-| POST /submissions/:id/grade | — | if enrolled as teacher | any | one line: teacher/admin AND enrolled in module |
+| GET /modules/:id/submissions | if enrolled (own only) | if enrolled / lecturer (all roster) | any | LEFT JOIN enrollments — missing work shown |
+| POST /submissions/:id/grade | — | if enrolled as mentor | any | one line: mentor/admin AND enrolled in module |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
-| GET /events?from=&to= | if modules open | if enrolled/teacher | any | date range filter |
-| POST /events | — | create | create | teacher/admin only |
-| PATCH /events/:id | — | if created | any | teacher/admin only |
+| GET /events?from=&to= | if modules open | if enrolled/lecturer | any | date range filter |
+| POST /events | — | create | create | lecturer/admin only |
+| PATCH /events/:id | — | if created | any | lecturer/admin only |
 | DELETE /events/:id | — | if created | any | soft delete |
 | GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
 | POST /mentor-slots | — | open window | open window | mentor creates slots |
@@ -92,16 +92,16 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
 | DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
 | GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled modules |
-| GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
+| GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / lecturer | any | all students × assignments |
 
 **File read rule** — a file is readable if:
 1. it's linked to a visible, non-deleted content item in a module you're enrolled in, **or**
 2. it's linked to a submission you own, **or**
-3. you may grade that submission (teacher/admin enrolled in the module).
+3. you may grade that submission (lecturer/admin enrolled in the module).
 
-A teacher cannot download a random student's upload unless it's attached to a submission they're grading.
+A lecturer cannot download a random student's upload unless it's attached to a submission they're grading.
 
-**Grading rule** — `POST /submissions/:id/grade`: caller must be `teacher` or `admin` **AND** enrolled in the module that owns that submission's assignment. Query joins `submissions → assignments → content_items → modules → enrollments` and checks the caller's enrollment role for that module. "Is a teacher" is not enough; must be "teaches this module."
+**Grading rule** — `POST /submissions/:id/grade`: caller must be `mentor` or `admin` **AND** enrolled in the module that owns that submission's assignment. Query joins `submissions → assignments → content_items → modules → enrollments` and checks the caller's enrollment role for that module. "Is a lecturer" is not enough; must be "teaches this module."
 
 ## Endpoints
 
@@ -135,13 +135,13 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **GET /users?search=**
 - Admin only. Returns users matching email/name substring.
-- Needed so admins/teachers can look up `user_id` for enrollment
+- Needed so admins/lecturers can look up `user_id` for enrollment
 
 ### Modules
 
 **POST /modules**
 - Body: `{ title, description }`
-- Teacher/admin creates; auto-enrolls creator as `teacher`
+- Lecturer/admin creates; auto-enrolls creator as `lecturer`
 - Returns: module row
 
 **GET /modules**
@@ -149,7 +149,7 @@ A teacher cannot download a random student's upload unless it's attached to a su
 - One joined query
 
 **GET /modules/:id**
-- 404 if missing/soft-deleted. 403 if not enrolled and not admin/teacher of module
+- 404 if missing/soft-deleted. 403 if not enrolled and not admin/lecturer of module
 
 **PATCH /modules/:id**
 - Body: `{ title?, description? }`
@@ -175,7 +175,7 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **GET /modules/:moduleId/content-items**
 - Returns flat list. All items have `parent_id = null` (sections removed).
-- Server-side filter: `is_visible = true` and `deleted_at IS NULL` for students/teachers; admin sees all.
+- Server-side filter: `is_visible = true` and `deleted_at IS NULL` for students/lecturers; admin sees all.
 - One query for all items of module; list built in memory (O(n), n small)
 - Response shape:
   ```json
@@ -243,13 +243,13 @@ A teacher cannot download a random student's upload unless it's attached to a su
 **GET /content-items/:assignmentId/submissions/me**
 - Own submission: text, grade, feedback, files
 
-**GET /modules/:moduleId/content-items/:assignmentId/submissions** (teacher/admin)
+**GET /modules/:moduleId/content-items/:assignmentId/submissions** (lecturer/admin)
 - Full enrolled roster: `enrollments LEFT JOIN submissions` — one row per enrolled student, missing work shown as null
 - Teacher must be enrolled in the module
 
 **POST /submissions/:id/grade**
 - Body: `{ grade, feedback }`
-- Rule: caller is `teacher` or `admin` AND enrolled in the module owning the submission
+- Rule: caller is `lecturer` or `admin` AND enrolled in the module owning the submission
 - Sets `graded_by = auth user`, `graded_at = now`, `grade CHECK 0 <= grade <= max_points` (enforced in app code)
 
 **GET /submissions/:id/files**
@@ -261,15 +261,15 @@ A teacher cannot download a random student's upload unless it's attached to a su
 - Returns events in date range. Students see only events from open modules (module lock enforced server-side).
 - One query with date range filter.
 
-**POST /events** (teacher/admin only)
+**POST /events** (lecturer/admin only)
 - Body: `{ title, kind, starts_at, ends_at, all_day?, location?, description?, module_id? }`
 - Creates a calendar event. `kind` in `lecture | meeting | off-campus`.
 
-**PATCH /events/:id** (teacher/admin only)
+**PATCH /events/:id** (lecturer/admin only)
 - Body: partial event fields
 - Updates event. Creator or admin.
 
-**DELETE /events/:id** (teacher/admin only)
+**DELETE /events/:id** (lecturer/admin only)
 - Soft delete.
 
 ### Mentor Slots (1:1 meetings)
@@ -277,18 +277,18 @@ A teacher cannot download a random student's upload unless it's attached to a su
 **GET /mentor-slots**
 - Student: own mentor's slots. Teacher/admin: own slots. Future slots only.
 
-**POST /mentor-slots** (teacher/admin only)
+**POST /mentor-slots** (lecturer/admin only)
 - Body: `{ date, start, end, slot_minutes? }` — date as `YYYY-MM-DD`, times as `HH:MM`.
 - Backend cuts window into back-to-back slots (default 30 min), skipping clashes with existing slots.
 
-**DELETE /mentor-slots/:id** (teacher/admin only)
+**DELETE /mentor-slots/:id** (lecturer/admin only)
 - Only if free (not booked). Otherwise 409.
 
 **POST /mentor-slots/:id/book** (student only)
 - Locks the slot. 409 if taken or student already has an upcoming booking.
 
 **DELETE /mentor-slots/:id/book**
-- Student cancels own booking; teacher/admin cancels any booking.
+- Student cancels own booking; lecturer/admin cancels any booking.
 
 ### Deadlines (requirement 2)
 
@@ -316,7 +316,7 @@ Codes: 400 bad body, 401 invalid credentials, 403 forbidden, 404 missing, 409 du
 - PDF preview (future feature 1.1)
 - Interactive game — nothing in ER covers it; no endpoints until defined
 - Multiple submission attempts — single attempt documented above; revisit after capstone
-- Storage backend — local disk for capstone (disappears on container restart; documented ceiling). S3-like later is one config change.
+- Storage backend — S3-compatible (Supabase) via interface-based `Storage` layer; local disk removed
 - Section nesting — content items are flat (files/assignments only); sections removed
 
 ## Framework decision pending

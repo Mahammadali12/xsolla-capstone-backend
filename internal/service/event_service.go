@@ -23,7 +23,7 @@ func NewEventService(s store.Store) *EventService {
 var ErrEventNotFound = store.ErrEventNotFound
 
 // ErrOnlyStaffCanCreateEvent is returned when a non-staff user tries to create an event.
-var ErrOnlyStaffCanCreateEvent = errors.New("only teachers and admins can create events")
+var ErrOnlyStaffCanCreateEvent = errors.New("only lecturers and admins can create events")
 
 // ErrEndsBeforeStarts is returned when ends_at is before starts_at.
 var ErrEndsBeforeStarts = errors.New("ends_at must be after starts_at")
@@ -31,8 +31,8 @@ var ErrEndsBeforeStarts = errors.New("ends_at must be after starts_at")
 // ErrModuleNotFound is returned when module_id references a non-existent content item.
 var ErrModuleNotFound = errors.New("module not found")
 
-// ErrNotTeacherOfModule is returned when the caller is not the teacher of the module.
-var ErrNotTeacherOfModule = errors.New("not the teacher of this module")
+// ErrNotTeacherOfModule is returned when the caller is not the lecturer of the module.
+var ErrNotTeacherOfModule = errors.New("not the lecturer of this module")
 
 // Event represents a calendar event.
 type Event struct {

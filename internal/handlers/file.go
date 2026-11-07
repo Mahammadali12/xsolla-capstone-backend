@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -10,7 +11,6 @@ import (
 	"log"
 	"mime"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -27,6 +27,7 @@ type FileService interface {
 	GetFileByID(ctx context.Context, id int64) (*store.File, error)
 	CanReadFile(ctx context.Context, userID int64, roles []string, fileID int64) (*store.File, error)
 	DeleteFile(ctx context.Context, userID int64, roles []string, id int64) error
+	DownloadFile(ctx context.Context, storageKey string) (io.ReadCloser, error)
 }
 
 type FileHandlers struct {
@@ -174,18 +175,25 @@ func (h *FileHandlers) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := filepath.Join("uploads", f.StorageKey)
-	file, err := os.Open(path)
+	rc, err := h.svc.DownloadFile(r.Context(), f.StorageKey)
 	if err != nil {
-		writeError(w, 404, "not_found", "file not found on disk", nil)
+		log.Printf("file handler: download error: %v", err)
+		writeError(w, 500, "server_error", "could not download file", nil)
 		return
 	}
-	defer file.Close()
+	defer rc.Close()
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		log.Printf("file handler: read download error: %v", err)
+		writeError(w, 500, "server_error", "could not read file", nil)
+		return
+	}
 
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", f.OriginalName))
 	w.Header().Set("Content-Type", f.MimeType)
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", f.SizeBytes))
-	http.ServeContent(w, r, f.OriginalName, f.CreatedAt, file)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	http.ServeContent(w, r, f.OriginalName, f.CreatedAt, bytes.NewReader(data))
 }
 
 // DELETE /files/:id

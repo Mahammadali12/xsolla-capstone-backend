@@ -111,7 +111,8 @@ func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItem
 	for rows.Next() {
 		var sub Submission
 		var studentID int64
-		var studentName, studentEmail, studentRole string
+		var studentName, studentEmail string
+		var studentRole sql.NullString
 		err := rows.Scan(
 			&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
 			&sub.Grade, &sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,

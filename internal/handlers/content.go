@@ -295,13 +295,12 @@ func (h *ContentHandlers) DeleteContentItem(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(204)
 }
 
-// buildContentTree builds a nested tree from a flat list of content items.
+// buildContentTree maps a flat list of content items to response nodes.
+// Sections have been removed, so every item is a root item (parent_id is always null).
 func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
-	itemMap := make(map[int64]*dto.ContentTreeNode)
-	var roots []*dto.ContentTreeNode
-
-	for _, ci := range items {
-		node := dto.ContentTreeNode{
+	result := make([]dto.ContentTreeNode, len(items))
+	for i, ci := range items {
+		result[i] = dto.ContentTreeNode{
 			ID:          ci.ID,
 			Type:        ci.Type,
 			Title:       ci.Title,
@@ -311,30 +310,7 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			FileID:      ci.FileID,
 			DueAt:       ci.DueAt,
 			MaxPoints:   ci.MaxPoints,
-			Children:    []*dto.ContentTreeNode{},
 		}
-		itemMap[ci.ID] = &node
-	}
-
-	for _, ci := range items {
-		node := itemMap[ci.ID]
-		if ci.ParentID == nil {
-			roots = append(roots, node)
-		} else {
-			parent := itemMap[*ci.ParentID]
-			if parent != nil {
-				parent.Children = append(parent.Children, node)
-			} else {
-				// Parent not in list (e.g. hidden), treat as root
-				roots = append(roots, node)
-			}
-		}
-	}
-
-	// Convert pointer slice to value slice for JSON serialization.
-	result := make([]dto.ContentTreeNode, len(roots))
-	for i, node := range roots {
-		result[i] = *node
 	}
 	return result
 }

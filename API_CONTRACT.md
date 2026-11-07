@@ -35,7 +35,7 @@ Body:
 Success 201:
 ```json
 {
-  "user": { "id": "1", "email": "alice@x.com", "name": "Alice", "role": "student", "created_at": "2026-11-04T13:45:00Z" },
+  "user": { "id": "1", "email": "alice@x.com", "name": "Alice", "roles": ["student"], "created_at": "2026-11-04T13:45:00Z" },
   "access_token": "<jwt>",
   "refresh_token": "<jwt>"
 }
@@ -98,7 +98,7 @@ Auth: required.
 
 Success 200:
 ```json
-{ "id": "1", "email": "alice@x.com", "name": "Alice", "role": "student", "created_at": "2026-11-04T13:45:00Z" }
+{ "id": "1", "email": "alice@x.com", "name": "Alice", "roles": ["student"], "created_at": "2026-11-04T13:45:00Z" }
 ```
 
 ---
@@ -111,12 +111,12 @@ Query: `search` (substring match on email or name).
 
 Success 200:
 ```json
-[ { "id": "1", "email": "alice@x.com", "name": "Alice", "role": "student" } ]
+[ { "id": "1", "email": "alice@x.com", "name": "Alice", "roles": ["student"] } ]
 ```
 
 Errors: 403.
 
-Needed by teachers/admins to look up `user_id` before enrolling someone.
+Needed by lecturers/admins to look up `user_id` before enrolling someone.
 
 ---
 
@@ -124,7 +124,7 @@ Needed by teachers/admins to look up `user_id` before enrolling someone.
 
 ### POST /modules
 
-Auth: required (teacher or admin).
+Auth: required (lecturer or admin).
 
 Body:
 ```json
@@ -136,7 +136,7 @@ Success 201:
 { "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z" }
 ```
 
-Teacher creating a module is auto-enrolled as teacher of that module.
+Lecturer creating a module is auto-enrolled as lecturer of that module.
 
 Errors: 403.
 
@@ -166,7 +166,7 @@ Success 200:
 { "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z" }
 ```
 
-Errors: 404, 403 (not enrolled / not teacher of this module).
+Errors: 404, 403 (not enrolled / not lecturer of this module).
 
 ---
 
@@ -231,7 +231,7 @@ Errors: 403, 404.
 
 ### GET /modules/:moduleId/enrollments
 
-Auth: required (enrolled / teacher / admin of module).
+Auth: required (enrolled / lecturer / admin of module).
 
 Success 200:
 ```json
@@ -249,7 +249,7 @@ Section type has been removed — content items are flat (no nesting).
 
 ### GET /modules/:moduleId/content-items
 
-Auth: required (enrolled / teacher / admin of module).
+Auth: required (enrolled / lecturer / admin of module).
 
 Success 200 — flat list:
 ```json
@@ -274,13 +274,13 @@ Success 200 — flat list:
 ]
 ```
 
-Students/teachers see only `is_visible=true` and non-deleted items. Admin sees all. `position` gives order.
+Students/lecturers see only `is_visible=true` and non-deleted items. Admin sees all. `position` gives order.
 
 ---
 
 ### POST /modules/:moduleId/content-items
 
-Auth: required (teacher or admin enrolled in module).
+Auth: required (lecturer or admin enrolled in module).
 
 Body:
 ```json
@@ -322,7 +322,7 @@ Errors: 403 (not visible and not authorized), 404.
 
 ### PATCH /content-items/:id
 
-Auth: required (teacher/admin of module or item `created_by`).
+Auth: required (lecturer/admin of module or item `created_by`).
 
 Body (partial): any of `title`, `description`, `position`, `is_visible`, `file_id`, `due_at`, `max_points`.
 
@@ -334,7 +334,7 @@ Errors: 400, 403, 404.
 
 ### DELETE /content-items/:id
 
-Auth: required (teacher/admin of module).
+Auth: required (lecturer/admin of module).
 
 Success 204: empty body.
 
@@ -392,7 +392,7 @@ Errors: 403, 404.
 **File read rule** — a file is readable if:
 1. linked to a visible, non-deleted content item in a module you're enrolled in, **or**
 2. linked to a submission you own, **or**
-3. linked to a submission you may grade (teacher/admin enrolled in the module).
+3. linked to a submission you may grade (lecturer/admin enrolled in the module).
 
 ---
 
@@ -455,7 +455,7 @@ Success 200: single submission object (same shape as above) or 404 if none submi
 
 ### GET /modules/:moduleId/content-items/:assignmentId/submissions
 
-Auth: required (teacher or admin enrolled in module).
+Auth: required (lecturer or admin enrolled in module).
 
 Success 200 — full enrolled roster via LEFT JOIN (missing work shown):
 ```json
@@ -469,7 +469,7 @@ Success 200 — full enrolled roster via LEFT JOIN (missing work shown):
 
 ### POST /submissions/:id/grade
 
-Auth: required (teacher/admin enrolled in the module owning this submission's assignment).
+Auth: required (lecturer/admin enrolled in the module owning this submission's assignment).
 
 Body:
 ```json
@@ -483,7 +483,7 @@ Success 200:
 
 Rule: `0 <= grade <= max_points` (enforced in application code).
 
-Errors: 403 (not teacher of this module), 404, 422 (grade out of bounds).
+Errors: 403 (not lecturer of this module), 404, 422 (grade out of bounds).
 
 ---
 
@@ -522,7 +522,7 @@ Errors: 403.
 
 ### POST /events
 
-Auth: required (teacher or admin only).
+Auth: required (lecturer or admin only).
 
 Body:
 ```json
@@ -532,17 +532,17 @@ Body:
 Rules:
 - `kind` must be `lecture`, `meeting`, or `off-campus`.
 - `starts_at` must be before `ends_at`.
-- `module_id`, when provided, must reference a content item in a module the caller teaches.
+- `module_id`, when provided, must reference a module the caller teaches.
 
 Success 201: created event row.
 
-Errors: 400 (invalid dates / missing fields), 403 (not teacher/admin), 404 (module not found).
+Errors: 400 (invalid dates / missing fields), 403 (not lecturer/admin), 404 (module not found).
 
 ---
 
 ### PATCH /events/:id
 
-Auth: required (teacher or admin only — creator of the event or admin).
+Auth: required (lecturer or admin only — creator of the event or admin).
 
 Body (partial): any of `title`, `kind`, `starts_at`, `ends_at`, `all_day`, `location`, `description`, `module_id`.
 
@@ -554,7 +554,7 @@ Errors: 400 (invalid dates / cycle), 403, 404.
 
 ### DELETE /events/:id
 
-Auth: required (teacher or admin only — creator of the event or admin).
+Auth: required (lecturer or admin only — creator of the event or admin).
 
 Success 204: empty body.
 
@@ -588,7 +588,7 @@ Errors: 403.
 
 ### POST /mentor-slots
 
-Auth: required (teacher or admin only).
+Auth: required (lecturer or admin only).
 
 Body:
 ```json
@@ -607,7 +607,7 @@ Errors: 400 (invalid window / too short / past date), 403.
 
 ### DELETE /mentor-slots/:id
 
-Auth: required (teacher or admin only — owner of the slot).
+Auth: required (lecturer or admin only — owner of the slot).
 
 Success 204: empty body.
 
@@ -659,7 +659,7 @@ Upcoming assignments across all enrolled modules, sorted by `due_at`, with submi
 
 ### GET /modules/:id/gradebook
 
-Auth: required (teacher or admin enrolled in module; student sees own row only).
+Auth: required (lecturer or admin enrolled in module; student sees own row only).
 
 Success 200:
 ```json

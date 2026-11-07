@@ -6,6 +6,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
@@ -72,10 +73,12 @@ func Load() (*Config, error) {
 // loadEnvFile parses a KEY=VALUE .env file and sets missing variables via os.Setenv.
 // Lines starting with # are comments; blank lines are skipped.
 // It intentionally does not overwrite variables already set in the environment.
+// Returns an error if the file exists but cannot be read; missing file is not an error.
 func loadEnvFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Printf("config: .env file not found at %s, using environment variables only", path)
 			return nil
 		}
 		return err
@@ -99,7 +102,10 @@ func loadEnvFile(path string) error {
 			_ = os.Setenv(key, value)
 		}
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("config: failed to read .env: %w", err)
+	}
+	return nil
 }
 
 // getenv returns the environment value for key, or def if unset.

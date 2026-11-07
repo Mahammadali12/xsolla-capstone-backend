@@ -35,6 +35,11 @@ func NewFileService(s store.Store, st Storage) *FileService {
 // ErrFileReferenced is returned when a file is still referenced by a content item or submission.
 var ErrFileReferenced = errors.New("file is still referenced by a content item or submission")
 
+// DownloadFile downloads a file from object storage.
+func (s *FileService) DownloadFile(ctx context.Context, storageKey string) (io.ReadCloser, error) {
+	return s.storeS.Download(ctx, storageKey)
+}
+
 // CreateFile creates a new file record.
 func (s *FileService) CreateFile(ctx context.Context, uploadedBy int64, originalName, storageKey, mimeType string, sizeBytes int64, reader io.Reader) (*store.File, error) {
 	// First upload to object storage

@@ -9,7 +9,7 @@ Shared contract so the Go backend and the React frontend (separate repo) build a
 | Backend | Go, stdlib `net/http` + `database/sql` + `pgx`/`lib/pq` | This repo |
 | Frontend | React + Vite, TypeScript, plain `fetch` | Separate repo; consumes this API |
 | Database | PostgreSQL | Extension: `citext` |
-| File storage | Local disk (`/data/uploads/`) | One directory per user; container restart loses files — documented ceiling |
+| File storage | S3-compatible object storage (Supabase) | AWS SDK v2 with custom endpoint; container restart loses files — documented ceiling |
 | Auth | JWT access token + refresh token | Reuse checkout-api pattern; stateless, Bearer header |
 
 **Load target:** one school, tens of users, one backend process. Nothing here needs horizontal scaling yet.
@@ -26,7 +26,7 @@ xsolla-capstone/              # Backend repo (this repo)
 │   ├── db/                   # migrations, queries
 │   ├── handlers/             # one file per resource
 │   ├── middleware/           # auth, role, enrollment checks, CORS
-│   └── storage/              # local disk file store
+│   └── storage/              # S3-compatible object storage interface
 ├── migrations/               # .sql files
 ├── go.mod / go.sum
 ├── API_PLAN.md               # endpoint plan
@@ -54,8 +54,8 @@ Frontend repo (separate, not in this tree)
 Extensions: `CREATE EXTENSION citext;`
 
 **users**
-- `id bigint PK`, `email citext UK`, `name text`, `role text CHECK role IN ('student','teacher','admin')`, `password_hash text NOT NULL`, `created_at timestamptz`
-- Signup defaults role to `student`. First registered user becomes `admin` (bootstrap). No role-change endpoint for capstone.
+- `id bigint PK`, `email citext UK`, `name text`, `roles TEXT[] NOT NULL DEFAULT '{}'`, `password_hash text NOT NULL`, `created_at timestamptz`
+- Signup defaults roles to `["student"]`. First registered user becomes `admin` (bootstrap). No role-change endpoint for capstone.
 
 **modules** (frontend refers to these as "modules"; backend DB table renamed from `courses`)
 - `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
@@ -86,7 +86,7 @@ Extensions: `CREATE EXTENSION citext;`
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK`
 
 **events** (calendar events: lectures, meetings, off-campus days)
-- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES content_items(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
 
 **mentor_slots** (1:1 meeting availability + bookings)
 - `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
@@ -103,46 +103,46 @@ Indexes on every FK column used for filtering: `enrollments(module_id, user_id)`
 3. `POST /auth/refresh` → rotate refresh token, return new access token.
 4. `POST /auth/logout` → revoke refresh token, 204.
 
-Middleware extracts JWT from `Authorization: Bearer <token>`, verifies, puts `user_id` and `role` in request context. Every state-changing endpoint and every data endpoint checks enrollment where required.
+Middleware extracts JWT from `Authorization: Bearer <token>`, verifies, puts `user_id` and `roles` in request context. Every state-changing endpoint and every data endpoint checks enrollment where required.
 
-Role bootstrap: first registered user = `admin`. After that, no self-service promotion. An admin must create teacher accounts (or one-time CLI seed).
+Role bootstrap: first registered user = `admin`. After that, no self-service promotion. An admin must create lecturer accounts (or one-time CLI seed).
 
 ---
 
 ## 5. Permission matrix
 
-| Endpoint | student | teacher | admin | Condition |
+| Endpoint | student | lecturer | admin | Condition |
 |---|---|---|---|---|
 | POST /auth/signup | any | any | any | — |
 | POST /auth/login | any | any | any | — |
 | POST /auth/logout / refresh | any | any | any | — |
 | GET /users/me | self | self | self | — |
 | GET /users?search= | — | — | any | admin only |
-| POST /modules | — | create + auto-enroll as teacher | create | — |
-| GET /modules | enrolled | enrolled / teacher | any | — |
-| GET /modules/:id | if enrolled | if enrolled / teacher | any | else 403 |
+| POST /modules | — | create + auto-enroll as lecturer | create | — |
+| GET /modules | enrolled | enrolled / lecturer | any | — |
+| GET /modules/:id | if enrolled | if enrolled / lecturer | any | else 403 |
 | PATCH /modules/:id | — | if created_by | if created_by | — |
 | DELETE /modules/:id | — | if created_by | any | soft delete; collect storage keys first |
 | POST /modules/:id/enrollments | self only | any user | any | 409 duplicate |
 | DELETE /modules/:id/enrollments/:userId | self only | any | any | — |
-| GET /modules/:id/enrollments | if enrolled | if enrolled / teacher | any | — |
-| GET /modules/:id/content-items | if enrolled | if enrolled / teacher | any | `is_visible` filtered server-side |
-| POST /modules/:id/content-items | — | if enrolled / teacher | any | parent rules enforced |
-| GET /content-items/:id | if enrolled + visible | if enrolled / teacher | any | else 403/404 |
-| PATCH /content-items/:id | — | if enrolled / teacher | any | cycle check on parent_id |
-| DELETE /content-items/:id | — | if enrolled / teacher | any | soft delete |
+| GET /modules/:id/enrollments | if enrolled | if enrolled / lecturer | any | — |
+| GET /modules/:id/content-items | if enrolled | if enrolled / lecturer | any | `is_visible` filtered server-side |
+| POST /modules/:id/content-items | — | if enrolled / lecturer | any | parent rules enforced |
+| GET /content-items/:id | if enrolled + visible | if enrolled / lecturer | any | else 403/404 |
+| PATCH /content-items/:id | — | if enrolled / lecturer | any | cycle check on parent_id |
+| DELETE /content-items/:id | — | if enrolled / lecturer | any | soft delete |
 | POST /files | any authenticated | any authenticated | any | size + type allowlist |
 | GET /files/:id | if accessible via link | if accessible via link | any | — |
 | GET /files/:id/download | if accessible via link | if accessible via link | any | link rule below |
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
 | POST /content-items/:id/submissions | self only | — | — | single attempt; file ownership check |
 | GET /content-items/:id/submissions/me | self only | — | — | own submission |
-| GET /modules/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / teacher (all) | any | LEFT JOIN enrollments |
-| POST /submissions/:id/grade | — | if enrolled as teacher | any | teacher/admin AND enrolled in module |
+| GET /modules/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / lecturer (all) | any | LEFT JOIN enrollments |
+| POST /submissions/:id/grade | — | if enrolled as mentor | any | mentor/admin AND enrolled in module |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
-| GET /events?from=&to= | if modules open | if enrolled/teacher | any | date range filter |
-| POST /events | — | create | create | teacher/admin only |
-| PATCH /events/:id | — | if created | any | teacher/admin only |
+| GET /events?from=&to= | if modules open | if enrolled/lecturer | any | date range filter |
+| POST /events | — | create | create | lecturer/admin only |
+| PATCH /events/:id | — | if created | any | lecturer/admin only |
 | DELETE /events/:id | — | if created | any | soft delete |
 | GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
 | POST /mentor-slots | — | open window | open window | mentor creates slots |
@@ -150,20 +150,20 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
 | DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
 | GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled modules |
-| GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / teacher | any | all students × assignments |
+| GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / lecturer | any | all students × assignments |
 
 **File read rule** — a file is readable if:
 1. linked to a visible, non-deleted content item in a module you're enrolled in, **or**
 2. linked to a submission you own, **or**
-3. linked to a submission you may grade (teacher/admin enrolled in the module).
+3. linked to a submission you may grade (lecturer/admin enrolled in the module).
 
-A teacher cannot download a random student's upload unless it's attached to a submission they're grading.
+A lecturer cannot download a random student's upload unless it's attached to a submission they're grading.
 
-**Grading rule** — `POST /submissions/:id/grade`: caller must be `teacher` or `admin` **AND** enrolled in the module that owns the submission's assignment. Join: `submissions → assignments → content_items → modules → enrollments`. "Is a teacher" is not enough; must be "teaches this module."
+**Grading rule** — `POST /submissions/:id/grade`: caller must be `mentor` or `admin` **AND** enrolled in the module that owns the submission's assignment. Join: `submissions → assignments → content_items → modules → enrollments`. "Is a lecturer" is not enough; must be "teaches this module."
 
 ---
 
-## 6. File uploads (local disk)
+## 6. File uploads (S3-compatible object storage)
 
 - Endpoint: `POST /files` multipart, one file.
 - Constraints enforced server-side: max size (e.g. 50 MB → 413), allowlist `pdf/pptx/md/zip` → 415 otherwise.
@@ -171,7 +171,7 @@ A teacher cannot download a random student's upload unless it's attached to a su
 - `storage_key` = `users/<user_id>/<uuid>.<ext>` generated by backend; client never supplies it.
 - `original_name` sanitized before echoing into headers/responses.
 - Files soft-deleted (`deleted_at`); hard delete refused while referenced by `content_items` or `submission_files`.
-- Module deletion: collect `storage_key`s before cascade, delete from storage, then soft-delete DB rows.
+- Module deletion: collect `storage_key`s before cascade, delete from S3 storage, then soft-delete DB rows.
 - Submission creation accepts `file_ids` and validates each belongs to the student in the same request. Resubmit replaces `submission_files` rows (old files become storage orphans — documented ceiling; cleanup job later).
 
 ---
@@ -182,7 +182,7 @@ A teacher cannot download a random student's upload unless it's attached to a su
 
 **Modules:** create, list, get, patch, delete (soft)
 
-**Enrollments:** create (self or teacher/admin), delete, list members
+**Enrollments:** create (self or lecturer/admin), delete, list members
 
 **Content items** (single route set; no separate `/assignments/*`): list (with `is_visible` server-side filter), create, get, patch, delete (soft). Sections removed — flat list of files and assignments.
 
@@ -240,8 +240,8 @@ Auth: store tokens (memory or `localStorage` — document XSS tradeoff), send `A
 
 | Shortcut | Ceiling | Upgrade |
 |---|---|---|
-| Global role on `users`, not per-module | Can't model teacher-in-one-module / student-in-another | Move `role` to `enrollments` |
-| Local disk storage | Container restart loses uploads | S3-like storage, one interface swap |
+| Global roles on `users` as `roles TEXT[]` | Can't model lecturer-in-one-module / student-in-another | Move `roles` to per-enrollment |
+| S3-compatible storage (Supabase) | Container restart loses files; bucket case sensitivity | Different S3 provider, per-bucket config |
 | Single submission attempt | No graded re-attempts | Add `attempt_number`, keep history |
 | Resubmit replaces files (old ones orphan) | Storage bloat over a semester | Nightly orphan cleanup job |
 | JWT in localStorage | XSS token theft | httpOnly cookies + refresh rotation |
