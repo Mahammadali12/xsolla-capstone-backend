@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -260,6 +262,34 @@ func (q *Query) IsUserTeacherOfModule(ctx context.Context, moduleID int64, userI
 	return q.DBTX.QueryRowContext(ctx,
 		`SELECT 1 FROM modules WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
 		moduleID, userID,
+	)
+}
+
+// GetActiveStudentIDs returns all active students (student role, not deleted/left).
+func (q *Query) GetActiveStudentIDs(ctx context.Context) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT u.id FROM users u
+		 WHERE u.deleted_at IS NULL AND u.left_at IS NULL
+		   AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'student')`,
+	)
+}
+
+// EnrollStudentsInModule bulk-enrolls students into a module (ON CONFLICT DO NOTHING).
+func (q *Query) EnrollStudentsInModule(ctx context.Context, moduleID int64, studentIDs []int64) (*sql.Rows, error) {
+	if len(studentIDs) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(studentIDs)*2)
+	placeholders := make([]string, 0, len(studentIDs))
+	for i, sid := range studentIDs {
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d)", i*2+1, i*2+2))
+		args = append(args, moduleID, sid)
+	}
+	return q.DBTX.QueryContext(ctx,
+		`INSERT INTO enrollments (module_id, user_id)
+		 VALUES `+strings.Join(placeholders, ",")+`
+		 ON CONFLICT DO NOTHING`,
+		args...,
 	)
 }
 

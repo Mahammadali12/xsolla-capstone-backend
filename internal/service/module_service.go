@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
@@ -18,6 +19,7 @@ func NewModuleService(s store.Store) *ModuleService {
 }
 
 // CreateModule creates a new module with the given user as teacher.
+// All active students are automatically enrolled in the new module.
 func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title string, description string) (*store.Module, error) {
 	m, err := s.store.CreateModule(ctx, title, description, userID)
 	if err != nil {
@@ -25,7 +27,16 @@ func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title st
 	}
 
 	// Auto-enroll the creator so they can see the module in their list.
-	if _, err := s.store.CreateEnrollment(ctx, m.ID, userID); err != nil {
+	if _, err := s.store.CreateEnrollment(ctx, m.ID, userID); err != nil && !errors.Is(err, store.ErrAlreadyEnrolled) {
+		return nil, err
+	}
+
+	// Auto-enroll all active students in the new module.
+	studentIDs, err := s.store.GetActiveStudentIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.EnrollStudentsInModule(ctx, m.ID, studentIDs); err != nil {
 		return nil, err
 	}
 

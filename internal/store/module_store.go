@@ -179,3 +179,31 @@ func (s *StoreImpl) IsUserTeacherOfModule(ctx context.Context, moduleID int64, u
 	}
 	return true, nil
 }
+
+// GetActiveStudentIDs returns all active student IDs.
+func (s *StoreImpl) GetActiveStudentIDs(ctx context.Context) ([]int64, error) {
+	rows, err := s.DB().GetActiveStudentIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// EnrollStudentsInModule bulk-enrolls students into a module.
+func (s *StoreImpl) EnrollStudentsInModule(ctx context.Context, moduleID int64, studentIDs []int64) error {
+	if len(studentIDs) == 0 {
+		return nil
+	}
+	_, err := s.DB().EnrollStudentsInModule(ctx, moduleID, studentIDs)
+	return err
+}

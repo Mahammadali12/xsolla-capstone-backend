@@ -17,7 +17,7 @@ config:
 request:
   variables:
     - name: accessToken
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjE2LCJyb2xlcyI6WyJzdHVkZW50Il0sImV4cCI6MTc5NDE2NzYxOX0.McRvJbubueQMiTwchyNFt_Qm5rph4JjPJQfg4fulvHM
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEzLCJyb2xlcyI6WyJhZG1pbiIsIm1lbnRvciJdLCJleHAiOjE3OTQxNjkwMzJ9.kw3EkF11kcYHeCM2yJtswRoFce_IAgSJE8hgmKJsYaQ
 bundled: false
 extensions:
   bruno:

@@ -43,6 +43,8 @@ type Store interface {
 	GetEnrollmentsForModule(ctx context.Context, moduleID int64) ([]Enrollment, error)
 	IsUserEnrolled(ctx context.Context, moduleID int64, userID int64) (bool, error)
 	IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) (bool, error)
+	GetActiveStudentIDs(ctx context.Context) ([]int64, error)
+	EnrollStudentsInModule(ctx context.Context, moduleID int64, studentIDs []int64) error
 
 	// Content item methods
 	CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, url *string) (*ContentItem, error)
