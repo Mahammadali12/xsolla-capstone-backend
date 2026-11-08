@@ -118,7 +118,7 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /auth/login | any | any | any | — |
 | POST /auth/logout / refresh | any | any | any | — |
 | GET /users/me | self | self | self | — |
-| GET /users?search= | — | any | any | — |
+| GET /users?search= | lecturer | mentor | admin | any |
 | POST /modules | — | create + auto-enroll as lecturer + auto-enroll all active students | create | — |
 | GET /modules | enrolled | enrolled / lecturer | any | — |
 | GET /modules/:id | if enrolled | if enrolled / lecturer | any | else 403 |
@@ -151,9 +151,10 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
 | DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
 | GET /teams | — | — | any | admin only |
-| PUT /teams | — | — | any | admin only |
+| POST /teams | — | — | any | admin only |
 | PATCH /teams/:id | — | — | any | admin only |
-| PUT /teams/:id/student | — | — | any | admin only |
+| POST /teams/:id/students | — | — | any | admin only |
+| DELETE /teams/:id/students/{studentId} | — | — | any | admin only |
 | DELETE /teams/:id/students | — | — | any | admin only |
 | PUT /teams/:id/mentor | — | — | any | admin only |
 | GET /teams/me | any | any | any | — |
@@ -201,7 +202,7 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **1:1 mentor slots:** list, open window, delete, book, cancel booking
 
-**Teams:** list, replace all, patch, put students, delete students, put mentor, get my team, get mentor team
+**Teams:** list, replace all, patch, post students, delete student, delete students, put mentor, get my team, get mentor team
 
 **Deadlines:** `GET /users/me/deadlines` — upcoming assignments across enrolled modules, one joined query
 

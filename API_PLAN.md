@@ -39,6 +39,9 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 **SUBMISSIONS** (multiple attempts per student per assignment)
 - `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `grade numeric CHECK grade >= 0`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
 - Each POST inserts a new row; a student may have many submissions for one assignment. `GET /me` returns the latest attempt; the roster/list returns all attempts.
+- Multiple attempts are allowed — each POST inserts a new submission row (new `id`, new `submitted_at`).
+- File ownership: student may only attach `file_ids` they uploaded.
+- Allowed while ungraded and before `due_at`.
 
 **SUBMISSION_FILES**
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK` — no duplicate file links on one submission
@@ -60,7 +63,7 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | POST /auth/login | any | any | any | — |
 | POST /auth/logout | any | any | any | — |
 | GET /users/me | self | self | self | — |
-| GET /users?search= | — | any | any | — |
+| GET /users?search= | lecturer | mentor | admin | any |
 | POST /modules | — | create + auto-enroll as lecturer + auto-enroll all active students | create | — |
 | GET /modules | enrolled | enrolled / lecturer | any | — |
 | GET /modules/:id | if enrolled | if enrolled / lecturer | any | 403 otherwise |
@@ -306,7 +309,10 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 ```
 - Names are generated `Team 1..n`. Validate: every id exists and is an active student/mentor, no duplicates, `422` otherwise. `[]` is allowed and means "no teams".
 
-**PUT /teams/:id/student** (admin) - add or move students: `{ "student_ids": [3, 4, 8] }`. Each student is removed from any existing team first.
+**POST /teams/:id/students** (admin) - add students to team: `{ "student_ids": [3, 4, 8] }`.
+- Students must not already belong to another team; returns 422 if any student is already in another team (no auto-removal).
+
+**DELETE /teams/:id/students/{studentId}** (admin) - remove one student from a team.
 
 **DELETE /teams/:id/students** (admin) - remove students: `{ "student_ids": [3, 4] }`.
 

@@ -672,15 +672,15 @@ Body:
 
 Success 200: the new list of teams.
 
-### PUT /teams/:id/student
+### POST /teams/:id/students
 
-Auth: required (admin only). Add or move students to a team.
+Auth: required (admin only). Add students to a team.
+- Students must not already belong to another team (no auto-removal).
 
 Body:
 ```json
 { "student_ids": ["3", "4", "8"] }
 ```
-- Each student is removed from any existing team first (one team per student).
 
 Success 204: empty body.
 
