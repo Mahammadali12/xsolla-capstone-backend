@@ -1,0 +1,29 @@
+info:
+  name: Replace user roles
+  type: http
+  seq: 5
+
+http:
+  method: PUT
+  url: http://localhost:8080/users/1/roles
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "roles": ["lecturer"],
+        "expires_at": {
+          "lecturer": "2026-12-01T23:59:59Z"
+        }
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

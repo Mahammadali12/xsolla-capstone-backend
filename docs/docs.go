@@ -1345,6 +1345,9 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "left_at": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },

@@ -213,6 +213,8 @@ definitions:
         type: string
       id:
         type: integer
+      left_at:
+        type: string
       name:
         type: string
       role_expires_at:

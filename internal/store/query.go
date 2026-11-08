@@ -91,6 +91,69 @@ func (q *Query) GetUserByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
+// GetUsers returns all users with their roles (array_agg), ordered by id.
+// Callers apply search/role/status filters in Go.
+func (q *Query) GetUsers(ctx context.Context) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT u.id, u.email, u.name, u.created_at, u.left_at, u.deleted_at,
+		       COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}') as roles
+		 FROM users u
+		 LEFT JOIN user_roles ur ON ur.user_id = u.id
+		 GROUP BY u.id, u.email, u.name, u.created_at, u.left_at, u.deleted_at
+		 ORDER BY u.id`,
+	)
+}
+
+// GetUserRoleExpiriesAll returns every non-null role expiry across all users.
+func (q *Query) GetUserRoleExpiriesAll(ctx context.Context) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT user_id, role, expires_at FROM user_roles WHERE expires_at IS NOT NULL`,
+	)
+}
+
+// UpdateUser updates name and/or email, returning the updated row.
+func (q *Query) UpdateUser(ctx context.Context, id int64, name, email string) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email)
+		 WHERE id = $1
+		 RETURNING id, email, name, created_at, left_at, deleted_at`,
+		id, name, email,
+	)
+}
+
+// SetUserLeftAt sets left_at to NOW() when deactivating, NULL when reactivating.
+func (q *Query) SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE users SET left_at = CASE WHEN $2 THEN NOW() ELSE NULL END WHERE id = $1`,
+		id, deactivate,
+	)
+}
+
+// SoftDeleteUser sets deleted_at = NOW() if not already deleted.
+func (q *Query) SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+// CountAdmins counts non-deleted users that hold the admin role.
+func (q *Query) CountAdmins(ctx context.Context) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users u
+		 WHERE u.deleted_at IS NULL
+		   AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'admin')`,
+	)
+}
+
+// DeleteUserRoles removes all role assignments for a user.
+func (q *Query) DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`DELETE FROM user_roles WHERE user_id = $1`,
+		userID,
+	)
+}
+
 // Module queries
 
 func (q *Query) CreateModule(ctx context.Context, title string, description string, createdBy int64) *sql.Row {

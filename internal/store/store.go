@@ -15,6 +15,13 @@ type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
 	GetUserByID(ctx context.Context, id int64) (*User, error)
+	GetUsers(ctx context.Context, search, role, status string) ([]User, error)
+	UpdateUser(ctx context.Context, id int64, name, email string) (*User, error)
+	SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error)
+	SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error)
+	CountAdmins(ctx context.Context) (int, error)
+	DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, error)
+	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
 
 	// Refresh token methods
 	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error

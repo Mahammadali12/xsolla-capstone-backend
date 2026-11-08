@@ -32,6 +32,7 @@ type UserResponse struct {
 	Name          string          `json:"name"`
 	Roles         []string        `json:"roles"`
 	RoleExpiresAt map[string]time.Time `json:"role_expires_at,omitempty"`
+	LeftAt        *time.Time      `json:"left_at,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
 

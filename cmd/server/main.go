@@ -54,6 +54,7 @@ func main() {
 	contentSvc := service.NewContentService(store)
 	submissionSvc := service.NewSubmissionService(store)
 	eventSvc := service.NewEventService(store)
+	userSvc := service.NewUserService(store)
 
 	// S3 object storage
 	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)
@@ -74,6 +75,7 @@ func main() {
 	fileH := handlers.NewFileHandlers(fileSvc)
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
 	eventH := handlers.NewEventHandlers(eventSvc)
+	userH := handlers.NewUserHandlers(userSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -83,6 +85,13 @@ func main() {
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
+
+	// Admin-only user management (4.1)
+	mux.Handle("GET /users", authenticator.RequireRole(http.HandlerFunc(userH.ListUsers), "admin"))
+	mux.Handle("POST /users", authenticator.RequireRole(http.HandlerFunc(userH.CreateUser), "admin"))
+	mux.Handle("PATCH /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.UpdateUser), "admin"))
+	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
+	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
 
 	mux.Handle("POST /modules", authenticator.Middleware(http.HandlerFunc(moduleH.CreateModule)))
 	mux.Handle("GET /modules", authenticator.Middleware(http.HandlerFunc(moduleH.ListModules)))
