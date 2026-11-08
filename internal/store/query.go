@@ -680,3 +680,102 @@ func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin
 	)
 }
 
+// Team queries
+
+// GetAllTeams returns all teams with their mentor_id and student_ids.
+func (q *Query) GetAllTeams(ctx context.Context) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT t.id, t.name, t.mentor_id, t.created_at
+		 FROM teams t
+		 ORDER BY t.id`,
+	)
+}
+
+// GetTeamMembers returns student ids for a team.
+func (q *Query) GetTeamMembers(ctx context.Context, teamID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT student_id FROM team_members WHERE team_id = $1 ORDER BY student_id`,
+		teamID,
+	)
+}
+
+// GetActiveUsersByIDs returns users by ids that are active (not deleted, not left).
+func (q *Query) GetActiveUsersByIDs(ctx context.Context, ids []int64) (*sql.Rows, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return q.DBTX.QueryContext(ctx,
+		`SELECT u.id, u.email, u.name, COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}') as roles
+		 FROM users u
+		 LEFT JOIN user_roles ur ON ur.user_id = u.id
+		 WHERE u.id = ANY($1::bigint[]) AND u.deleted_at IS NULL AND u.left_at IS NULL
+		 GROUP BY u.id, u.email, u.name
+		 ORDER BY u.id`,
+		ids,
+	)
+}
+
+// GetUserTeam returns the team id a student belongs to, if any.
+func (q *Query) GetUserTeam(ctx context.Context, studentID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT team_id FROM team_members WHERE student_id = $1`,
+		studentID,
+	)
+}
+
+// CountTeams returns the total number of teams.
+func (q *Query) CountTeams(ctx context.Context) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx, `SELECT COUNT(*) FROM teams`)
+}
+
+// CountActiveStudents returns count of active students.
+func (q *Query) CountActiveStudents(ctx context.Context) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users u
+		 WHERE u.deleted_at IS NULL AND u.left_at IS NULL
+		   AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'student')`,
+	)
+}
+
+// GetTeamsWithMembers returns all teams with their members and mentor info.
+func (q *Query) GetTeamsWithMembers(ctx context.Context) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT t.id, t.name, t.mentor_id, u.id, u.email, u.name, ur.role
+		 FROM teams t
+		 LEFT JOIN team_members tm ON tm.team_id = t.id
+		 LEFT JOIN users u ON u.id = tm.student_id AND u.deleted_at IS NULL AND u.left_at IS NULL
+		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'student'
+		 ORDER BY t.id, u.id`,
+	)
+}
+
+// GetMentorTeam returns the team id a mentor leads, if any.
+func (q *Query) GetMentorTeam(ctx context.Context, mentorID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id FROM teams WHERE mentor_id = $1`,
+		mentorID,
+	)
+}
+
+// PatchTeam updates a single team's name and/or mentor_id in place.
+func (q *Query) PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE teams
+		 SET name = COALESCE($2, name),
+		     mentor_id = COALESCE($3, mentor_id)
+		 WHERE id = $1
+		 RETURNING id, name, mentor_id, created_at`,
+		id, name, mentorID,
+	)
+}
+
+// ExecContext passthrough for raw SQL execution.
+func (q *Query) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx, query, args...)
+}
+
+// QueryRowContext passthrough for raw SQL row queries.
+func (q *Query) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx, query, args...)
+}
+

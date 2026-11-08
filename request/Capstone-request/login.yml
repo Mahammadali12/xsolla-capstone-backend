@@ -13,8 +13,8 @@ http:
     type: json
     data: |-
       {
-        "login": "teacher@xsolla.com",
-        "password": "secret123"
+        "login": "admin2@xsolla.com",
+        "password": "Secret123"
       }
 
 settings:

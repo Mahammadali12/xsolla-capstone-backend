@@ -1,0 +1,35 @@
+info:
+  name: Replace teams
+  type: http
+  seq: 2
+
+http:
+  method: PUT
+  url: http://localhost:8080/teams
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "teams": [
+          {
+            "mentor_id": 5,
+            "student_ids": [3, 4, 8]
+          },
+          {
+            "mentor_id": 9,
+            "student_ids": []
+          }
+        ]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

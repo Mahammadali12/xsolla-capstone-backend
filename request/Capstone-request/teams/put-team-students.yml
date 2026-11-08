@@ -1,0 +1,26 @@
+info:
+  name: Put team students
+  type: http
+  seq: 3
+
+http:
+  method: PUT
+  url: http://localhost:8080/teams/1/student
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "student_ids": [3, 4, 8]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

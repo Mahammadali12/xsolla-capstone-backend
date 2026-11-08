@@ -5,7 +5,7 @@ info:
 
 http:
   method: PUT
-  url: http://localhost:8080/users/1/roles
+  url: http://localhost:8080/users/13/roles
   headers:
     - name: Content-Type
       value: application/json
@@ -15,7 +15,7 @@ http:
     type: json
     data: |-
       {
-        "roles": ["lecturer"],
+        "roles": ["admin","mentor"],
         "expires_at": {
           "lecturer": "2026-12-01T23:59:59Z"
         }

@@ -55,6 +55,7 @@ func main() {
 	submissionSvc := service.NewSubmissionService(store)
 	eventSvc := service.NewEventService(store)
 	userSvc := service.NewUserService(store)
+	teamSvc := service.NewTeamService(store)
 
 	// S3 object storage
 	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)
@@ -76,6 +77,7 @@ func main() {
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
 	eventH := handlers.NewEventHandlers(eventSvc)
 	userH := handlers.NewUserHandlers(userSvc)
+	teamH := handlers.NewTeamHandlers(teamSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -92,6 +94,18 @@ func main() {
 	mux.Handle("PATCH /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.UpdateUser), "admin"))
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
 	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
+
+	// Admin-only teams (4.2)
+	mux.Handle("GET /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ListTeams), "admin"))
+	mux.Handle("PUT /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ReplaceTeams), "admin"))
+	mux.Handle("PATCH /teams/{id}", authenticator.RequireRole(http.HandlerFunc(teamH.PatchTeam), "admin"))
+	mux.Handle("PUT /teams/{id}/student", authenticator.RequireRole(http.HandlerFunc(teamH.PutTeamStudents), "admin"))
+	mux.Handle("DELETE /teams/{id}/students", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeamStudents), "admin"))
+	mux.Handle("PUT /teams/{id}/mentor", authenticator.RequireRole(http.HandlerFunc(teamH.PutTeamMentor), "admin"))
+
+	// Team read side (student/mentor)
+	mux.Handle("GET /teams/me", authenticator.Middleware(http.HandlerFunc(teamH.GetMyTeam)))
+	mux.Handle("GET /mentors/me/team", authenticator.Middleware(http.HandlerFunc(teamH.GetMentorTeam)))
 
 	mux.Handle("POST /modules", authenticator.Middleware(http.HandlerFunc(moduleH.CreateModule)))
 	mux.Handle("GET /modules", authenticator.Middleware(http.HandlerFunc(moduleH.ListModules)))

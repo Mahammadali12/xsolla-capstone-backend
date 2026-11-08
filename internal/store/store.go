@@ -84,6 +84,19 @@ type Store interface {
 	ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error)
 	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
 	DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error
+
+	// Team methods
+	GetAllTeams(ctx context.Context) ([]Team, error)
+	ReplaceTeams(ctx context.Context, teams []TeamInput) ([]Team, error)
+	PutTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
+	DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
+	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
+	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*Team, error)
+	GetMyTeam(ctx context.Context, studentID int64) (*TeamDetail, error)
+	GetMentorTeamDetail(ctx context.Context, mentorID int64) (*TeamDetail, error)
+	CountTeams(ctx context.Context) (int, error)
+	CountActiveStudents(ctx context.Context) (int, error)
+	GetActiveUsersByIDs(ctx context.Context, ids []int64) ([]UserBrief, error)
 }
 
 // Store wraps the database connection and provides access to queries.

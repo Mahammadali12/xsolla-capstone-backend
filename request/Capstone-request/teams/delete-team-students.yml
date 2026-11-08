@@ -1,0 +1,26 @@
+info:
+  name: Delete team students
+  type: http
+  seq: 4
+
+http:
+  method: DELETE
+  url: http://localhost:8080/teams/1/students
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "student_ids": [3, 4]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

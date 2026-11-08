@@ -1,0 +1,26 @@
+info:
+  name: Put team mentor
+  type: http
+  seq: 4
+
+http:
+  method: PUT
+  url: http://localhost:8080/teams/1/mentor
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "mentor_id": 9
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
