@@ -672,6 +672,22 @@ Body:
 
 Success 200: the new list of teams.
 
+### POST /teams
+
+Auth: required (admin only). Create a single team.
+
+Body:
+```json
+{ "name": "Alpha Squad", "mentor_id": 5, "student_ids": [3, 4] }
+```
+- `name` is required and must be non-empty.
+- `mentor_id` is optional; if provided, the user must have the `mentor` role.
+- `student_ids` is optional; each student must have the `student` role and must not already belong to another team (no auto-removal).
+
+Success 201: the created team.
+
+Errors: 400 (bad JSON), 422 (empty name, invalid role, student already in another team).
+
 ### POST /teams/:id/students
 
 Auth: required (admin only). Add students to a team.

@@ -98,6 +98,7 @@ func main() {
 	// Admin-only teams (4.2)
 	mux.Handle("GET /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ListTeams), "admin"))
 	mux.Handle("PUT /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ReplaceTeams), "admin"))
+	mux.Handle("POST /teams", authenticator.RequireRole(http.HandlerFunc(teamH.CreateTeam), "admin"))
 	mux.Handle("PATCH /teams/{id}", authenticator.RequireRole(http.HandlerFunc(teamH.PatchTeam), "admin"))
 	mux.Handle("POST /teams/{id}/students", authenticator.RequireRole(http.HandlerFunc(teamH.AddTeamStudents), "admin"))
 	mux.Handle("DELETE /teams/{id}/students/{studentId}", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeamStudent), "admin"))

@@ -287,6 +287,56 @@ func (s *StoreImpl) PutTeamMentor(ctx context.Context, teamID int64, mentorID *i
 	return err
 }
 
+// CreateTeam creates a single team. name must be non-empty.
+func (s *StoreImpl) CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*Team, error) {
+	var teamID int64
+	err := s.DB().QueryRowContext(ctx,
+		`INSERT INTO teams (name, mentor_id) VALUES ($1, $2) RETURNING id`,
+		*name, mentorID,
+	).Scan(&teamID)
+	if err != nil {
+		return nil, err
+	}
+	team := &Team{
+		ID:         teamID,
+		Name:       *name,
+		MentorID:   mentorID,
+		StudentIDs: []int64{},
+	}
+	for _, sid := range studentIDs {
+		if _, err := s.DB().ExecContext(ctx,
+			`INSERT INTO team_members (team_id, student_id) VALUES ($1, $2)`,
+			teamID, sid,
+		); err != nil {
+			return nil, err
+		}
+		team.StudentIDs = append(team.StudentIDs, sid)
+	}
+	return team, nil
+}
+
+// GetStudentTeams returns student_id -> team_id for students already in a team.
+func (s *StoreImpl) GetStudentTeams(ctx context.Context, studentIDs []int64) (map[int64]int64, error) {
+	rows, err := s.DB().QueryContext(ctx,
+		`SELECT student_id, team_id FROM team_members WHERE student_id = ANY($1::bigint[])`,
+		studentIDs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[int64]int64)
+	for rows.Next() {
+		var studentID, teamID int64
+		if err := rows.Scan(&studentID, &teamID); err != nil {
+			return nil, err
+		}
+		result[studentID] = teamID
+	}
+	return result, nil
+}
+
 // PatchTeam updates a single team's name and/or mentor_id in place.
 func (s *StoreImpl) PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*Team, error) {
 	var team Team

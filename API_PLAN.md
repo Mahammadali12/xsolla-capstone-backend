@@ -309,6 +309,11 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 ```
 - Names are generated `Team 1..n`. Validate: every id exists and is an active student/mentor, no duplicates, `422` otherwise. `[]` is allowed and means "no teams".
 
+**POST /teams** (admin) - create a single team: `{ "name": "Alpha Squad", "mentor_id": 5, "student_ids": [3, 4] }`.
+- `name` is required and must be non-empty.
+- Mentor must have 'mentor' role; students must have 'student' role.
+- No student may already belong to another team (no auto-removal); returns 422 otherwise.
+
 **POST /teams/:id/students** (admin) - add students to team: `{ "student_ids": [3, 4, 8] }`.
 - Students must not already belong to another team; returns 422 if any student is already in another team (no auto-removal).
 

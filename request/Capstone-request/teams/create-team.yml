@@ -1,0 +1,28 @@
+info:
+  name: Create team
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: http://localhost:8080/teams
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Alpha Squad",
+        "mentor_id": 5,
+        "student_ids": [3, 4]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

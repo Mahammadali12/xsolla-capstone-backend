@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 
@@ -24,6 +25,8 @@ var (
 	ErrTeamNotFound = store.ErrTeamNotFound
 	// ErrInvalidTeamConfig is returned for invalid team configuration.
 	ErrInvalidTeamConfig = errors.New("invalid team configuration")
+	// ErrStudentInAnotherTeam is returned when a student is already assigned to a different team.
+	ErrStudentInAnotherTeam = errors.New("student already in another team")
 	// ErrDuplicateStudent is returned when a student appears in multiple teams.
 	ErrDuplicateStudent = store.ErrDuplicateStudent
 	// ErrDuplicateMentor is returned when a mentor leads multiple teams.
@@ -106,6 +109,61 @@ func (s *TeamService) ReplaceTeams(ctx context.Context, inputs []store.TeamInput
 	// be both, but that's an edge case we allow.
 
 	return s.store.ReplaceTeams(ctx, inputs)
+}
+
+// CreateTeam creates a single team.
+// name must be non-empty. Mentor must have 'mentor' role, students 'student' role.
+// No student may already belong to another team (no auto-removal).
+func (s *TeamService) CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*store.Team, error) {
+	if name == nil || *name == "" {
+		return nil, ErrInvalidTeamConfig
+	}
+
+	// Validate all referenced users exist and are active.
+	allIDs := make([]int64, 0, len(studentIDs)+1)
+	if mentorID != nil {
+		allIDs = append(allIDs, *mentorID)
+	}
+	allIDs = append(allIDs, studentIDs...)
+
+	if len(allIDs) > 0 {
+		users, err := s.store.GetActiveUsersByIDs(ctx, allIDs)
+		if err != nil {
+			return nil, err
+		}
+		userRoles := make(map[int64][]string, len(users))
+		for _, u := range users {
+			userRoles[u.ID] = u.Roles
+		}
+		for _, id := range allIDs {
+			if _, ok := userRoles[id]; !ok {
+				return nil, ErrInvalidTeamConfig
+			}
+		}
+		if mentorID != nil {
+			if !slices.Contains(userRoles[*mentorID], "mentor") {
+				return nil, ErrInvalidTeamConfig
+			}
+		}
+		for _, sid := range studentIDs {
+			if !slices.Contains(userRoles[sid], "student") {
+				return nil, ErrInvalidTeamConfig
+			}
+		}
+	}
+
+	// Check no student is already in another team (no auto-removal).
+	if len(studentIDs) > 0 {
+		existing, err := s.store.GetStudentTeams(ctx, studentIDs)
+		if err != nil {
+			return nil, err
+		}
+		for studentID, existingTeamID := range existing {
+			return nil, fmt.Errorf("%w: student %d is already in team %d", ErrStudentInAnotherTeam, studentID, existingTeamID)
+		}
+	}
+
+	return s.store.CreateTeam(ctx, name, mentorID, studentIDs)
 }
 
 // AddTeamStudents adds students to a team.

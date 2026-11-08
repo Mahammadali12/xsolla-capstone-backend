@@ -23,6 +23,7 @@ type TeamService interface {
 	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*store.Team, error)
+	CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*store.Team, error)
 	GetMyTeam(ctx context.Context, studentID int64) (*store.TeamDetail, error)
 	GetMentorTeam(ctx context.Context, mentorID int64) (*store.TeamDetail, error)
 	Counts(ctx context.Context) (teamCount int, studentCount int, err error)
@@ -98,6 +99,36 @@ func (h *TeamHandlers) ReplaceTeams(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, 200, resp)
+}
+
+// POST /teams — admin only. Create a single team.
+// name is required; students must not already belong to another team.
+func (h *TeamHandlers) CreateTeam(w http.ResponseWriter, r *http.Request) {
+	var req dto.CreateTeamRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+
+	team, err := h.svc.CreateTeam(r.Context(), req.Name, req.MentorID, req.StudentIDs)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidTeamConfig),
+			errors.Is(err, service.ErrStudentInAnotherTeam):
+			writeError(w, 422, "validation_failed", err.Error(), nil)
+		default:
+			log.Printf("team handler: CreateTeam error: %v", err)
+			writeError(w, 500, "server_error", "could not create team", nil)
+		}
+		return
+	}
+
+	writeJSON(w, 201, dto.TeamResponse{
+		ID:         team.ID,
+		Name:       team.Name,
+		MentorID:   team.MentorID,
+		StudentIDs: team.StudentIDs,
+	})
 }
 
 // POST /teams/{id}/student — admin only. Add students to a team.

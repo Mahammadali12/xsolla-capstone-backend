@@ -19,6 +19,13 @@ type PutTeamRequest struct {
 	Teams []TeamInput `json:"teams"`
 }
 
+// CreateTeamRequest is the payload for POST /teams.
+type CreateTeamRequest struct {
+	Name       *string  `json:"name"`
+	MentorID   *int64   `json:"mentor_id,omitempty"`
+	StudentIDs []int64  `json:"student_ids"`
+}
+
 // PutTeamStudentsRequest is the payload for PUT /teams/:id/student.
 type PutTeamStudentsRequest struct {
 	StudentIDs []int64 `json:"student_ids"`

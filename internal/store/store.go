@@ -95,6 +95,8 @@ type Store interface {
 	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*Team, error)
+	CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*Team, error)
+	GetStudentTeams(ctx context.Context, studentIDs []int64) (map[int64]int64, error)
 	GetMyTeam(ctx context.Context, studentID int64) (*TeamDetail, error)
 	GetMentorTeamDetail(ctx context.Context, mentorID int64) (*TeamDetail, error)
 	CountTeams(ctx context.Context) (int, error)
