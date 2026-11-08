@@ -89,7 +89,7 @@ func main() {
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
 
 	// Admin-only user management (4.1)
-	mux.Handle("GET /users", authenticator.RequireRole(http.HandlerFunc(userH.ListUsers), "admin"))
+	mux.Handle("GET /users", authenticator.RequireRole(http.HandlerFunc(userH.ListUsers), "admin", "lecturer", "mentor"))
 	mux.Handle("POST /users", authenticator.RequireRole(http.HandlerFunc(userH.CreateUser), "admin"))
 	mux.Handle("PATCH /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.UpdateUser), "admin"))
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))

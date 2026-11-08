@@ -299,14 +299,14 @@ func (q *Query) CreateContentItem(ctx context.Context, moduleID int64, parentID 
 	return q.DBTX.QueryRowContext(ctx,
 		`INSERT INTO content_items (module_id, parent_id, type, title, description, position, is_visible, file_id, url)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, module_id, parent_id, type, title, description, position, is_visible, file_id, url, created_at`,
+		 RETURNING id, module_id, parent_id, type, title, description, position, is_visible, file_id, url, created_by, created_at`,
 		moduleID, parentID, itemType, title, description, position, isVisible, fileID, url,
 	)
 }
 
 func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_at,
+		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
 			 a.due_at, COALESCE(a.max_points, 0)
 		 FROM content_items ci
 		 LEFT JOIN assignments a ON a.content_item_id = ci.id
@@ -318,7 +318,7 @@ func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
 func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, visibleOnly bool) (*sql.Rows, error) {
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_at,
+			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
 			 a.due_at, COALESCE(a.max_points, 0)
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
@@ -328,7 +328,7 @@ func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, vi
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_at,
+		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
 			 a.due_at, COALESCE(a.max_points, 0)
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
@@ -341,7 +341,7 @@ func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, vi
 func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visibleOnly bool) (*sql.Rows, error) {
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_at,
+			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
 			 a.due_at, COALESCE(a.max_points, 0)
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
@@ -351,7 +351,7 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_at,
+		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
 			 a.due_at, COALESCE(a.max_points, 0)
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
@@ -372,7 +372,7 @@ func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, d
 		     file_id = COALESCE($7, file_id),
 		     url = COALESCE($8, url)
 		 WHERE ci.id = $1 AND ci.deleted_at IS NULL
-		 RETURNING ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_at,
+		 RETURNING ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
 		     (SELECT a.due_at FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL),
 		     COALESCE((SELECT a.max_points FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL), 0)`,
 		id, title, description, position, isVisible, parentID, fileID, url,

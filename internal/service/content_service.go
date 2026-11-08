@@ -149,7 +149,7 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 		if err != nil {
 			return nil, err
 		}
-		if !teacher {
+		if !teacher && (ci.CreatedBy == nil || *ci.CreatedBy != userID) {
 			return nil, store.ErrNotModuleTeacher
 		}
 	}

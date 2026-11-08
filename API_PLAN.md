@@ -12,8 +12,9 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `CREATE EXTENSION citext;` — case-insensitive, unique email. No lowercasing needed before write.
 
 **USERS**
-- `id bigint PK`, `email citext UK`, `name text`, `roles TEXT[] NOT NULL DEFAULT '{}'`, `password_hash text NOT NULL`, `created_at timestamptz`
-- Signup defaults roles to `["student"]`. First registered user becomes `admin` (bootstrap); after that only an admin can create lecturer accounts. No role-change endpoint for capstone.
+- `id bigint PK`, `email citext UK` (partial unique among live accounts: `WHERE deleted_at IS NULL`), `name text`, `password_hash text NOT NULL`, `created_at timestamptz`, `left_at timestamptz NULL`, `deleted_at timestamptz NULL`
+- Signup defaults to `student` role (stored in `user_roles` junction table). First registered user becomes `admin` (bootstrap).
+- `user_roles(user_id, role, expires_at)` junction table for role assignments with optional end dates.
 
 **MODULES** (renamed from courses — frontend refers to them as modules)
 - `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
@@ -23,7 +24,7 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `UNIQUE (module_id, user_id)` — no double enrolls, no app-level check-then-insert race
 
 **CONTENT_ITEMS** (files / assignments / links, flat — no sections, no nesting)
-- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment','link')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `url text NULL`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment','link')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `url text NULL`, `created_by bigint NULL REFERENCES users(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
 - `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type IN ('assignment','link') AND file_id IS NULL)` — both directions
 - `parent_id` is always null (sections removed — no parent-child nesting)
 - `UNIQUE (module_id, parent_id, position)` — no duplicate positions under the same parent
@@ -59,8 +60,8 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | POST /auth/login | any | any | any | — |
 | POST /auth/logout | any | any | any | — |
 | GET /users/me | self | self | self | — |
-| GET /users?search= | — | — | any | admin only |
-| POST /modules | — | create + auto-enroll as lecturer | create | — |
+| GET /users?search= | — | any | any | — |
+| POST /modules | — | create + auto-enroll as lecturer + auto-enroll all active students | create | — |
 | GET /modules | enrolled | enrolled / lecturer | any | — |
 | GET /modules/:id | if enrolled | if enrolled / lecturer | any | 403 otherwise |
 | PATCH /modules/:id | — | if created_by | if created_by | — |
@@ -79,8 +80,8 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 | DELETE /files/:id | if uploaded_by | if uploaded_by | any | refuse if referenced |
 | POST /modules/:id/content-items/:assignmentId/submissions | self only | — | — | multiple attempts allowed; file ownership check |
 | GET /content-items/:assignmentId/submissions/me | self only | — | — | own submission |
-| GET /modules/:id/submissions | if enrolled (own only) | if enrolled / lecturer (all roster) | any | LEFT JOIN enrollments — missing work shown |
-| POST /submissions/:id/grade | — | if enrolled as mentor | any | one line: mentor/admin AND enrolled in module |
+| GET /modules/:moduleId/content-items/:assignmentId/submissions | if enrolled (own only) | if enrolled / lecturer (all roster) | any | LEFT JOIN enrollments — missing work shown |
+| POST /submissions/:id/grade | — | if enrolled as mentor | any | mentor/admin |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
 | GET /events?from=&to= | if modules open | if enrolled/lecturer | any | date range filter |
 | POST /events | — | create | create | lecturer/admin only |
@@ -130,7 +131,7 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 ### Users
 
 **GET /users/me**
-- Returns: `id, email, name, role, created_at`
+- Returns: `id, email, name, roles, role_expires_at, left_at, created_at`
 - Needs: authenticated user id
 
 **GET /users?search=**
@@ -141,7 +142,7 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **POST /modules**
 - Body: `{ title, description }`
-- Lecturer/admin creates; auto-enrolls creator as `lecturer`
+- Lecturer/admin creates; auto-enrolls creator as `lecturer`; auto-enrolls all active students.
 - Returns: module row
 
 **GET /modules**
@@ -290,6 +291,30 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **DELETE /mentor-slots/:id/book**
 - Student cancels own booking; lecturer/admin cancels any booking.
+
+### Teams
+
+**GET /teams** (admin) - all teams:
+```json
+[ { "id": 3, "name": "Team 3", "mentor_id": 900, "student_ids": [1, 101, 102, 103, 104] } ]
+```
+- Left or deleted students never appear. A mentor who lost the role appears as `mentor_id: null`.
+
+**PUT /teams** (admin) - replace every team in one transaction:
+```json
+{ "teams": [ { "mentor_id": 901, "student_ids": [1, 101, 102, 103, 104] }, { "mentor_id": null, "student_ids": [105, 106, 107, 108] } ] }
+```
+- Names are generated `Team 1..n`. Validate: every id exists and is an active student/mentor, no duplicates, `422` otherwise. `[]` is allowed and means "no teams".
+
+**PUT /teams/:id/student** (admin) - add or move students: `{ "student_ids": [3, 4, 8] }`. Each student is removed from any existing team first.
+
+**DELETE /teams/:id/students** (admin) - remove students: `{ "student_ids": [3, 4] }`.
+
+**PUT /teams/:id/mentor** (admin) - set or remove mentor: `{ "mentor_id": 902 }` or `null`. If that mentor leads another team, they are taken off it.
+
+**GET /teams/me** (student) - `{ "id", "name", "mentor": {id,name,email}, "members": [{id,name,email}], "cohort_size": 29, "team_count": 6 }`
+
+**GET /mentors/me/team** (mentor) - same shape; `404` if the mentor has no team.
 
 ### Deadlines (requirement 2)
 

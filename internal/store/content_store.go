@@ -28,6 +28,7 @@ type ContentItem struct {
 	IsVisible   bool
 	FileID      *int64
 	Url         *string
+	CreatedBy   *int64
 	CreatedAt   time.Time
 	DueAt       *time.Time
 	MaxPoints   int
@@ -44,7 +45,7 @@ type Assignment struct {
 func (s *StoreImpl) CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, url *string) (*ContentItem, error) {
 	var ci ContentItem
 	err := s.DB().CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID, url).Scan(
-		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedAt,
+		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func (s *StoreImpl) CreateContentItem(ctx context.Context, moduleID int64, paren
 func (s *StoreImpl) GetContentItemByID(ctx context.Context, id int64) (*ContentItem, error) {
 	var ci ContentItem
 	err := s.DB().GetContentItemByID(ctx, id).Scan(
-		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedAt,
+		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt,
 		&ci.DueAt, &ci.MaxPoints,
 	)
 	if err != nil {
@@ -79,7 +80,7 @@ func (s *StoreImpl) GetContentItemsForModule(ctx context.Context, moduleID int64
 	var items []ContentItem
 	for rows.Next() {
 		var ci ContentItem
-		if err := rows.Scan(&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedAt, &ci.DueAt, &ci.MaxPoints); err != nil {
+		if err := rows.Scan(&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt, &ci.DueAt, &ci.MaxPoints); err != nil {
 			return nil, err
 		}
 		items = append(items, ci)
@@ -91,7 +92,7 @@ func (s *StoreImpl) GetContentItemsForModule(ctx context.Context, moduleID int64
 func (s *StoreImpl) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*ContentItem, error) {
 	var ci ContentItem
 	err := s.DB().UpdateContentItem(ctx, id, title, description, position, isVisible, parentID, fileID, dueAt, url).Scan(
-		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedAt,
+		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt,
 		&ci.DueAt, &ci.MaxPoints,
 	)
 	if err != nil {

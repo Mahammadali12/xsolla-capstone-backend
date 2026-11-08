@@ -54,8 +54,9 @@ Frontend repo (separate, not in this tree)
 Extensions: `CREATE EXTENSION citext;`
 
 **users**
-- `id bigint PK`, `email citext UK`, `name text`, `roles TEXT[] NOT NULL DEFAULT '{}'`, `password_hash text NOT NULL`, `created_at timestamptz`
-- Signup defaults roles to `["student"]`. First registered user becomes `admin` (bootstrap). No role-change endpoint for capstone.
+- `id bigint PK`, `email citext UK` (partial unique among live accounts: `WHERE deleted_at IS NULL`), `name text`, `password_hash text NOT NULL`, `created_at timestamptz`, `left_at timestamptz NULL`, `deleted_at timestamptz NULL`
+- Signup defaults to `student` role (stored in `user_roles` junction table). First registered user becomes `admin` (bootstrap). No role-change endpoint for capstone.
+- `user_roles(user_id, role, expires_at)` junction table for role assignments with optional end dates.
 
 **modules** (frontend refers to these as "modules"; backend DB table renamed from `courses`)
 - `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
@@ -65,7 +66,7 @@ Extensions: `CREATE EXTENSION citext;`
 - `UNIQUE (module_id, user_id)` — no double enrolls, no app-level check-then-insert race
 
 **content_items** (files / assignments / links, flat — sections removed, no nesting)
-- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment','link')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `url text NULL`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `id bigint PK`, `module_id bigint FK` (index, CASCADE), `parent_id bigint FK` (index, nullable; always null — sections removed), `type text CHECK type IN ('file','assignment','link')`, `title text`, `description text`, `position int`, `is_visible bool DEFAULT true`, `file_id bigint FK` (index, nullable), `url text NULL`, `created_by bigint NULL REFERENCES users(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
 - `CHECK (type = 'file' AND file_id IS NOT NULL) OR (type IN ('assignment','link') AND file_id IS NULL)`
 - `parent_id` is always null (sections removed — no parent-child nesting)
 - `UNIQUE (module_id, parent_id, position)`
@@ -117,8 +118,8 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /auth/login | any | any | any | — |
 | POST /auth/logout / refresh | any | any | any | — |
 | GET /users/me | self | self | self | — |
-| GET /users?search= | — | — | any | admin only |
-| POST /modules | — | create + auto-enroll as lecturer | create | — |
+| GET /users?search= | — | any | any | — |
+| POST /modules | — | create + auto-enroll as lecturer + auto-enroll all active students | create | — |
 | GET /modules | enrolled | enrolled / lecturer | any | — |
 | GET /modules/:id | if enrolled | if enrolled / lecturer | any | else 403 |
 | PATCH /modules/:id | — | if created_by | if created_by | — |
@@ -149,6 +150,14 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | DELETE /mentor-slots/:id | — | own slot | own slot | only if free |
 | POST /mentor-slots/:id/book | self only | — | — | 409 if taken or already booked |
 | DELETE /mentor-slots/:id/book | cancel own | cancel any | cancel any | — |
+| GET /teams | — | — | any | admin only |
+| PUT /teams | — | — | any | admin only |
+| PATCH /teams/:id | — | — | any | admin only |
+| PUT /teams/:id/student | — | — | any | admin only |
+| DELETE /teams/:id/students | — | — | any | admin only |
+| PUT /teams/:id/mentor | — | — | any | admin only |
+| GET /teams/me | any | any | any | — |
+| GET /mentors/me/team | any | any | any | — |
 | GET /users/me/deadlines | any | any | any | upcoming assignments across enrolled modules |
 | GET /modules/:id/gradebook | if enrolled (own row) | if enrolled / lecturer | any | all students × assignments |
 
@@ -159,14 +168,14 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 
 A lecturer cannot download a random student's upload unless it's attached to a submission they're grading.
 
-**Grading rule** — `POST /submissions/:id/grade`: caller must be `mentor` or `admin` **AND** enrolled in the module that owns the submission's assignment. Join: `submissions → assignments → content_items → modules → enrollments`. "Is a lecturer" is not enough; must be "teaches this module."
+**Grading rule** — `POST /submissions/:id/grade`: caller must be `mentor` or `admin`. Join: `submissions → assignments → content_items → modules → enrollments`.
 
 ---
 
 ## 6. File uploads (S3-compatible object storage)
 
 - Endpoint: `POST /files` multipart, one file.
-- Constraints enforced server-side: max size (e.g. 50 MB → 413), allowlist `pdf/pptx/md/zip` → 415 otherwise.
+- Constraints enforced server-side: max size (e.g. 50 MB → 413), allowlist `pdf/pptx/md/zip/doc/docx/png/jpeg/gif/webp` → 415 otherwise.
 - MIME type derived server-side from content/extension; never trust client MIME.
 - `storage_key` = `users/<user_id>/<uuid>.<ext>` generated by backend; client never supplies it.
 - `original_name` sanitized before echoing into headers/responses.
@@ -178,7 +187,7 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 ## 7. Endpoint list
 
-**Auth:** signup, login, refresh, logout, me, user search (admin)
+**Auth:** signup, login, refresh, logout, me, user search (admin, lecturer, mentor), user management (admin)
 
 **Modules:** create, list, get, patch, delete (soft)
 
@@ -191,6 +200,8 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 **Calendar events:** list (date range), create, patch, delete (soft)
 
 **1:1 mentor slots:** list, open window, delete, book, cancel booking
+
+**Teams:** list, replace all, patch, put students, delete students, put mentor, get my team, get mentor team
 
 **Deadlines:** `GET /users/me/deadlines` — upcoming assignments across enrolled modules, one joined query
 

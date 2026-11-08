@@ -62,14 +62,7 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles [
 		return nil, ErrNotEnrolled
 	}
 
-	teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if teacher {
-		return m, nil
-	}
-
+	// Enrolled users (including teachers who are auto-enrolled) can view the module
 	return m, nil
 }
 
