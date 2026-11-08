@@ -14,15 +14,16 @@ import (
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/store"
 )
 
 // AuthService is the interface that auth handlers depend on.
 type AuthService interface {
 	Signup(ctx context.Context, email string, name string, password string) (int64, []string, error)
-	Login(ctx context.Context, email string, password string) (int64, []string, error)
+	Login(ctx context.Context, email string, password string) (*store.User, error)
 	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
-	GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error)
+	GetUserByID(ctx context.Context, id int64) (*store.User, error)
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 }
 
@@ -96,11 +97,12 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, 201, dto.AuthResponse{
 		User: dto.UserResponse{
-			ID:         id,
-			Email:      req.Email,
-			Name:       req.Name,
-			Roles:      roles,
-			CreatedAt:  time.Now().UTC(),
+			ID:            id,
+			Email:         req.Email,
+			Name:          req.Name,
+			Roles:         roles,
+			RoleExpiresAt: map[string]time.Time{},
+			CreatedAt:     time.Now().UTC(),
 		},
 		AccessToken:  access,
 		RefreshToken: refresh,
@@ -125,37 +127,45 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Login = strings.ToLower(strings.TrimSpace(req.Login))
 
-	id, roles, err := h.svc.Login(r.Context(), req.Login, req.Password)
+	user, err := h.svc.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
-		if errors.Is(err, service.ErrUserNotFound) || errors.Is(err, service.ErrInvalidCredentials) {
+		switch {
+		case errors.Is(err, service.ErrInactive):
+			writeError(w, 403, "account_inactive", "This account is no longer active.", nil)
+			return
+		case errors.Is(err, service.ErrInvalidCredentials) || errors.Is(err, service.ErrUserNotFound):
 			writeError(w, 401, "invalid_credentials", "invalid email or password", nil)
-		} else {
+			return
+		default:
 			writeError(w, 500, "server_error", "database error", nil)
+			return
 		}
-		return
 	}
 
-	access, err := auth.AccessToken(id, roles, h.accessSecret, h.accessTTL)
+	access, err := auth.AccessToken(user.ID, user.Roles, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
 	}
-	refresh, err := auth.RefreshToken(id, h.refreshSecret, h.refreshTTL)
+	refresh, err := auth.RefreshToken(user.ID, h.refreshSecret, h.refreshTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign refresh token", nil)
 		return
 	}
 
-	if err := h.svc.SaveRefreshToken(r.Context(), id, hashToken(refresh), time.Now().Add(h.refreshTTL)); err != nil {
+	if err := h.svc.SaveRefreshToken(r.Context(), user.ID, hashToken(refresh), time.Now().Add(h.refreshTTL)); err != nil {
 		writeError(w, 500, "server_error", "could not store refresh token", nil)
 		return
 	}
 
 	writeJSON(w, 200, dto.AuthResponse{
 		User: dto.UserResponse{
-			ID:    id,
-			Email: req.Login,
-			Roles: roles,
+			ID:            user.ID,
+			Email:         user.Email,
+			Name:          user.Name,
+			Roles:         user.Roles,
+			RoleExpiresAt: user.RoleExpiresAt,
+			CreatedAt:     user.CreatedAt,
 		},
 		AccessToken:  access,
 		RefreshToken: refresh,
@@ -185,13 +195,13 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _, _, roles, _, err := h.svc.GetUserByID(r.Context(), userID)
+	user, err := h.svc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		writeError(w, 500, "server_error", "user lookup failed", nil)
 		return
 	}
 
-	access, err := auth.AccessToken(userID, roles, h.accessSecret, h.accessTTL)
+	access, err := auth.AccessToken(userID, user.Roles, h.accessSecret, h.accessTTL)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not sign access token", nil)
 		return
@@ -254,7 +264,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized", "missing user context", nil)
 		return
 	}
-	_, email, name, roles, _, err := h.svc.GetUserByID(r.Context(), userID)
+	user, err := h.svc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
 			writeError(w, 404, "not_found", "user not found", nil)
@@ -264,11 +274,12 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, dto.UserResponse{
-		ID:         userID,
-		Email:      email,
-		Name:       name,
-		Roles:      roles,
-		CreatedAt:  time.Now().UTC(),
+		ID:            user.ID,
+		Email:         user.Email,
+		Name:          user.Name,
+		Roles:         user.Roles,
+		RoleExpiresAt: user.RoleExpiresAt,
+		CreatedAt:     user.CreatedAt,
 	})
 }
 

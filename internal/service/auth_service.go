@@ -16,8 +16,9 @@ import (
 type UserStore interface {
 	GetUserCount(ctx context.Context) (int, error)
 	CreateUser(ctx context.Context, email string, name string, roles []string, passwordHash string) (int64, error)
-	GetUserByEmail(ctx context.Context, email string) (int64, string, []string, error)
-	GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error)
+	GetUserByEmail(ctx context.Context, email string) (*store.User, error)
+	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
+	GetUserByID(ctx context.Context, id int64) (*store.User, error)
 }
 
 // ErrEmailTaken is re-exported from the store package for handler use.
@@ -28,6 +29,9 @@ var ErrUserNotFound = store.ErrUserNotFound
 
 // ErrInvalidCredentials is returned when email or password is incorrect.
 var ErrInvalidCredentials = errors.New("invalid credentials")
+
+// ErrInactive is returned when a user account is inactive (left the school).
+var ErrInactive = errors.New("account is inactive")
 
 // RefreshTokenStore abstracts refresh token persistence for the service layer.
 type RefreshTokenStore interface {
@@ -81,20 +85,58 @@ func (s *AuthService) Signup(ctx context.Context, email string, name string, pas
 	return id, roles, nil
 }
 
-// Login validates credentials and returns the user ID and roles.
-func (s *AuthService) Login(ctx context.Context, email string, password string) (int64, []string, error) {
-	id, hash, roles, err := s.userStore.GetUserByEmail(ctx, email)
+// Login validates credentials and returns the user with effective roles.
+// A user whose account is inactive (left_at set) gets ErrInactive.
+func (s *AuthService) Login(ctx context.Context, email string, password string) (*store.User, error) {
+	user, err := s.userStore.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, store.ErrUserNotFound) {
-			return 0, nil, err
+			return nil, ErrInvalidCredentials
 		}
-		return 0, nil, err
+		return nil, err
 	}
 
-	if err := auth.Compare(hash, password); err != nil {
-		return 0, nil, ErrInvalidCredentials
+	// Inactive accounts cannot sign in.
+	if user.LeftAt != nil || user.DeletedAt != nil {
+		return nil, ErrInactive
 	}
-	return id, roles, nil
+
+	if err := auth.Compare(user.PasswordHash, password); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	applyEffectiveRoles(user)
+	return user, nil
+}
+
+// GetUserByID looks up a user by ID with effective roles.
+func (s *AuthService) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	user, err := s.userStore.GetUserByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	applyEffectiveRoles(user)
+	return user, nil
+}
+
+// applyEffectiveRoles fills in Roles (raw roles minus expired) and
+// RoleExpiresAt (non-expired expiries only) on the user.
+// Roles and their expiries are already loaded by the store lookup.
+func applyEffectiveRoles(user *store.User) {
+	now := time.Now()
+	effective := []string{}
+	kept := map[string]time.Time{}
+	for _, role := range user.Roles {
+		if exp, ok := user.RoleExpiresAt[role]; ok && !exp.After(now) {
+			continue // role expired
+		}
+		effective = append(effective, role)
+		if exp, ok := user.RoleExpiresAt[role]; ok {
+			kept[role] = exp
+		}
+	}
+	user.Roles = effective
+	user.RoleExpiresAt = kept
 }
 
 // SaveRefreshToken persists a refresh token for a user.
@@ -123,9 +165,4 @@ func (s *AuthService) FindRefreshTokenByHash(ctx context.Context, tokenHash stri
 func (s *AuthService) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	hashed := hashRefreshToken(tokenHash)
 	return s.refreshTokenStore.DeleteRefreshToken(ctx, hashed)
-}
-
-// GetUserByID looks up a user by ID.
-func (s *AuthService) GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error) {
-	return s.userStore.GetUserByID(ctx, id)
 }

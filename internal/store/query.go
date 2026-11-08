@@ -18,17 +18,32 @@ type Query struct {
 	DBTX DBTX
 }
 
-func (q *Query) InsertUser(ctx context.Context, email string, name string, roles []string, passwordHash string) *sql.Row {
+func (q *Query) InsertUser(ctx context.Context, email string, name string, passwordHash string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO users (email, name, roles, password_hash) VALUES ($1, $2, $3, $4) RETURNING id`,
-		email, name, roles, passwordHash,
+		`INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id`,
+		email, name, passwordHash,
 	)
 }
 
 func (q *Query) GetUserByEmail(ctx context.Context, email string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, password_hash, roles FROM users WHERE lower(email) = $1`,
+		`SELECT id, password_hash, name, created_at, left_at, deleted_at FROM users WHERE lower(email) = $1`,
 		email,
+	)
+}
+
+// GetUserRoles returns every role for a user plus its expiry (nil if permanent).
+func (q *Query) GetUserRoles(ctx context.Context, userID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT role, expires_at FROM user_roles WHERE user_id = $1`,
+		userID,
+	)
+}
+
+func (q *Query) InsertUserRole(ctx context.Context, userID int64, role string) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`,
+		userID, role,
 	)
 }
 
@@ -71,7 +86,7 @@ func (q *Query) CountRefreshTokens(ctx context.Context) *sql.Row {
 
 func (q *Query) GetUserByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, email, name, roles, created_at FROM users WHERE id = $1`,
+		`SELECT id, email, name, created_at, left_at, deleted_at FROM users WHERE id = $1`,
 		id,
 	)
 }
@@ -163,7 +178,7 @@ func (q *Query) DeleteEnrollment(ctx context.Context, moduleID int64, userID int
 
 func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.module_id, e.user_id, e.created_at, u.email, u.name, u.role
+		`SELECT e.id, e.module_id, e.user_id, e.created_at, u.email, u.name
 		 FROM enrollments e
 		 JOIN users u ON u.id = e.user_id
 		 WHERE e.module_id = $1`,
@@ -418,7 +433,7 @@ func (q *Query) GetSubmissionsByStudentAndAssignment(ctx context.Context, studen
 func (q *Query) GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
 		`SELECT s.id, s.content_item_id, s.student_id, s.text_body, s.submitted_at, s.grade, s.feedback, s.graded_by, s.graded_at, s.created_at,
-		       u.id, u.email, u.name, u.role
+		       u.id, u.email, u.name
 		 FROM submissions s
 		 JOIN users u ON u.id = s.student_id
 		 WHERE s.content_item_id = $1 AND s.deleted_at IS NULL

@@ -215,6 +215,10 @@ definitions:
         type: integer
       name:
         type: string
+      role_expires_at:
+        additionalProperties:
+          type: string
+        type: object
       roles:
         items:
           type: string

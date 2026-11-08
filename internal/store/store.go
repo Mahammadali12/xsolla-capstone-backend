@@ -11,9 +11,10 @@ import (
 type Store interface {
 	// User methods
 	CreateUser(ctx context.Context, email string, name string, roles []string, passwordHash string) (int64, error)
-	GetUserByEmail(ctx context.Context, email string) (int64, string, []string, error)
 	GetUserCount(ctx context.Context) (int, error)
-	GetUserByID(ctx context.Context, id int64) (int64, string, string, []string, time.Time, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
+	GetUserByID(ctx context.Context, id int64) (*User, error)
 
 	// Refresh token methods
 	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error

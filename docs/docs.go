@@ -1348,6 +1348,12 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "role_expires_at": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "roles": {
                     "type": "array",
                     "items": {

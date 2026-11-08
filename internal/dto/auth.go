@@ -27,11 +27,12 @@ type LogoutRequest struct {
 
 // UserResponse is the user object returned in auth responses.
 type UserResponse struct {
-	ID         int64     `json:"id"`
-	Email      string    `json:"email"`
-	Name       string    `json:"name"`
-	Roles      []string  `json:"roles"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID            int64           `json:"id"`
+	Email         string          `json:"email"`
+	Name          string          `json:"name"`
+	Roles         []string        `json:"roles"`
+	RoleExpiresAt map[string]time.Time `json:"role_expires_at,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 // AuthResponse is the payload for successful signup/login.

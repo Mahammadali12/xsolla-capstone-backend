@@ -139,11 +139,10 @@ func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItem
 		var sub Submission
 		var studentID int64
 		var studentName, studentEmail string
-		var studentRole sql.NullString
 		err := rows.Scan(
 			&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
 			&sub.Grade, &sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
-			&studentID, &studentEmail, &studentName, &studentRole,
+			&studentID, &studentEmail, &studentName,
 		)
 		if err != nil {
 			return nil, err
