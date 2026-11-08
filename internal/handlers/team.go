@@ -18,8 +18,9 @@ import (
 type TeamService interface {
 	ListTeams(ctx context.Context) ([]store.Team, error)
 	ReplaceTeams(ctx context.Context, inputs []store.TeamInput) ([]store.Team, error)
-	PutTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
+	AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
+	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*store.Team, error)
 	GetMyTeam(ctx context.Context, studentID int64) (*store.TeamDetail, error)
@@ -99,8 +100,9 @@ func (h *TeamHandlers) ReplaceTeams(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, resp)
 }
 
-// PUT /teams/{id}/student — admin only. Add or move students to a team.
-func (h *TeamHandlers) PutTeamStudents(w http.ResponseWriter, r *http.Request) {
+// POST /teams/{id}/student — admin only. Add students to a team.
+// Students must not already belong to another team (no auto-removal).
+func (h *TeamHandlers) AddTeamStudents(w http.ResponseWriter, r *http.Request) {
 	teamID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeError(w, 400, "bad_request", "invalid team ID", nil)
@@ -113,15 +115,41 @@ func (h *TeamHandlers) PutTeamStudents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.PutTeamStudents(r.Context(), teamID, req.StudentIDs); err != nil {
+	if err := h.svc.AddTeamStudents(r.Context(), teamID, req.StudentIDs); err != nil {
 		switch {
 		case errors.Is(err, store.ErrTeamNotFound):
 			writeError(w, 404, "not_found", "team not found", nil)
 		case errors.Is(err, service.ErrInvalidTeamConfig):
 			writeError(w, 422, "validation_failed", err.Error(), nil)
 		default:
-			log.Printf("team handler: PutTeamStudents error: %v", err)
+			log.Printf("team handler: AddTeamStudents error: %v", err)
 			writeError(w, 500, "server_error", "could not update team students", nil)
+		}
+		return
+	}
+	w.WriteHeader(204)
+}
+
+// DELETE /teams/{id}/students/{studentId} — admin only. Remove one student from a team.
+func (h *TeamHandlers) DeleteTeamStudent(w http.ResponseWriter, r *http.Request) {
+	teamID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid team ID", nil)
+		return
+	}
+	studentID, err := strconv.ParseInt(r.PathValue("studentId"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid student ID", nil)
+		return
+	}
+
+	if err := h.svc.DeleteTeamStudent(r.Context(), teamID, studentID); err != nil {
+		switch {
+		case errors.Is(err, store.ErrTeamNotFound):
+			writeError(w, 404, "not_found", "team not found", nil)
+		default:
+			log.Printf("team handler: DeleteTeamStudent error: %v", err)
+			writeError(w, 500, "server_error", "could not remove student from team", nil)
 		}
 		return
 	}

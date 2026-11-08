@@ -1,11 +1,11 @@
 info:
-  name: Put team students
+  name: Add team students
   type: http
   seq: 3
 
 http:
-  method: PUT
-  url: http://localhost:8080/teams/1/student
+  method: POST
+  url: http://localhost:8080/teams/1/students
   headers:
     - name: Content-Type
       value: application/json

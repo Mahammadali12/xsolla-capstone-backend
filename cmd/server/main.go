@@ -99,7 +99,8 @@ func main() {
 	mux.Handle("GET /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ListTeams), "admin"))
 	mux.Handle("PUT /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ReplaceTeams), "admin"))
 	mux.Handle("PATCH /teams/{id}", authenticator.RequireRole(http.HandlerFunc(teamH.PatchTeam), "admin"))
-	mux.Handle("PUT /teams/{id}/student", authenticator.RequireRole(http.HandlerFunc(teamH.PutTeamStudents), "admin"))
+	mux.Handle("POST /teams/{id}/students", authenticator.RequireRole(http.HandlerFunc(teamH.AddTeamStudents), "admin"))
+	mux.Handle("DELETE /teams/{id}/students/{studentId}", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeamStudent), "admin"))
 	mux.Handle("DELETE /teams/{id}/students", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeamStudents), "admin"))
 	mux.Handle("PUT /teams/{id}/mentor", authenticator.RequireRole(http.HandlerFunc(teamH.PutTeamMentor), "admin"))
 

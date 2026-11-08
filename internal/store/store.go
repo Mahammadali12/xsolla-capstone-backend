@@ -90,8 +90,9 @@ type Store interface {
 	// Team methods
 	GetAllTeams(ctx context.Context) ([]Team, error)
 	ReplaceTeams(ctx context.Context, teams []TeamInput) ([]Team, error)
-	PutTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
+	AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
+	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*Team, error)
 	GetMyTeam(ctx context.Context, studentID int64) (*TeamDetail, error)

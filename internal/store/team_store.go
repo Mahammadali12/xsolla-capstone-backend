@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,10 +46,10 @@ type TeamDetail struct {
 
 // UserBrief is a brief user representation for validation/lookup.
 type UserBrief struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	ID    int64   `json:"id"`
+	Name  string  `json:"name"`
+	Email string  `json:"email"`
+	Roles []string `json:"roles"`
 }
 
 // ErrTeamNotFound is returned when a team does not exist.
@@ -173,13 +174,67 @@ func (s *StoreImpl) ReplaceTeams(ctx context.Context, teams []TeamInput) ([]Team
 	return result, nil
 }
 
-// PutTeamStudents adds or moves students to a team.
-// Each student is removed from any existing team first (one team per student).
-func (s *StoreImpl) PutTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error {
-	for _, studentID := range studentIDs {
-		// Remove student from any existing team first.
-		if _, err := s.DB().ExecContext(ctx, `DELETE FROM team_members WHERE student_id = $1`, studentID); err != nil {
+// AddTeamStudents adds students to a team.
+// Each student must not already belong to another team (no auto-removal).
+func (s *StoreImpl) AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error {
+	// Validate team exists.
+	teams, err := s.GetAllTeams(ctx)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, t := range teams {
+		if t.ID == teamID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ErrTeamNotFound
+	}
+
+	// Validate all students exist, are active, and have the 'student' role.
+	if len(studentIDs) > 0 {
+		users, err := s.GetActiveUsersByIDs(ctx, studentIDs)
+		if err != nil {
 			return err
+		}
+		if len(users) != len(studentIDs) {
+			return ErrInvalidTeamRole
+		}
+		for _, u := range users {
+			if !slices.Contains(u.Roles, "student") {
+				return ErrInvalidTeamRole
+			}
+		}
+	}
+
+	// Check that no student is already in another team.
+	rows, err := s.DB().QueryContext(ctx,
+		`SELECT student_id, team_id FROM team_members WHERE student_id = ANY($1::bigint[])`,
+		studentIDs,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	alreadyInTeam := make(map[int64]int64)
+	for rows.Next() {
+		var studentID, existingTeamID int64
+		if err := rows.Scan(&studentID, &existingTeamID); err != nil {
+			return err
+		}
+		if existingTeamID != teamID {
+			return fmt.Errorf("student %d is already in team %d", studentID, existingTeamID)
+		}
+		alreadyInTeam[studentID] = existingTeamID
+	}
+
+	// Insert students into the team (skip those already in this team).
+	for _, studentID := range studentIDs {
+		if alreadyInTeam[studentID] == teamID {
+			continue
 		}
 		if _, err := s.DB().ExecContext(ctx, `INSERT INTO team_members (team_id, student_id) VALUES ($1, $2)`, teamID, studentID); err != nil {
 			return err
@@ -209,6 +264,12 @@ func (s *StoreImpl) DeleteTeamStudents(ctx context.Context, teamID int64, studen
 		return err
 	}
 	return nil
+}
+
+// DeleteTeamStudent removes a single student from a team.
+func (s *StoreImpl) DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error {
+	_, err := s.DB().ExecContext(ctx, `DELETE FROM team_members WHERE team_id = $1 AND student_id = $2`, teamID, studentID)
+	return err
 }
 
 // PutTeamMentor sets or removes a team's mentor. If the mentor leads another
@@ -311,10 +372,7 @@ func (s *StoreImpl) GetActiveUsersByIDs(ctx context.Context, ids []int64) ([]Use
 		if err := rows.Scan(&u.ID, &u.Email, &u.Name, pq.Array(&roles)); err != nil {
 			return nil, err
 		}
-		u.Role = ""
-		if len(roles) > 0 {
-			u.Role = roles[0]
-		}
+		u.Roles = roles
 		users = append(users, u)
 	}
 	return users, nil

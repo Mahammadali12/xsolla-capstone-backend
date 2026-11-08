@@ -804,6 +804,11 @@ func (q *Query) ExecContext(ctx context.Context, query string, args ...any) (sql
 	return q.DBTX.ExecContext(ctx, query, args...)
 }
 
+// QueryContext passthrough for raw SQL row queries.
+func (q *Query) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx, query, args...)
+}
+
 // QueryRowContext passthrough for raw SQL row queries.
 func (q *Query) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx, query, args...)

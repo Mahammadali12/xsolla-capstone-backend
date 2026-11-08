@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 
 	"xsolla-capstone-api/internal/store"
@@ -73,9 +74,9 @@ func (s *TeamService) ReplaceTeams(ctx context.Context, inputs []store.TeamInput
 	if err != nil {
 		return nil, err
 	}
-	userRoles := make(map[int64]string)
+	userRoles := make(map[int64][]string)
 	for _, u := range users {
-		userRoles[u.ID] = u.Role
+		userRoles[u.ID] = u.Roles
 	}
 
 	// Check each referenced id exists and is active.
@@ -87,12 +88,12 @@ func (s *TeamService) ReplaceTeams(ctx context.Context, inputs []store.TeamInput
 
 	// Validate roles: mentor_ids must have 'mentor' role, student_ids must have 'student' role.
 	for _, mid := range mentorIDs {
-		if userRoles[mid] != "mentor" {
+		if !slices.Contains(userRoles[mid], "mentor") {
 			return nil, ErrInvalidTeamConfig
 		}
 	}
 	for _, sid := range studentIDs {
-		if userRoles[sid] != "student" {
+		if !slices.Contains(userRoles[sid], "student") {
 			return nil, ErrInvalidTeamConfig
 		}
 	}
@@ -107,10 +108,9 @@ func (s *TeamService) ReplaceTeams(ctx context.Context, inputs []store.TeamInput
 	return s.store.ReplaceTeams(ctx, inputs)
 }
 
-// PutTeamStudents adds or moves students to a team.
-// Each student is removed from any existing team first (one team per student).
-// Validates: all students exist, are active, and have the 'student' role.
-func (s *TeamService) PutTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error {
+// AddTeamStudents adds students to a team.
+// Students must not already belong to another team (no auto-removal).
+func (s *TeamService) AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error {
 	// Validate team exists.
 	teams, err := s.store.GetAllTeams(ctx)
 	if err != nil {
@@ -137,13 +137,13 @@ func (s *TeamService) PutTeamStudents(ctx context.Context, teamID int64, student
 			return ErrInvalidTeamConfig
 		}
 		for _, u := range users {
-			if u.Role != "student" {
+			if !slices.Contains(u.Roles, "student") {
 				return ErrInvalidTeamConfig
 			}
 		}
 	}
 
-	return s.store.PutTeamStudents(ctx, teamID, studentIDs)
+	return s.store.AddTeamStudents(ctx, teamID, studentIDs)
 }
 
 // PatchTeam updates a single team's name and/or mentor_id in place.
@@ -172,7 +172,7 @@ func (s *TeamService) PatchTeam(ctx context.Context, id int64, name *string, men
 		if err != nil {
 			return nil, err
 		}
-		if len(users) == 0 || users[0].Role != "mentor" {
+		if len(users) == 0 || !slices.Contains(users[0].Roles, "mentor") {
 			return nil, ErrInvalidTeamConfig
 		}
 	}
@@ -180,7 +180,10 @@ func (s *TeamService) PatchTeam(ctx context.Context, id int64, name *string, men
 	return s.store.PatchTeam(ctx, id, name, mentorID)
 }
 
-// DeleteTeamStudents removes students from a team.
+// DeleteTeamStudent removes a single student from a team.
+func (s *TeamService) DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error {
+	return s.store.DeleteTeamStudent(ctx, teamID, studentID)
+}
 func (s *TeamService) DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error {
 	// Validate team exists.
 	teams, err := s.store.GetAllTeams(ctx)
@@ -225,7 +228,7 @@ func (s *TeamService) PutTeamMentor(ctx context.Context, teamID int64, mentorID 
 		if err != nil {
 			return err
 		}
-		if len(users) == 0 || users[0].Role != "mentor" {
+		if len(users) == 0 || !slices.Contains(users[0].Roles, "mentor") {
 			return ErrInvalidTeamConfig
 		}
 	}
