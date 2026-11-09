@@ -90,6 +90,35 @@ Errors: 400 (missing token).
 
 ---
 
+### GET /auth/google/login
+
+Auth: required (valid JWT via `Authorization: Bearer` header or `?access_token=` query param).
+
+302 Redirect to `https://accounts.google.com/o/oauth2/v2/auth` with scopes `calendar.events`, `gmail.send`, `openid`, `email`; `access_type=offline`, `prompt=consent`.
+
+Links the user's Google account to their LMS account.
+
+---
+
+### GET /auth/google/callback
+
+Google redirects here with `?code=` and `?state=`. Exchanges the code for access + refresh tokens, encrypts and stores the refresh token, then 302-redirects to the frontend (`?google=connected` or `?google=error`).
+
+---
+
+### GET /auth/google/me
+
+Auth: required (valid JWT).
+
+Returns the connected Google account profile:
+```json
+{ "id": "...", "email": "...", "name": "...", "picture": "...", "locale": "...", "hd": "...", "verified_email": true }
+```
+
+Errors: 404 (Google account not connected), 401 (refresh token expired/revoked), 502 (Google API unreachable).
+
+---
+
 ## Users
 
 ### GET /users/me
@@ -710,6 +739,14 @@ Body:
 ```json
 { "student_ids": ["3", "4"] }
 ```
+
+Success 204: empty body.
+
+Errors: 404 (team not found).
+
+### DELETE /teams/:id/students/{studentId}
+
+Auth: required (admin only). Remove one student from a team.
 
 Success 204: empty body.
 

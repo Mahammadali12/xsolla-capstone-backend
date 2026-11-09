@@ -145,6 +145,9 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /events | — | create | create | lecturer/admin only |
 | PATCH /events/:id | — | if created | any | lecturer/admin only |
 | DELETE /events/:id | — | if created | any | soft delete |
+| GET /auth/google/login | any | any | any | JWT via header or ?access_token= |
+| GET /auth/google/callback | any | any | any | Google redirect target |
+| GET /auth/google/me | any | any | any | 404 if Google not connected |
 | GET /mentor-slots | own mentor's slots | own slots | own slots | future slots only |
 | POST /mentor-slots | — | open window | open window | mentor creates slots |
 | DELETE /mentor-slots/:id | — | own slot | own slot | only if free |

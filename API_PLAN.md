@@ -49,6 +49,12 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 **EVENTS** (calendar events: lectures, meetings, off-campus days)
 - `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
 
+**GOOGLE_TOKENS** (encrypted Google OAuth refresh tokens)
+- `user_id bigint PK, FK REFERENCES users(id) ON DELETE CASCADE`
+- `encrypted_refresh_token text NOT NULL` (AES-GCM encrypted at rest, never plaintext)
+- `token_expires_at timestamptz NULL`
+- `updated_at timestamptz NOT NULL DEFAULT now()`
+
 **MENTOR_SLOTS** (1:1 meeting availability + bookings)
 - `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
 - Constraint: `ends_at > starts_at`
@@ -276,6 +282,22 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **DELETE /events/:id** (lecturer/admin only)
 - Soft delete.
+
+**DELETE /events/:id** (lecturer/admin only)
+- Soft delete.
+
+### Google OAuth
+
+**GET /auth/google/login** (auth required — JWT via `Authorization: Bearer` header or `?access_token=` query param)
+- Redirects user to Google consent screen with scopes `calendar.events`, `gmail.send`, `openid`, `email`.
+- `access_type=offline`, `prompt=consent` to ensure a refresh token is issued.
+
+**GET /auth/google/callback**
+- Google redirect target. Exchanges `?code=` for access + refresh tokens, encrypts and stores the refresh token linked to the LMS user, then redirects to frontend (`?google=connected` or `?google=error`).
+
+**GET /auth/google/me** (auth required)
+- Returns connected Google profile: `id`, `email`, `name`, `picture`, `locale`, `hd`, `verified_email`.
+- 404 if Google account not connected; 401 if refresh token expired/revoked; 502 if Google API unreachable.
 
 ### Mentor Slots (1:1 meetings)
 
