@@ -86,6 +86,9 @@ func main() {
 	mux.HandleFunc("POST /auth/login", authH.Login)
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
+	mux.Handle("GET /auth/google/login", authenticator.OptionalAuth(http.HandlerFunc(authH.GoogleLogin)))
+	mux.HandleFunc("GET /auth/google/callback", authH.GoogleCallback)
+	mux.Handle("GET /auth/google/me", authenticator.Middleware(http.HandlerFunc(authH.GoogleMe)))
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
 
 	// Admin-only user management (4.1)

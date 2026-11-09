@@ -19,6 +19,9 @@ type UserStore interface {
 	GetUserByEmail(ctx context.Context, email string) (*store.User, error)
 	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
 	GetUserByID(ctx context.Context, id int64) (*store.User, error)
+	// Google OAuth token storage
+	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
+	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
 }
 
 // ErrEmailTaken is re-exported from the store package for handler use.
@@ -165,4 +168,14 @@ func (s *AuthService) FindRefreshTokenByHash(ctx context.Context, tokenHash stri
 func (s *AuthService) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	hashed := hashRefreshToken(tokenHash)
 	return s.refreshTokenStore.DeleteRefreshToken(ctx, hashed)
+}
+
+// SaveGoogleRefreshToken persists an encrypted Google refresh token for a user.
+func (s *AuthService) SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error {
+	return s.userStore.SaveGoogleRefreshToken(ctx, userID, encryptedToken, expiresAt)
+}
+
+// GetGoogleRefreshToken retrieves the encrypted Google refresh token for a user.
+func (s *AuthService) GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error) {
+	return s.userStore.GetGoogleRefreshToken(ctx, userID)
 }

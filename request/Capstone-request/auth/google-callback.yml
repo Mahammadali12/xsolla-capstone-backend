@@ -1,0 +1,16 @@
+info:
+  name: Google OAuth callback
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: http://localhost:8080/auth/google/callback?code=EXAMPLE_AUTH_CODE&state=EXAMPLE_STATE
+  headers: []
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

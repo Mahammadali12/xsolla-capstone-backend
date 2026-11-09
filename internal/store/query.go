@@ -82,6 +82,25 @@ func (q *Query) DeleteRefreshToken(ctx context.Context, tokenHash string) (sql.R
 	)
 }
 
+func (q *Query) UpsertGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`INSERT INTO google_tokens (user_id, encrypted_refresh_token, token_expires_at, updated_at)
+		 VALUES ($1, $2, $3, now())
+		 ON CONFLICT (user_id) DO UPDATE SET
+		   encrypted_refresh_token = EXCLUDED.encrypted_refresh_token,
+		   token_expires_at = EXCLUDED.token_expires_at,
+		   updated_at = now()`,
+		userID, encryptedToken, expiresAt,
+	)
+}
+
+func (q *Query) GetGoogleRefreshToken(ctx context.Context, userID int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT encrypted_refresh_token, token_expires_at FROM google_tokens WHERE user_id = $1`,
+		userID,
+	)
+}
+
 func (q *Query) CountRefreshTokens(ctx context.Context) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx, `SELECT COUNT(*) FROM refresh_tokens WHERE expires_at > NOW()`)
 }

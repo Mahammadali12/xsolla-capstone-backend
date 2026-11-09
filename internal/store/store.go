@@ -102,6 +102,9 @@ type Store interface {
 	CountTeams(ctx context.Context) (int, error)
 	CountActiveStudents(ctx context.Context) (int, error)
 	GetActiveUsersByIDs(ctx context.Context, ids []int64) ([]UserBrief, error)
+	// Google OAuth token storage
+	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
+	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
 }
 
 // Store wraps the database connection and provides access to queries.

@@ -350,3 +350,25 @@ func (s *StoreImpl) FindRefreshTokenByHash(ctx context.Context, tokenHash string
 	}
 	return userID, tokenHashOut, expiresAt, nil
 }
+
+// SaveGoogleRefreshToken stores an encrypted Google refresh token for a user.
+func (s *StoreImpl) SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error {
+	q := s.DB()
+	_, err := q.UpsertGoogleRefreshToken(ctx, userID, encryptedToken, expiresAt)
+	return err
+}
+
+// GetGoogleRefreshToken retrieves the encrypted Google refresh token for a user.
+func (s *StoreImpl) GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error) {
+	q := s.DB()
+	var encryptedToken string
+	var expiresAt time.Time
+	err := q.GetGoogleRefreshToken(ctx, userID).Scan(&encryptedToken, &expiresAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", time.Time{}, ErrRefreshTokenNotFound
+		}
+		return "", time.Time{}, err
+	}
+	return encryptedToken, expiresAt, nil
+}
