@@ -85,6 +85,7 @@ type Store interface {
 	GetEventByID(ctx context.Context, id int64) (*Event, error)
 	ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error)
 	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
+	UpdateEventGoogleID(ctx context.Context, eventID int64, googleEventID string) error
 	DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error
 
 	// Team methods

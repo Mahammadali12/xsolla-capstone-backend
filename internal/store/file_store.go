@@ -133,16 +133,17 @@ func (s *StoreImpl) FileReferencedCount(ctx context.Context, fileID int64) (int6
 
 // Event represents an event row from the database.
 type Event struct {
-	ID          int64
-	Title       string
-	Kind        string
-	StartsAt    time.Time
-	EndsAt      time.Time
-	AllDay      bool
-	Location    *string
-	Description *string
-	ModuleID    *int64
-	CreatedAt   time.Time
+	ID            int64
+	Title         string
+	Kind          string
+	StartsAt      time.Time
+	EndsAt        time.Time
+	AllDay        bool
+	Location      *string
+	Description   *string
+	ModuleID      *int64
+	GoogleEventID *string
+	CreatedAt     time.Time
 }
 
 // ErrEventNotFound is returned when an event does not exist or is deleted.
@@ -152,12 +153,21 @@ var ErrEventNotFound = errors.New("event not found")
 func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
 	var e Event
 	err := s.DB().CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, moduleID).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.ModuleID, &e.CreatedAt,
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.ModuleID, &e.GoogleEventID, &e.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 	return &e, nil
+}
+
+// UpdateEventGoogleID sets the google_event_id for an event.
+func (s *StoreImpl) UpdateEventGoogleID(ctx context.Context, eventID int64, googleEventID string) error {
+	_, err := s.DB().ExecContext(ctx,
+		`UPDATE events SET google_event_id = $1 WHERE id = $2`,
+		googleEventID, eventID,
+	)
+	return err
 }
 
 // GetEventByID returns an event by ID if it exists and is not deleted.
@@ -166,8 +176,9 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 	var location *string
 	var description *string
 	var moduleID *int64
+	var googleEventID *string
 	err := s.DB().GetEventByID(ctx, id).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &e.CreatedAt,
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &googleEventID, &e.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -178,6 +189,7 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 	e.Location = location
 	e.Description = description
 	e.ModuleID = moduleID
+	e.GoogleEventID = googleEventID
 	return &e, nil
 }
 
@@ -195,12 +207,14 @@ func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to ti
 		var location *string
 		var description *string
 		var moduleID *int64
-		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &e.CreatedAt); err != nil {
+		var googleEventID *string
+		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &googleEventID, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		e.Location = location
 		e.Description = description
 		e.ModuleID = moduleID
+		e.GoogleEventID = googleEventID
 		events = append(events, e)
 	}
 	return events, nil
@@ -212,8 +226,9 @@ func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kin
 	var loc *string
 	var desc *string
 	var modID *int64
+	var googleEventID *string
 	err := s.DB().UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID, isAdmin).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &modID, &e.CreatedAt,
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &modID, &googleEventID, &e.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -224,6 +239,7 @@ func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kin
 	e.Location = loc
 	e.Description = desc
 	e.ModuleID = modID
+	e.GoogleEventID = googleEventID
 	return &e, nil
 }
 

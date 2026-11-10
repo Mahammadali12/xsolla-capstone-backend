@@ -548,7 +548,7 @@ Query: `from` and `to` as ISO 8601 timestamps defining the date range.
 Success 200:
 ```json
 [
-  { "id": "100", "title": "Weekly Lecture", "kind": "lecture", "starts_at": "2026-11-09T10:00:00Z", "ends_at": "2026-11-09T12:00:00Z", "all_day": false, "location": "Main hall", "description": "Weekly lecture for the current module.", "module_id": "200" },
+  { "id": "100", "title": "Weekly Lecture", "kind": "lecture", "starts_at": "2026-11-09T10:00:00Z", "ends_at": "2026-11-09T12:00:00Z", "all_day": false, "location": "Main hall", "description": "Weekly lecture for the current module.", "module_id": "200", "google_event_id": "abc123def456" },
   { "id": "101", "title": "Off-campus day", "kind": "off-campus", "starts_at": "2026-11-20T00:00:00Z", "ends_at": "2026-11-20T23:59:00Z", "all_day": true, "description": "No classes - the school is closed." }
 ]
 ```
@@ -565,15 +565,16 @@ Auth: required (lecturer or admin only).
 
 Body:
 ```json
-{ "title": "Weekly Lecture", "kind": "lecture", "starts_at": "2026-11-09T10:00:00Z", "ends_at": "2026-11-09T12:00:00Z", "location": "Main hall", "description": "...", "module_id": "200" }
+{ "title": "Weekly Lecture", "kind": "lecture", "starts_at": "2026-11-09T10:00:00Z", "ends_at": "2026-11-09T12:00:00Z", "location": "Main hall", "description": "...", "module_id": "200", "sync_to_google": false }
 ```
 
 Rules:
 - `kind` must be `lecture`, `meeting`, or `off-campus`.
 - `starts_at` must be before `ends_at`.
 - `module_id`, when provided, must reference a module the caller teaches.
+- `sync_to_google` (optional, default false): if true, also creates the event in Google Calendar on the creator's own calendar. Requires the user to have connected their Google account. Non-fatal: if Google Calendar sync fails, the event is still created in the LMS.
 
-Success 201: created event row.
+Success 201: created event row, includes `google_event_id` if synced.
 
 Errors: 400 (invalid dates / missing fields), 403 (not lecturer/admin), 404 (module not found).
 

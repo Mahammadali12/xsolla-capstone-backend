@@ -3,20 +3,28 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
+	"xsolla-capstone-api/internal/service/google"
 	"xsolla-capstone-api/internal/store"
 )
 
 // EventService coordinates event operations.
 type EventService struct {
-	store store.Store
+	store   store.Store
+	googleSvc google.Service
 }
 
 // NewEventService creates an EventService backed by the given store.
 func NewEventService(s store.Store) *EventService {
 	return &EventService{store: s}
+}
+
+// NewEventServiceWithGoogle creates an EventService with Google Calendar integration.
+func NewEventServiceWithGoogle(s store.Store, g google.Service) *EventService {
+	return &EventService{store: s, googleSvc: g}
 }
 
 // ErrEventNotFound is returned when an event does not exist or is deleted.
@@ -36,30 +44,32 @@ var ErrNotTeacherOfModule = errors.New("not the lecturer of this module")
 
 // Event represents a calendar event.
 type Event struct {
-	ID          int64
-	Title       string
-	Kind        string
-	StartsAt    time.Time
-	EndsAt      time.Time
-	AllDay      bool
-	Location    *string
-	Description *string
-	ModuleID    *int64
-	CreatedAt   time.Time
+	ID            int64
+	Title         string
+	Kind          string
+	StartsAt      time.Time
+	EndsAt        time.Time
+	AllDay        bool
+	Location      *string
+	Description   *string
+	ModuleID      *int64
+	GoogleEventID *string
+	CreatedAt     time.Time
 }
 
 func eventFromStore(e store.Event) Event {
 	return Event{
-		ID:          e.ID,
-		Title:       e.Title,
-		Kind:        e.Kind,
-		StartsAt:    e.StartsAt,
-		EndsAt:      e.EndsAt,
-		AllDay:      e.AllDay,
-		Location:    e.Location,
-		Description: e.Description,
-		ModuleID:    e.ModuleID,
-		CreatedAt:   e.CreatedAt,
+		ID:            e.ID,
+		Title:         e.Title,
+		Kind:          e.Kind,
+		StartsAt:      e.StartsAt,
+		EndsAt:        e.EndsAt,
+		AllDay:        e.AllDay,
+		Location:      e.Location,
+		Description:   e.Description,
+		ModuleID:      e.ModuleID,
+		GoogleEventID: e.GoogleEventID,
+		CreatedAt:     e.CreatedAt,
 	}
 }
 
@@ -105,23 +115,26 @@ func (s *EventService) GetEventByID(ctx context.Context, userID int64, roles []s
 
 func eventFromStorePtr(e *store.Event) *Event {
 	return &Event{
-		ID:          e.ID,
-		Title:       e.Title,
-		Kind:        e.Kind,
-		StartsAt:    e.StartsAt,
-		EndsAt:      e.EndsAt,
-		AllDay:      e.AllDay,
-		Location:    e.Location,
-		Description: e.Description,
-		ModuleID:    e.ModuleID,
-		CreatedAt:   e.CreatedAt,
+		ID:            e.ID,
+		Title:         e.Title,
+		Kind:          e.Kind,
+		StartsAt:      e.StartsAt,
+		EndsAt:        e.EndsAt,
+		AllDay:        e.AllDay,
+		Location:      e.Location,
+		Description:   e.Description,
+		ModuleID:      e.ModuleID,
+		GoogleEventID: e.GoogleEventID,
+		CreatedAt:     e.CreatedAt,
 	}
 }
 
 // CreateEvent creates a new calendar event.
 // Only lecturers and admins can create events. module_id must reference a
 // module the caller teaches (or be nil).
-func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
+// If syncToGoogle is true and moduleID is set, the event is also pushed to
+// Google Calendar with enrolled students and the lecturer as attendees.
+func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, syncToGoogle bool) (*Event, error) {
 	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, ErrOnlyStaffCanCreateEvent
 	}
@@ -155,7 +168,65 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []st
 		return nil, err
 	}
 	ev := eventFromStore(*storeEvent)
+
+	// Push to Google Calendar if requested
+	if syncToGoogle && s.googleSvc != nil {
+		if err := s.pushEventToGoogle(ctx, userID, ev); err != nil {
+			// Non-fatal: log and continue, event is still created in LMS
+			log.Printf("event service: Google Calendar sync failed for event %d: %v", ev.ID, err)
+		}
+	}
+
 	return &ev, nil
+}
+
+// pushEventToGoogle creates the event in Google Calendar and stores the google_event_id.
+// No attendees, no module required — just the creator's own calendar.
+func (s *EventService) pushEventToGoogle(ctx context.Context, userID int64, ev Event) error {
+	// Get a valid access token for the user
+	accessToken, err := s.googleSvc.GetValidAccessToken(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Create a Google API client with auto-refresh
+	client := google.NewClient(userID, s.googleSvc, accessToken)
+
+	googleEvent := google.CalendarEvent{
+		Summary:     ev.Title,
+		Description: orEmpty(ev.Description),
+		Start: google.EventTime{
+			DateTime: ev.StartsAt.Format(time.RFC3339),
+			TimeZone: "UTC",
+		},
+		End: google.EventTime{
+			DateTime: ev.EndsAt.Format(time.RFC3339),
+			TimeZone: "UTC",
+		},
+	}
+
+	created, err := client.CreateCalendarEvent(ctx, googleEvent)
+	if err != nil {
+		return err
+	}
+
+	// Store the google_event_id
+	if created.ID != "" {
+		if err := s.store.UpdateEventGoogleID(ctx, ev.ID, created.ID); err != nil {
+			return err
+		}
+		ev.GoogleEventID = &created.ID
+	}
+
+	return nil
+}
+
+// orEmpty returns the string value of a *string pointer, or "" if nil.
+func orEmpty(s *string) string {
+	if s != nil {
+		return *s
+	}
+	return ""
 }
 
 // UpdateEvent updates an event.

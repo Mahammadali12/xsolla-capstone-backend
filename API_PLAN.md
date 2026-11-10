@@ -47,7 +47,7 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK` — no duplicate file links on one submission
 
 **EVENTS** (calendar events: lectures, meetings, off-campus days)
-- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `google_event_id text NULL` (Google Calendar event ID when synced), `deleted_at timestamptz NULL`, `created_at timestamptz`
 
 **GOOGLE_TOKENS** (encrypted Google OAuth refresh tokens)
 - `user_id bigint PK, FK REFERENCES users(id) ON DELETE CASCADE`
@@ -273,8 +273,10 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 - One query with date range filter.
 
 **POST /events** (lecturer/admin only)
-- Body: `{ title, kind, starts_at, ends_at, all_day?, location?, description?, module_id? }`
+- Body: `{ title, kind, starts_at, ends_at, all_day?, location?, description?, module_id?, sync_to_google? }`
 - Creates a calendar event. `kind` in `lecture | meeting | off-campus`.
+- If `sync_to_google` is true, also creates the event in Google Calendar on the creator's own calendar. Requires the user to have connected their Google account (OAuth flow). Non-fatal: if Google Calendar sync fails, the event is still created in the LMS.
+- Returns the created event with `google_event_id` if synced.
 
 **PATCH /events/:id** (lecturer/admin only)
 - Body: partial event fields

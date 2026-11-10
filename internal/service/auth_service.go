@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"os"
 	"strings"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
+	"xsolla-capstone-api/internal/service/google"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -178,4 +180,29 @@ func (s *AuthService) SaveGoogleRefreshToken(ctx context.Context, userID int64, 
 // GetGoogleRefreshToken retrieves the encrypted Google refresh token for a user.
 func (s *AuthService) GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error) {
 	return s.userStore.GetGoogleRefreshToken(ctx, userID)
+}
+
+// GetValidAccessToken returns a usable Google access token for the user,
+// refreshing via the stored refresh token if needed.
+// Implements google.Service for use with google.Client.
+func (s *AuthService) GetValidAccessToken(ctx context.Context, userID int64) (string, error) {
+	encrypted, _, err := s.userStore.GetGoogleRefreshToken(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	refreshToken, err := google.DecryptToken(encrypted)
+	if err != nil {
+		return "", err
+	}
+
+	tokens, err := google.ExchangeRefreshToken(
+		os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		refreshToken,
+	)
+	if err != nil {
+		return "", err
+	}
+	return tokens.AccessToken, nil
 }

@@ -87,7 +87,7 @@ Extensions: `CREATE EXTENSION citext;`
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK`
 
 **events** (calendar events: lectures, meetings, off-campus days)
-- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `deleted_at timestamptz NULL`, `created_at timestamptz`
+- `id bigint PK`, `title text`, `kind text CHECK kind IN ('lecture','meeting','off-campus')`, `starts_at timestamptz`, `ends_at timestamptz`, `all_day bool DEFAULT false`, `location text nullable`, `description text nullable`, `module_id bigint nullable FK REFERENCES modules(id)`, `google_event_id text NULL` (Google Calendar event ID when synced to Google), `deleted_at timestamptz NULL`, `created_at timestamptz`
 
 **mentor_slots** (1:1 meeting availability + bookings)
 - `id bigint PK`, `mentor_id bigint FK REFERENCES users(id)` (index), `starts_at timestamptz`, `ends_at timestamptz`, `booked bool DEFAULT false`, `booked_by bigint nullable FK REFERENCES users(id)` (index), `deleted_at timestamptz NULL`, `created_at timestamptz`
@@ -201,7 +201,7 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **Submissions:** create (multiple attempts allowed), get mine (latest), get roster (left join — missing work shown), grade, list files
 
-**Calendar events:** list (date range), create, patch, delete (soft)
+**Calendar events:** list (date range), create (with optional `sync_to_google` to push to Google Calendar on the creator's calendar), patch, delete (soft)
 
 **1:1 mentor slots:** list, open window, delete, book, cancel booking
 

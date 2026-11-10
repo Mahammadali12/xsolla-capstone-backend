@@ -2,15 +2,11 @@ package handlers
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -23,6 +19,7 @@ import (
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/service/google"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -375,95 +372,6 @@ func generateRandomString(n int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// googleTokenEncryptionKey is the AES-256 key used to encrypt refresh tokens at rest.
-// It must be 32 bytes, provided as base64 in the GOOGLE_TOKEN_ENCRYPTION_KEY env var.
-// shortcut: key is read once from env on first use. No key rotation support yet.
-// Upgrade path: integrate with a KMS or secrets manager.
-var googleTokenEncryptionKey []byte
-var googleTokenEncryptionKeyOnce sync.Once
-
-func getGoogleTokenEncryptionKey() ([]byte, error) {
-	var err error
-	googleTokenEncryptionKeyOnce.Do(func() {
-		encoded := os.Getenv("GOOGLE_TOKEN_ENCRYPTION_KEY")
-		if encoded == "" {
-			err = errors.New("GOOGLE_TOKEN_ENCRYPTION_KEY env var is required")
-			return
-		}
-		googleTokenEncryptionKey, err = base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			err = fmt.Errorf("invalid GOOGLE_TOKEN_ENCRYPTION_KEY: %w", err)
-			return
-		}
-		if len(googleTokenEncryptionKey) != 32 {
-			err = errors.New("GOOGLE_TOKEN_ENCRYPTION_KEY must decode to 32 bytes")
-			return
-		}
-	})
-	return googleTokenEncryptionKey, err
-}
-
-// encryptToken encrypts a plaintext token with AES-GCM and returns base64(nonce+ciphertext).
-func encryptToken(plaintext string) (string, error) {
-	key, err := getGoogleTokenEncryptionKey()
-	if err != nil {
-		return "", err
-	}
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", err
-	}
-	sealed := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
-	return base64.StdEncoding.EncodeToString(sealed), nil
-}
-
-// decryptToken decrypts a base64(nonce+ciphertext) token back to plaintext.
-func decryptToken(ciphertext string) (string, error) {
-	key, err := getGoogleTokenEncryptionKey()
-	if err != nil {
-		return "", err
-	}
-	data, err := base64.StdEncoding.DecodeString(ciphertext)
-	if err != nil {
-		return "", err
-	}
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonceSize := gcm.NonceSize()
-	if len(data) < nonceSize {
-		return "", errors.New("ciphertext too short")
-	}
-	nonce, ciphertextBytes := data[:nonceSize], data[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertextBytes, nil)
-	if err != nil {
-		return "", err
-	}
-	return string(plaintext), nil
-}
-
-// googleTokenExchangeResponse is the response from Google's token endpoint.
-type googleTokenExchangeResponse struct {
-	AccessToken  string `json:"access_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	RefreshToken string `json:"refresh_token"`
-	Scope        string `json:"scope"`
-	TokenType    string `json:"token_type"`
-}
-
 // @Summary     Google OAuth callback
 // @Description Handle Google OAuth redirect, exchange code for tokens, store encrypted refresh token
 // @Tags        auth
@@ -501,7 +409,12 @@ func (h *AuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	googleLoginStates.Delete(state)
 
 	// Exchange authorization code for tokens.
-	tokens, err := exchangeGoogleCode(code)
+	tokens, err := google.ExchangeAuthorizationCode(
+		os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_OAUTH_REDIRECT_URI"),
+		code,
+	)
 	if err != nil {
 		log.Printf("google callback: token exchange failed: %v", err)
 		http.Redirect(w, r, frontendRedirect("google=error"), http.StatusFound)
@@ -514,7 +427,7 @@ func (h *AuthHandlers) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Encrypt and store the refresh token.
-	encrypted, err := encryptToken(tokens.RefreshToken)
+	encrypted, err := google.EncryptToken(tokens.RefreshToken)
 	if err != nil {
 		log.Printf("google callback: token encryption failed: %v", err)
 		http.Redirect(w, r, frontendRedirect("google=error"), http.StatusFound)
@@ -543,33 +456,6 @@ func frontendRedirect(query string) string {
 	return base
 }
 
-// exchangeGoogleCode exchanges an authorization code for Google OAuth tokens.
-func exchangeGoogleCode(code string) (*googleTokenExchangeResponse, error) {
-	data := url.Values{
-		"code":          {code},
-		"client_id":     {os.Getenv("GOOGLE_OAUTH_CLIENT_ID")},
-		"client_secret": {os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")},
-		"redirect_uri":  {os.Getenv("GOOGLE_OAUTH_REDIRECT_URI")},
-		"grant_type":    {"authorization_code"},
-	}
-
-	resp, err := http.PostForm("https://oauth2.googleapis.com/token", data)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google token exchange failed: %s", resp.Status)
-	}
-
-	var tokens googleTokenExchangeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
-		return nil, err
-	}
-	return &tokens, nil
-}
-
 // googleUserInfo is the response from Google's userinfo endpoint.
 type googleUserInfo struct {
 	ID            string `json:"id"`
@@ -581,32 +467,6 @@ type googleUserInfo struct {
 	Locale        string `json:"locale"`
 	HD            string `json:"hd"`
 	VerifiedEmail bool   `json:"verified_email"`
-}
-
-// exchangeGoogleRefreshToken exchanges a Google refresh token for a new access token.
-func exchangeGoogleRefreshToken(refreshToken string) (*googleTokenExchangeResponse, error) {
-	data := url.Values{
-		"client_id":     {os.Getenv("GOOGLE_OAUTH_CLIENT_ID")},
-		"client_secret": {os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")},
-		"refresh_token": {refreshToken},
-		"grant_type":    {"refresh_token"},
-	}
-
-	resp, err := http.PostForm("https://oauth2.googleapis.com/token", data)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google token refresh failed: %s", resp.Status)
-	}
-
-	var tokens googleTokenExchangeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokens); err != nil {
-		return nil, err
-	}
-	return &tokens, nil
 }
 
 // @Summary     Google user profile
@@ -637,14 +497,18 @@ func (h *AuthHandlers) GoogleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refreshToken, err := decryptToken(encrypted)
+	refreshToken, err := google.DecryptToken(encrypted)
 	if err != nil {
 		log.Printf("google me: decrypt failed for user %d: %v", userID, err)
 		writeError(w, 500, "server_error", "could not decrypt Google token", nil)
 		return
 	}
 
-	tokens, err := exchangeGoogleRefreshToken(refreshToken)
+	tokens, err := google.ExchangeRefreshToken(
+		os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		refreshToken,
+	)
 	if err != nil {
 		log.Printf("google me: refresh token exchange failed for user %d: %v", userID, err)
 		writeError(w, 401, "google_token_expired", "Google refresh token expired or revoked", nil)

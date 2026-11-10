@@ -53,7 +53,7 @@ func main() {
 	moduleSvc := service.NewModuleService(store)
 	contentSvc := service.NewContentService(store)
 	submissionSvc := service.NewSubmissionService(store)
-	eventSvc := service.NewEventService(store)
+	eventSvc := service.NewEventServiceWithGoogle(store, authSvc)
 	userSvc := service.NewUserService(store)
 	teamSvc := service.NewTeamService(store)
 

@@ -19,7 +19,7 @@ import (
 type EventService interface {
 	ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]service.Event, error)
 	GetEventByID(ctx context.Context, userID int64, roles []string, id int64) (*service.Event, error)
-	CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*service.Event, error)
+	CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, syncToGoogle bool) (*service.Event, error)
 	UpdateEvent(ctx context.Context, userID int64, roles []string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*service.Event, error)
 	DeleteEvent(ctx context.Context, userID int64, roles []string, id int64) error
 }
@@ -72,16 +72,17 @@ func (h *EventHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	resp := make([]dto.EventResponse, len(events))
 	for i, e := range events {
 		resp[i] = dto.EventResponse{
-			ID:          e.ID,
-			Title:       e.Title,
-			Kind:        e.Kind,
-			StartsAt:    e.StartsAt,
-			EndsAt:      e.EndsAt,
-			AllDay:      e.AllDay,
-			Location:    e.Location,
-			Description: e.Description,
-			ModuleID:    e.ModuleID,
-			CreatedAt:   e.CreatedAt,
+			ID:            e.ID,
+			Title:         e.Title,
+			Kind:          e.Kind,
+			StartsAt:      e.StartsAt,
+			EndsAt:        e.EndsAt,
+			AllDay:        e.AllDay,
+			Location:      e.Location,
+			Description:   e.Description,
+			ModuleID:      e.ModuleID,
+			GoogleEventID: e.GoogleEventID,
+			CreatedAt:     e.CreatedAt,
 		}
 	}
 	writeJSON(w, 200, resp)
@@ -134,7 +135,7 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		moduleID = &req.ModuleID
 	}
 
-	e, err := h.svc.CreateEvent(r.Context(), userID, roles, req.Title, req.Kind, startsAt, endsAt, req.AllDay, location, description, moduleID)
+	e, err := h.svc.CreateEvent(r.Context(), userID, roles, req.Title, req.Kind, startsAt, endsAt, req.AllDay, location, description, moduleID, req.SyncToGoogle)
 	if err != nil {
 		log.Printf("event handler: CreateEvent error: %v", err)
 		switch {
@@ -155,16 +156,17 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 201, dto.EventResponse{
-		ID:          e.ID,
-		Title:       e.Title,
-		Kind:        e.Kind,
-		StartsAt:    e.StartsAt,
-		EndsAt:      e.EndsAt,
-		AllDay:      e.AllDay,
-		Location:    e.Location,
-		Description: e.Description,
-		ModuleID:    e.ModuleID,
-		CreatedAt:   e.CreatedAt,
+		ID:            e.ID,
+		Title:         e.Title,
+		Kind:          e.Kind,
+		StartsAt:      e.StartsAt,
+		EndsAt:        e.EndsAt,
+		AllDay:        e.AllDay,
+		Location:      e.Location,
+		Description:   e.Description,
+		ModuleID:      e.ModuleID,
+		GoogleEventID: e.GoogleEventID,
+		CreatedAt:     e.CreatedAt,
 	})
 }
 
@@ -273,16 +275,17 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 200, dto.EventResponse{
-		ID:          e.ID,
-		Title:       e.Title,
-		Kind:        e.Kind,
-		StartsAt:    e.StartsAt,
-		EndsAt:      e.EndsAt,
-		AllDay:      e.AllDay,
-		Location:    e.Location,
-		Description: e.Description,
-		ModuleID:    e.ModuleID,
-		CreatedAt:   e.CreatedAt,
+		ID:            e.ID,
+		Title:         e.Title,
+		Kind:          e.Kind,
+		StartsAt:      e.StartsAt,
+		EndsAt:        e.EndsAt,
+		AllDay:        e.AllDay,
+		Location:      e.Location,
+		Description:   e.Description,
+		ModuleID:      e.ModuleID,
+		GoogleEventID: e.GoogleEventID,
+		CreatedAt:     e.CreatedAt,
 	})
 }
 
