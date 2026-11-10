@@ -56,3 +56,34 @@ func (c *Client) CreateCalendarEvent(ctx context.Context, ev CalendarEvent) (*cr
 	}
 	return &result, nil
 }
+
+// UpdateCalendarEvent updates an existing Google Calendar event.
+// Returns the updated event.
+func (c *Client) UpdateCalendarEvent(ctx context.Context, eventID string, ev CalendarEvent) (*createdEvent, error) {
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", c.baseURL+"/calendar/v3/calendars/primary/events/"+eventID, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var result createdEvent
+	if err := c.doWithRetry(req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteCalendarEvent deletes a Google Calendar event.
+func (c *Client) DeleteCalendarEvent(ctx context.Context, eventID string) error {
+	req, err := http.NewRequestWithContext(ctx, "DELETE", c.baseURL+"/calendar/v3/calendars/primary/events/"+eventID, nil)
+	if err != nil {
+		return err
+	}
+
+	return c.doWithRetry(req, nil)
+}

@@ -221,6 +221,52 @@ func (s *EventService) pushEventToGoogle(ctx context.Context, userID int64, ev E
 	return nil
 }
 
+// patchEventToGoogle updates an existing Google Calendar event.
+func (s *EventService) patchEventToGoogle(ctx context.Context, userID int64, eventID string, ev Event) error {
+	// Get a valid access token for the user
+	accessToken, err := s.googleSvc.GetValidAccessToken(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Create a Google API client with auto-refresh
+	client := google.NewClient(userID, s.googleSvc, accessToken)
+
+	googleEvent := google.CalendarEvent{
+		Summary:     ev.Title,
+		Description: orEmpty(ev.Description),
+		Start: google.EventTime{
+			DateTime: ev.StartsAt.Format(time.RFC3339),
+			TimeZone: "UTC",
+		},
+		End: google.EventTime{
+			DateTime: ev.EndsAt.Format(time.RFC3339),
+			TimeZone: "UTC",
+		},
+	}
+
+	_, err = client.UpdateCalendarEvent(ctx, eventID, googleEvent)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// deleteEventFromGoogle deletes a Google Calendar event.
+func (s *EventService) deleteEventFromGoogle(ctx context.Context, userID int64, eventID string) error {
+	// Get a valid access token for the user
+	accessToken, err := s.googleSvc.GetValidAccessToken(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Create a Google API client with auto-refresh
+	client := google.NewClient(userID, s.googleSvc, accessToken)
+
+	return client.DeleteCalendarEvent(ctx, eventID)
+}
+
 // orEmpty returns the string value of a *string pointer, or "" if nil.
 func orEmpty(s *string) string {
 	if s != nil {
@@ -261,6 +307,15 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, roles []st
 		return nil, err
 	}
 	ev := eventFromStore(*storeEvent)
+
+	// Push update to Google Calendar if the event was previously synced
+	if ev.GoogleEventID != nil && *ev.GoogleEventID != "" && s.googleSvc != nil {
+		if err := s.patchEventToGoogle(ctx, userID, *ev.GoogleEventID, ev); err != nil {
+			// Non-fatal: log and continue, event is still updated in LMS
+			log.Printf("event service: Google Calendar update failed for event %d: %v", ev.ID, err)
+		}
+	}
+
 	return &ev, nil
 }
 
@@ -284,6 +339,14 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID int64, roles []st
 		}
 		if !teacher {
 			return ErrNotTeacherOfModule
+		}
+	}
+
+	// Delete from Google Calendar if the event was previously synced
+	if existing.GoogleEventID != nil && *existing.GoogleEventID != "" && s.googleSvc != nil {
+		if err := s.deleteEventFromGoogle(ctx, userID, *existing.GoogleEventID); err != nil {
+			// Non-fatal: log and continue, event is still deleted in LMS
+			log.Printf("event service: Google Calendar delete failed for event %d: %v", id, err)
 		}
 	}
 
