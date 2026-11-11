@@ -97,6 +97,14 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 		return ci, nil
 	}
 
+	if auth.HasRole(roles, "mentor") {
+		// Mentors can view any content item without being enrolled
+		if !ci.IsVisible {
+			return nil, store.ErrNotEnrolled
+		}
+		return ci, nil
+	}
+
 	enrolled, err := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID)
 	if err != nil {
 		return nil, err
@@ -117,6 +125,11 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error) {
 	if auth.HasRole(roles, "admin") {
 		return s.store.GetContentItemsForModule(ctx, moduleID, false)
+	}
+
+	if auth.HasRole(roles, "mentor") {
+		// Mentors can view content items in any module without being enrolled
+		return s.store.GetContentItemsForModule(ctx, moduleID, true)
 	}
 
 	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)

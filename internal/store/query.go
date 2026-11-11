@@ -222,6 +222,28 @@ func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []str
 	)
 }
 
+// GetModulesWithEnrolledStudents returns modules where any of the given students are enrolled.
+func (q *Query) GetModulesWithEnrolledStudents(ctx context.Context, studentIDs []int64) (*sql.Rows, error) {
+	if len(studentIDs) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(studentIDs))
+	placeholders := make([]string, 0, len(studentIDs))
+	for i, sid := range studentIDs {
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
+		args = append(args, sid)
+	}
+	return q.DBTX.QueryContext(ctx,
+		`SELECT DISTINCT m.id, m.title, m.description, m.created_by, m.grade, m.created_at, m.opens_at, m.closes_at
+		 FROM modules m
+		 JOIN enrollments e ON e.module_id = m.id
+		 WHERE m.deleted_at IS NULL
+		   AND e.user_id IN (`+strings.Join(placeholders, ",")+`)
+		 ORDER BY m.created_at`,
+		args...,
+	)
+}
+
 func (q *Query) PatchModule(ctx context.Context, id int64, title *string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) *sql.Row {
 	if isAdmin {
 		return q.DBTX.QueryRowContext(ctx,
@@ -584,6 +606,30 @@ func (q *Query) GetSubmissionsForAssignment(ctx context.Context, contentItemID i
 		 WHERE s.content_item_id = $1 AND s.deleted_at IS NULL
 		 ORDER BY u.name`,
 		contentItemID,
+	)
+}
+
+// GetSubmissionsForAssignmentByStudents returns submissions for an assignment
+// filtered to the given student IDs.
+func (q *Query) GetSubmissionsForAssignmentByStudents(ctx context.Context, contentItemID int64, studentIDs []int64) (*sql.Rows, error) {
+	if len(studentIDs) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(studentIDs)+1)
+	placeholders := make([]string, 0, len(studentIDs))
+	for i, sid := range studentIDs {
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+2))
+		args = append(args, sid)
+	}
+	args = append([]any{contentItemID}, args...)
+	return q.DBTX.QueryContext(ctx,
+		`SELECT s.id, s.content_item_id, s.student_id, s.text_body, s.submitted_at, s.feedback, s.graded_by, s.graded_at, s.created_at,
+		       u.id, u.email, u.name
+		 FROM submissions s
+		 JOIN users u ON u.id = s.student_id
+		 WHERE s.content_item_id = $1 AND s.student_id IN (`+strings.Join(placeholders, ",")+`) AND s.deleted_at IS NULL
+		 ORDER BY u.name`,
+		args...,
 	)
 }
 

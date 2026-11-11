@@ -152,6 +152,34 @@ func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItem
 	return submissions, nil
 }
 
+// GetSubmissionsForAssignmentByStudents returns submissions for an assignment
+// filtered to the given student IDs, with student info.
+func (s *StoreImpl) GetSubmissionsForAssignmentByStudents(ctx context.Context, contentItemID int64, studentIDs []int64) ([]Submission, error) {
+	rows, err := s.DB().GetSubmissionsForAssignmentByStudents(ctx, contentItemID, studentIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var submissions []Submission
+	for rows.Next() {
+		var sub Submission
+		var studentID int64
+		var studentName, studentEmail string
+		err := rows.Scan(
+			&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
+			&sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
+			&studentID, &studentEmail, &studentName,
+		)
+		if err != nil {
+			return nil, err
+		}
+		sub.StudentID = studentID
+		submissions = append(submissions, sub)
+	}
+	return submissions, nil
+}
+
 // UpdateSubmissionFeedback updates a submission's feedback.
 func (s *StoreImpl) UpdateSubmissionFeedback(ctx context.Context, id int64, feedback string, gradedBy int64) (*Submission, error) {
 	var sub Submission

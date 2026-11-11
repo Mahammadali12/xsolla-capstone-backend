@@ -55,6 +55,11 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles [
 		return m, nil
 	}
 
+	if auth.HasRole(roles, "mentor") {
+		// Mentors can view any module without being enrolled
+		return m, nil
+	}
+
 	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
 	if err != nil {
 		return nil, err
@@ -69,6 +74,24 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles [
 
 // GetModulesForUser returns modules accessible to the user.
 func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
+	if auth.HasRole(roles, "mentor") {
+		// Mentors see modules where any of their team's students are enrolled.
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return []store.Module{}, nil
+			}
+			return nil, err
+		}
+		studentIDs := make([]int64, 0, len(team.Members))
+		for _, m := range team.Members {
+			studentIDs = append(studentIDs, m.ID)
+		}
+		if len(studentIDs) == 0 {
+			return []store.Module{}, nil
+		}
+		return s.store.GetModulesWithEnrolledStudents(ctx, studentIDs)
+	}
 	return s.store.GetModulesForUser(ctx, userID, roles)
 }
 
@@ -187,7 +210,7 @@ func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int6
 		if err != nil {
 			return nil, err
 		}
-		if !teacher && !auth.HasRole(roles, "admin") {
+		if !teacher && !auth.HasRole(roles, "admin") && !auth.HasRole(roles, "mentor") {
 			return nil, ErrNotEnrolled
 		}
 	}
@@ -200,7 +223,24 @@ func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64,
 	if auth.HasRole(roles, "admin") {
 		// Admin can grade any enrollment
 	} else if auth.HasRole(roles, "mentor") {
-		// Mentor can grade
+		// Mentor can only grade students in their own team
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return nil, store.ErrNotModuleTeacher
+			}
+			return nil, err
+		}
+		found := false
+		for _, m := range team.Members {
+			if m.ID == studentID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, store.ErrNotModuleTeacher
+		}
 	} else {
 		return nil, store.ErrNotModuleTeacher
 	}
@@ -210,7 +250,7 @@ func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64,
 	case "red", "yellow", "green":
 		// valid
 	default:
-		return nil, errors.New("grade must be one of: red, yellow, green")
+		return nil, ErrInvalidGrade
 	}
 
 	gradePtr := &grade
@@ -222,6 +262,9 @@ var ErrNotModuleTeacher = store.ErrNotModuleTeacher
 
 // ErrNotEnrolled is re-exported from the store package for handler use.
 var ErrNotEnrolled = store.ErrNotEnrolled
+
+// ErrInvalidGrade is returned when a grade value is not red/yellow/green.
+var ErrInvalidGrade = errors.New("grade must be one of: red, yellow, green")
 
 // ErrParentMustBeSection is re-exported from the store package for handler use.
 var ErrParentMustBeSection = store.ErrParentMustBeSection

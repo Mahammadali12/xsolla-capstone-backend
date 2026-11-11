@@ -92,8 +92,27 @@ func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64,
 		// Admin can view any submission
 	} else if sub.StudentID == userID {
 		// Student can only view their own submission
+	} else if auth.HasRole(roles, "mentor") {
+		// Mentor can view submissions from students in their own team
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return nil, store.ErrNotEnrolled
+			}
+			return nil, err
+		}
+		found := false
+		for _, m := range team.Members {
+			if m.ID == sub.StudentID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, store.ErrNotEnrolled
+		}
 	} else {
-		// Lecturer/mentor must be the teacher of the module
+		// Lecturer must be the teacher of the module
 		ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
 		if err != nil {
 			return nil, err
@@ -130,7 +149,7 @@ func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Cont
 }
 
 // GetSubmissionsForAssignment returns all submissions for an assignment.
-// Teachers see all students; students see only their own.
+// Teachers see all students; mentors see only their team's students; students see only their own.
 func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64) ([]store.Submission, error) {
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
 	if err != nil {
@@ -159,6 +178,26 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 		if err != nil {
 			return nil, err
 		}
+	} else if auth.HasRole(roles, "mentor") {
+		// Mentor sees only submissions from students in their own team.
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return []store.Submission{}, nil
+			}
+			return nil, err
+		}
+		studentIDs := make([]int64, 0, len(team.Members))
+		for _, m := range team.Members {
+			studentIDs = append(studentIDs, m.ID)
+		}
+		if len(studentIDs) == 0 {
+			return []store.Submission{}, nil
+		}
+		submissions, err = s.store.GetSubmissionsForAssignmentByStudents(ctx, contentItemID, studentIDs)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		// Student: return all of their own attempts, most recent first
 		submissions, err = s.store.GetSubmissionsByStudentAndAssignment(ctx, userID, contentItemID)
@@ -179,16 +218,34 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 }
 
 // UpdateSubmissionFeedback updates a submission's feedback.
-// Only the mentor of the module or an admin can grade. Lecturers cannot grade.
+// Only the mentor of the student's team or an admin can grade.
 func (s *SubmissionService) UpdateSubmissionFeedback(ctx context.Context, userID int64, roles []string, submissionID int64, feedback string) (*store.Submission, error) {
-	if _, err := s.store.GetSubmissionByID(ctx, submissionID); err != nil {
+	sub, err := s.store.GetSubmissionByID(ctx, submissionID)
+	if err != nil {
 		return nil, err
 	}
 
 	if auth.HasRole(roles, "admin") {
 		// Admin can grade any submission
 	} else if auth.HasRole(roles, "mentor") {
-		// Mentor can grade
+		// Mentor can only grade submissions from students in their own team
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return nil, store.ErrNotModuleTeacher
+			}
+			return nil, err
+		}
+		found := false
+		for _, m := range team.Members {
+			if m.ID == sub.StudentID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, store.ErrNotModuleTeacher
+		}
 	} else {
 		return nil, store.ErrNotModuleTeacher
 	}
@@ -208,12 +265,33 @@ func (s *SubmissionService) UpdateSubmissionFeedback(ctx context.Context, userID
 }
 
 // UpdateModuleGrade updates a module's grade (red/yellow/green).
-// Only the mentor of the module or an admin can grade.
+// Only the mentor of a student in the module or an admin can grade.
 func (s *SubmissionService) UpdateModuleGrade(ctx context.Context, userID int64, roles []string, moduleID int64, grade string) (*store.Module, error) {
 	if auth.HasRole(roles, "admin") {
 		// Admin can grade any module
 	} else if auth.HasRole(roles, "mentor") {
-		// Mentor can grade
+		// Mentor can grade only if they mentor at least one student enrolled in the module
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return nil, store.ErrNotModuleTeacher
+			}
+			return nil, err
+		}
+		canGrade := false
+		for _, m := range team.Members {
+			enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, m.ID)
+			if err != nil {
+				return nil, err
+			}
+			if enrolled {
+				canGrade = true
+				break
+			}
+		}
+		if !canGrade {
+			return nil, store.ErrNotModuleTeacher
+		}
 	} else {
 		return nil, store.ErrNotModuleTeacher
 	}

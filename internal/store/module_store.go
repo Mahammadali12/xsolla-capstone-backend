@@ -86,6 +86,25 @@ func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles [
 	return modules, nil
 }
 
+// GetModulesWithEnrolledStudents returns modules where any of the given students are enrolled.
+func (s *StoreImpl) GetModulesWithEnrolledStudents(ctx context.Context, studentIDs []int64) ([]Module, error) {
+	rows, err := s.DB().GetModulesWithEnrolledStudents(ctx, studentIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var modules []Module
+	for rows.Next() {
+		var m Module
+		if err := rows.Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt); err != nil {
+			return nil, err
+		}
+		modules = append(modules, m)
+	}
+	return modules, nil
+}
+
 // PatchModule updates a module title/description if the user is authorized.
 func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title *string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) (*Module, error) {
 	var m Module
@@ -102,7 +121,7 @@ func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title *string, de
 // UpdateModuleGrade updates a module's grade.
 func (s *StoreImpl) UpdateModuleGrade(ctx context.Context, id int64, grade *string, gradedBy int64) (*Module, error) {
 	var m Module
-	err := s.DB().UpdateModuleGrade(ctx, id, grade, gradedBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
+	err := s.DB().UpdateModuleGrade(ctx, id, grade, gradedBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrModuleNotFound

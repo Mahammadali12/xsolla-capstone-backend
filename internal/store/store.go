@@ -35,6 +35,7 @@ type Store interface {
 	CreateModule(ctx context.Context, title string, description string, createdBy int64, opensAt, closesAt time.Time) (*Module, error)
 	GetModuleByID(ctx context.Context, id int64) (*Module, error)
 	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]Module, error)
+	GetModulesWithEnrolledStudents(ctx context.Context, studentIDs []int64) ([]Module, error)
 	GetAllModuleIDs(ctx context.Context) ([]int64, error)
 	PatchModule(ctx context.Context, id int64, title *string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) (*Module, error)
 	DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) error
@@ -77,6 +78,7 @@ type Store interface {
 	GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*Submission, error)
 	GetSubmissionsByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) ([]Submission, error)
 	GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) ([]Submission, error)
+	GetSubmissionsForAssignmentByStudents(ctx context.Context, contentItemID int64, studentIDs []int64) ([]Submission, error)
 	UpdateSubmissionFeedback(ctx context.Context, id int64, feedback string, gradedBy int64) (*Submission, error)
 	DeleteSubmission(ctx context.Context, id int64) error
 	CreateSubmissionFile(ctx context.Context, submissionID int64, fileID int64) (sql.Result, error)

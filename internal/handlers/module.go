@@ -444,6 +444,8 @@ func (h *ModuleHandlers) GradeEnrollment(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		if errors.Is(err, store.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "only mentors and admins can grade enrollments", nil)
+		} else if errors.Is(err, service.ErrInvalidGrade) {
+			writeError(w, 422, "validation_failed", err.Error(), nil)
 		} else if errors.Is(err, store.ErrNotEnrolled) {
 			writeError(w, 404, "not_found", "enrollment not found", nil)
 		} else {
