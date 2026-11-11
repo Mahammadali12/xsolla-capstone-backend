@@ -34,6 +34,7 @@ type Store interface {
 	CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error)
 	GetModuleByID(ctx context.Context, id int64) (*Module, error)
 	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]Module, error)
+	GetAllModuleIDs(ctx context.Context) ([]int64, error)
 	PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error)
 	DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) error
 

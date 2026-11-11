@@ -304,6 +304,13 @@ func (q *Query) IsUserTeacherOfModule(ctx context.Context, moduleID int64, userI
 	)
 }
 
+// GetAllModuleIDs returns all non-deleted module IDs.
+func (q *Query) GetAllModuleIDs(ctx context.Context) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`SELECT id FROM modules WHERE deleted_at IS NULL`,
+	)
+}
+
 // GetActiveStudentIDs returns all active students (student role, not deleted/left).
 func (q *Query) GetActiveStudentIDs(ctx context.Context) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,

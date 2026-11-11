@@ -208,6 +208,25 @@ func (s *StoreImpl) IsUserTeacherOfModule(ctx context.Context, moduleID int64, u
 	return true, nil
 }
 
+// GetAllModuleIDs returns all non-deleted module IDs.
+func (s *StoreImpl) GetAllModuleIDs(ctx context.Context) ([]int64, error) {
+	rows, err := s.DB().GetAllModuleIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 // GetActiveStudentIDs returns all active student IDs.
 func (s *StoreImpl) GetActiveStudentIDs(ctx context.Context) ([]int64, error) {
 	rows, err := s.DB().GetActiveStudentIDs(ctx)

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
@@ -69,7 +70,42 @@ func (s *UserService) CreateUser(ctx context.Context, email, name, password stri
 		}
 		return 0, nil, err
 	}
+
+	// Auto-enroll new students in every existing module, mirroring the
+	// auto-enrollment that happens when a module is created (CreateModule).
+	// Enrollment is best-effort: the account is already created, so enrollment
+	// failures are logged rather than failing user creation.
+	if hasRole(roles, "student") {
+		if err := s.enrollInAllModules(ctx, id); err != nil {
+			log.Printf("user service: auto-enroll user %d into modules: %v", id, err)
+		}
+	}
+
 	return id, roles, nil
+}
+
+// hasRole reports whether roles contains role.
+func hasRole(roles []string, role string) bool {
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
+// enrollInAllModules enrolls the user in every non-deleted module (idempotent).
+func (s *UserService) enrollInAllModules(ctx context.Context, userID int64) error {
+	moduleIDs, err := s.store.GetAllModuleIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, moduleID := range moduleIDs {
+		if _, err := s.store.CreateEnrollment(ctx, moduleID, userID); err != nil && !errors.Is(err, store.ErrAlreadyEnrolled) {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateUser updates name, email, and/or active status of a user.
