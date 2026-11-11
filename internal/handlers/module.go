@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
@@ -15,10 +16,10 @@ import (
 
 // ModuleService is the interface that module handlers depend on.
 type ModuleService interface {
-	CreateModule(ctx context.Context, userID int64, title string, description string) (*store.Module, error)
+	CreateModule(ctx context.Context, userID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error)
 	GetModuleByID(ctx context.Context, userID int64, roles []string, moduleID int64) (*store.Module, error)
 	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error)
-	PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string) (*store.Module, error)
+	PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error)
 	DeleteModule(ctx context.Context, userID int64, roles []string, moduleID int64) error
 	CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error)
 	DeleteEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) error
@@ -64,8 +65,20 @@ func (h *ModuleHandlers) CreateModule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_request", "title is required", nil)
 		return
 	}
+	if req.OpensAt.IsZero() {
+		writeError(w, 400, "bad_request", "opens_at is required", nil)
+		return
+	}
+	if req.ClosesAt.IsZero() {
+		writeError(w, 400, "bad_request", "closes_at is required", nil)
+		return
+	}
+	if !req.ClosesAt.After(req.OpensAt) {
+		writeError(w, 400, "bad_request", "closes_at must be after opens_at", nil)
+		return
+	}
 
-	m, err := h.svc.CreateModule(r.Context(), userID, req.Title, req.Description)
+	m, err := h.svc.CreateModule(r.Context(), userID, req.Title, req.Description, req.OpensAt, req.ClosesAt)
 	if err != nil {
 		writeError(w, 500, "server_error", "could not create module", nil)
 		return
@@ -77,6 +90,8 @@ func (h *ModuleHandlers) CreateModule(w http.ResponseWriter, r *http.Request) {
 		Description: m.Description,
 		CreatedBy:   m.CreatedBy,
 		CreatedAt:   m.CreatedAt,
+		OpensAt:     m.OpensAt,
+		ClosesAt:    m.ClosesAt,
 	})
 }
 
@@ -107,6 +122,8 @@ func (h *ModuleHandlers) ListModules(w http.ResponseWriter, r *http.Request) {
 			Description: m.Description,
 			CreatedBy:   m.CreatedBy,
 			CreatedAt:   m.CreatedAt,
+			OpensAt:     m.OpensAt,
+			ClosesAt:    m.ClosesAt,
 		}
 	}
 	writeJSON(w, 200, resp)
@@ -151,6 +168,8 @@ func (h *ModuleHandlers) GetModule(w http.ResponseWriter, r *http.Request) {
 		Description: m.Description,
 		CreatedBy:   m.CreatedBy,
 		CreatedAt:   m.CreatedAt,
+		OpensAt:     m.OpensAt,
+		ClosesAt:    m.ClosesAt,
 	})
 }
 
@@ -183,7 +202,7 @@ func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m, err := h.svc.PatchModule(r.Context(), userID, roles, moduleID, req.Title, req.Description)
+	m, err := h.svc.PatchModule(r.Context(), userID, roles, moduleID, req.Title, req.Description, req.OpensAt, req.ClosesAt)
 	if err != nil {
 		if errors.Is(err, service.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
@@ -201,6 +220,8 @@ func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 		Description: m.Description,
 		CreatedBy:   m.CreatedBy,
 		CreatedAt:   m.CreatedAt,
+		OpensAt:     m.OpensAt,
+		ClosesAt:    m.ClosesAt,
 	})
 }
 

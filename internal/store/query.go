@@ -142,6 +142,14 @@ func (q *Query) UpdateUser(ctx context.Context, id int64, name, email string) *s
 	)
 }
 
+// UpdateUserPassword replaces the user's password hash.
+func (q *Query) UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE users SET password_hash = $2 WHERE id = $1`,
+		id, passwordHash,
+	)
+}
+
 // SetUserLeftAt sets left_at to NOW() when deactivating, NULL when reactivating.
 func (q *Query) SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error) {
 	return q.DBTX.ExecContext(ctx,
@@ -177,16 +185,16 @@ func (q *Query) DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, 
 
 // Module queries
 
-func (q *Query) CreateModule(ctx context.Context, title string, description string, createdBy int64) *sql.Row {
+func (q *Query) CreateModule(ctx context.Context, title string, description string, createdBy int64, opensAt, closesAt time.Time) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO modules (title, description, created_by, grade) VALUES ($1, $2, $3, NULL) RETURNING id, title, description, created_by, grade, created_at`,
-		title, description, createdBy,
+		`INSERT INTO modules (title, description, created_by, grade, opens_at, closes_at) VALUES ($1, $2, $3, NULL, $4, $5) RETURNING id, title, description, created_by, grade, created_at, opens_at, closes_at`,
+		title, description, createdBy, opensAt, closesAt,
 	)
 }
 
 func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, title, description, created_by, grade, created_at FROM modules WHERE id = $1 AND deleted_at IS NULL`,
+		`SELECT id, title, description, created_by, grade, created_at, opens_at, closes_at FROM modules WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
 }
@@ -201,12 +209,12 @@ func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []str
 	}
 	if isAdmin {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at
+			`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at, m.opens_at, m.closes_at
 			 FROM modules m WHERE m.deleted_at IS NULL`,
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at
+		`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at, m.opens_at, m.closes_at
 		 FROM modules m
 		 JOIN enrollments e ON e.module_id = m.id
 		 WHERE m.deleted_at IS NULL AND e.user_id = $1`,
@@ -214,20 +222,20 @@ func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []str
 	)
 }
 
-func (q *Query) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) *sql.Row {
+func (q *Query) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) *sql.Row {
 	if isAdmin {
 		return q.DBTX.QueryRowContext(ctx,
-			`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description)
+			`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description), opens_at = $4, closes_at = $5
 			 WHERE id = $1 AND deleted_at IS NULL
-			 RETURNING id, title, description, created_by, grade, created_at`,
-			id, title, description,
+			 RETURNING id, title, description, created_by, grade, created_at, opens_at, closes_at`,
+			id, title, description, opensAt, closesAt,
 		)
 	}
 	return q.DBTX.QueryRowContext(ctx,
-		`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description)
-		 WHERE id = $1 AND created_by = $4 AND deleted_at IS NULL
-		 RETURNING id, title, description, created_by, grade, created_at`,
-		id, title, description, createdBy,
+		`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description), opens_at = $4, closes_at = $5
+		 WHERE id = $1 AND created_by = $6 AND deleted_at IS NULL
+		 RETURNING id, title, description, created_by, grade, created_at, opens_at, closes_at`,
+		id, title, description, opensAt, closesAt, createdBy,
 	)
 }
 
@@ -236,7 +244,7 @@ func (q *Query) UpdateModuleGrade(ctx context.Context, id int64, grade *string, 
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE modules SET grade = COALESCE($2, grade)
 		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, title, description, created_by, grade, created_at`,
+		 RETURNING id, title, description, created_by, grade, created_at, opens_at, closes_at`,
 		id, grade,
 	)
 }

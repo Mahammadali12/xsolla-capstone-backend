@@ -22,12 +22,14 @@ var (
 
 // Module represents a module row from the database.
 type Module struct {
-	ID          int64
-	Title       string
-	Description string
-	CreatedBy   int64
-	Grade       *string
-	CreatedAt   time.Time
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	CreatedBy   int64     `json:"created_by"`
+	Grade       *string   `json:"grade,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	OpensAt     time.Time `json:"opens_at"`
+	ClosesAt    time.Time `json:"closes_at"`
 }
 
 // Enrollment represents an enrollment row with user details.
@@ -43,9 +45,9 @@ type Enrollment struct {
 }
 
 // CreateModule inserts a new module.
-func (s *StoreImpl) CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error) {
+func (s *StoreImpl) CreateModule(ctx context.Context, title string, description string, createdBy int64, opensAt, closesAt time.Time) (*Module, error) {
 	var m Module
-	err := s.DB().CreateModule(ctx, title, description, createdBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
+	err := s.DB().CreateModule(ctx, title, description, createdBy, opensAt, closesAt).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (s *StoreImpl) CreateModule(ctx context.Context, title string, description 
 // GetModuleByID returns a module by ID if it exists and is not deleted.
 func (s *StoreImpl) GetModuleByID(ctx context.Context, id int64) (*Module, error) {
 	var m Module
-	err := s.DB().GetModuleByID(ctx, id).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
+	err := s.DB().GetModuleByID(ctx, id).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrModuleNotFound
@@ -76,7 +78,7 @@ func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles [
 	var modules []Module
 	for rows.Next() {
 		var m Module
-		if err := rows.Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt); err != nil {
 			return nil, err
 		}
 		modules = append(modules, m)
@@ -85,9 +87,9 @@ func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles [
 }
 
 // PatchModule updates a module title/description if the user is authorized.
-func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error) {
+func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) (*Module, error) {
 	var m Module
-	err := s.DB().PatchModule(ctx, id, title, description, createdBy, isAdmin).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
+	err := s.DB().PatchModule(ctx, id, title, description, createdBy, isAdmin, opensAt, closesAt).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrModuleNotFound

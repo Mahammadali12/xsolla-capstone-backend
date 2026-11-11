@@ -20,6 +20,7 @@ type UserService interface {
 	ListUsers(ctx context.Context, search, role, status string) ([]store.User, error)
 	CreateUser(ctx context.Context, email, name, password string, roles []string) (int64, []string, error)
 	UpdateUser(ctx context.Context, id int64, name, email string, active *bool) (*store.User, error)
+	UpdatePassword(ctx context.Context, id int64, password string) error
 	DeleteUser(ctx context.Context, id int64) error
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
 }
@@ -157,6 +158,37 @@ func (h *UserHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		LeftAt:        u.LeftAt,
 		CreatedAt:     u.CreatedAt,
 	})
+}
+
+// PATCH /users/:id/password
+func (h *UserHandlers) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid user ID", nil)
+		return
+	}
+
+	var req dto.UpdatePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+	if req.Password == "" {
+		writeError(w, 400, "bad_request", "password is required", nil)
+		return
+	}
+
+	if err := h.svc.UpdatePassword(r.Context(), id, req.Password); err != nil {
+		switch {
+		case errors.Is(err, store.ErrUserNotFound):
+			writeError(w, 404, "not_found", "user not found", nil)
+		default:
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		}
+		return
+	}
+
+	w.WriteHeader(204)
 }
 
 // DELETE /users/:id

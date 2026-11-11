@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
@@ -21,13 +22,161 @@ func NewUserService(s store.Store) *UserService {
 }
 
 var (
-	// ErrPasswordTooShort is returned when a password is shorter than 8 chars.
+	// ErrPasswordTooShort is returned when a password is shorter than 8 characters.
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
 	// ErrLastAdmin is returned when the last admin would be removed.
 	ErrLastAdmin = errors.New("cannot remove the last admin")
 	// ErrInvalidRoleSet is returned for an invalid role assignment.
 	ErrInvalidRoleSet = errors.New("invalid role set")
 )
+
+// weakPasswordParts lists common/easy-to-guess password fragments (mirrors
+// frontend src/utils/credentials.ts).
+var weakPasswordParts = []string{
+	"password", "passw0rd", "qwerty", "asdfgh", "zxcvbn", "qazwsx", "letmein",
+	"welcome", "iloveyou", "monkey", "dragon", "admin", "login", "secret",
+	"xsolla", "school", "student", "mentor", "lecturer", "baku",
+	"123456", "234567", "345678", "456789", "987654", "654321", "abcdef",
+	"bcdefg", "111111", "000000", "121212", "112233",
+}
+
+// minPasswordLength / maxPasswordLength mirror the frontend's rules.
+const (
+	minPasswordLength = 10
+	maxPasswordLength = 72
+)
+
+// validateNewPassword checks the candidate against the same rules the
+// frontend enforces (length, lower/upper/digit, no spaces, not common,
+// not personal to name or email).
+func validateNewPassword(password string, name, email string) error {
+	if len(password) < minPasswordLength || len(password) > maxPasswordLength {
+		return errors.New("use 10 to 72 characters")
+	}
+	lower := strings.ToLower(password)
+	if !hasLower(lower) {
+		return errors.New("add a lowercase letter")
+	}
+	if !hasUpper(password) {
+		return errors.New("add an uppercase letter")
+	}
+	if !hasDigit(password) {
+		return errors.New("add a number")
+	}
+	if strings.ContainsAny(password, " \t\n\r") {
+		return errors.New("leave out the spaces")
+	}
+	for _, weak := range weakPasswordParts {
+		if strings.Contains(lower, weak) {
+			return errors.New("this password is too easy to guess")
+		}
+	}
+	// four of the same character in a row
+	for i := 0; i+3 < len(password); i++ {
+		if password[i] == password[i+1] && password[i] == password[i+2] && password[i] == password[i+3] {
+			return errors.New("this password is too easy to guess")
+		}
+	}
+	// only 2-3 distinct characters
+	distinct := map[rune]bool{}
+	for _, r := range lower {
+		distinct[r] = true
+	}
+	if len(distinct) <= 3 {
+		return errors.New("this password is too easy to guess")
+	}
+	// not personal: must not contain name or email local-part fragments (3+ letters)
+	for _, part := range personalParts(name, email) {
+		if strings.Contains(lower, part) {
+			return errors.New("the password must not contain your name or e-mail")
+		}
+	}
+	return nil
+}
+
+func hasLower(s string) bool {
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' {
+			return true
+		}
+	}
+	return false
+}
+
+func hasUpper(s string) bool {
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDigit(s string) bool {
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+// personalParts returns name/email fragments (3+ letters) to screen out of passwords.
+func personalParts(name, email string) []string {
+	parts := []string{}
+	for _, p := range strings.FieldsFunc(name, func(r rune) bool {
+		return r == ' ' || r == '\'' || r == '.' || r == '-'
+	}) {
+		p = strings.ToLower(strings.TrimSpace(p))
+		if len(p) >= 3 {
+			parts = append(parts, p)
+		}
+	}
+	local := strings.ToLower(strings.Split(email, "@")[0])
+	for _, sep := range []string{".", "_", "+", "-"} {
+		local = strings.ReplaceAll(local, sep, " ")
+	}
+	for _, p := range strings.Fields(local) {
+		p = strings.ToLower(strings.TrimSpace(p))
+		if len(p) >= 3 {
+			parts = append(parts, p)
+		}
+	}
+	// also the whole local part
+	if len(local) >= 3 {
+		parts = append(parts, local)
+	}
+	// dedupe
+	seen := map[string]bool{}
+	out := []string{}
+	for _, p := range parts {
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// UpdatePassword sets a new password hash for the user and invalidates all
+// their refresh tokens (ends sessions on every device). Admin only.
+func (s *UserService) UpdatePassword(ctx context.Context, id int64, password string) error {
+	user, err := s.store.GetUserByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := validateNewPassword(password, user.Name, user.Email); err != nil {
+		return err
+	}
+	hash, err := auth.Hash(password)
+	if err != nil {
+		return err
+	}
+	if _, err := s.store.UpdateUserPassword(ctx, id, hash); err != nil {
+		return err
+	}
+	return s.store.DeleteRefreshTokensForUser(ctx, id)
+}
 
 // validRoles is the full set of assignable roles.
 var validRoles = map[string]bool{

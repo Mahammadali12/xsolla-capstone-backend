@@ -17,6 +17,7 @@ type Store interface {
 	GetUserByID(ctx context.Context, id int64) (*User, error)
 	GetUsers(ctx context.Context, search, role, status string) ([]User, error)
 	UpdateUser(ctx context.Context, id int64, name, email string) (*User, error)
+	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)
 	SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error)
 	SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error)
 	CountAdmins(ctx context.Context) (int, error)
@@ -31,11 +32,11 @@ type Store interface {
 	CountRefreshTokens(ctx context.Context) *sql.Row
 
 	// Module methods
-	CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error)
+	CreateModule(ctx context.Context, title string, description string, createdBy int64, opensAt, closesAt time.Time) (*Module, error)
 	GetModuleByID(ctx context.Context, id int64) (*Module, error)
 	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]Module, error)
 	GetAllModuleIDs(ctx context.Context) ([]int64, error)
-	PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error)
+	PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) (*Module, error)
 	DeleteModule(ctx context.Context, id int64, createdBy int64, isAdmin bool) error
 
 	// Enrollment methods

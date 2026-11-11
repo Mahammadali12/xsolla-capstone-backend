@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
@@ -20,8 +21,8 @@ func NewModuleService(s store.Store) *ModuleService {
 
 // CreateModule creates a new module with the given user as teacher.
 // All active students are automatically enrolled in the new module.
-func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title string, description string) (*store.Module, error) {
-	m, err := s.store.CreateModule(ctx, title, description, userID)
+func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error) {
+	m, err := s.store.CreateModule(ctx, title, description, userID, opensAt, closesAt)
 	if err != nil {
 		return nil, err
 	}
@@ -72,9 +73,14 @@ func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, rol
 }
 
 // PatchModule updates a module if the user is authorized.
-func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string) (*store.Module, error) {
+func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error) {
+	opensAt, closesAt, err := s.resolvePatchDates(ctx, moduleID, opensAt, closesAt)
+	if err != nil {
+		return nil, err
+	}
+
 	if auth.HasRole(roles, "admin") {
-		return s.store.PatchModule(ctx, moduleID, title, description, userID, true)
+		return s.store.PatchModule(ctx, moduleID, title, description, userID, true, opensAt, closesAt)
 	}
 
 	teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
@@ -85,7 +91,26 @@ func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []s
 		return nil, ErrNotModuleTeacher
 	}
 
-	return s.store.PatchModule(ctx, moduleID, title, description, userID, false)
+	return s.store.PatchModule(ctx, moduleID, title, description, userID, false, opensAt, closesAt)
+}
+
+// resolvePatchDates replaces zero opens_at/closes_at with the module's current
+// values so a partial PATCH never overwrites NOT NULL date columns with zero time.
+func (s *ModuleService) resolvePatchDates(ctx context.Context, moduleID int64, opensAt, closesAt time.Time) (time.Time, time.Time, error) {
+	if !opensAt.IsZero() && !closesAt.IsZero() {
+		return opensAt, closesAt, nil
+	}
+	current, err := s.store.GetModuleByID(ctx, moduleID)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if opensAt.IsZero() {
+		opensAt = current.OpensAt
+	}
+	if closesAt.IsZero() {
+		closesAt = current.ClosesAt
+	}
+	return opensAt, closesAt, nil
 }
 
 // DeleteModule soft-deletes a module if the user is authorized.

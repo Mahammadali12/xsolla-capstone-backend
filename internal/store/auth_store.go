@@ -188,6 +188,11 @@ func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email string
 	return &u, nil
 }
 
+// UpdateUserPassword replaces the user's password hash.
+func (s *StoreImpl) UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error) {
+	return s.DB().UpdateUserPassword(ctx, id, passwordHash)
+}
+
 // SetUserLeftAt deactivates (left_at=NOW) or reactivates (left_at=NULL) a user.
 func (s *StoreImpl) SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error) {
 	return s.DB().SetUserLeftAt(ctx, id, deactivate)

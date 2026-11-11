@@ -95,6 +95,7 @@ func main() {
 	mux.Handle("GET /users", authenticator.RequireRole(http.HandlerFunc(userH.ListUsers), "admin", "lecturer", "mentor"))
 	mux.Handle("POST /users", authenticator.RequireRole(http.HandlerFunc(userH.CreateUser), "admin"))
 	mux.Handle("PATCH /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.UpdateUser), "admin"))
+	mux.Handle("PUT /users/{id}/password", authenticator.RequireRole(http.HandlerFunc(userH.UpdatePassword), "admin"))
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
 	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
 

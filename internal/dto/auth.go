@@ -48,3 +48,8 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+// UpdatePasswordRequest is the payload for PATCH /users/:id/password.
+type UpdatePasswordRequest struct {
+	Password string `json:"password" example:"Back-To-Class-8"`
+}
