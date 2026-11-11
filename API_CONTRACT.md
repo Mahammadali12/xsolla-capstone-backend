@@ -192,7 +192,7 @@ Auth: required.
 
 Success 200:
 ```json
-{ "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z" }
+{ "id": "10", "title": "CS101", "description": "Intro to CS", "created_by": "1", "created_at": "2026-11-04T13:45:00Z", "grade": "green" }
 ```
 
 Errors: 404, 403 (not enrolled / not lecturer of this module).
@@ -211,6 +211,25 @@ Body (partial):
 Success 200: updated module row.
 
 Errors: 403, 404.
+
+---
+
+### PATCH /modules/:id/grade
+
+Auth: required (mentor/admin enrolled in the module).
+
+Body:
+```json
+{ "grade": "green" }
+```
+
+Rules:
+- `grade` must be one of: `red`, `yellow`, `green`.
+- Only mentors and admins can grade modules.
+
+Success 200: updated module row.
+
+Errors: 400 (invalid grade), 403, 404.
 
 ---
 
@@ -297,8 +316,7 @@ Success 200 — flat list:
     "title": "Homework 1",
     "position": 2,
     "is_visible": true,
-    "due_at": "2026-11-10T23:59:00Z",
-    "max_points": 100
+    "due_at": "2026-11-10T23:59:00Z"
   },
   {
     "id": "203",
@@ -330,20 +348,19 @@ Body:
   "is_visible": true,
   "file_id": null,
   "url": null,
-  "due_at": "2026-11-10T23:59:00Z",
-  "max_points": 100
+  "due_at": "2026-11-10T23:59:00Z"
 }
 ```
 
 Rules:
 - `parent_id` must be null (sections removed — no nesting).
 - `type = 'file'`: `file_id` required, must reference a file uploaded by the caller.
-- `type = 'assignment'`: `due_at` and `max_points` required.
+- `type = 'assignment'`: `due_at` required.
 - `type = 'link'`: `url` required.
 - `type = 'section'` is not supported (400).
 - `position` defaults to last+1.
 
-Success 201: created item row (includes `due_at`, `max_points` if assignment, `url` if link).
+Success 201: created item row (includes `due_at` if assignment).
 
 Errors: 400 (bad type / missing fields), 403.
 
@@ -478,7 +495,7 @@ Rules:
 - `student_id` is the authenticated user.
 - Multiple attempts are allowed — each POST inserts a new submission row (new `id`, new `submitted_at`).
 - File ownership: student may only attach `file_ids` they uploaded.
-- Allowed only while ungraded and before `due_at` (after that: 422).
+- Allowed only while unsubmitted and before `due_at` (after that: 422).
 
 Errors: 400 (file not owned by student), 403, 422 (after deadline).
 
@@ -499,30 +516,28 @@ Auth: required (lecturer or admin enrolled in module).
 Success 200 — full enrolled roster via LEFT JOIN (missing work shown):
 ```json
 [
-  { "id": "400", "student": { "id": "1", "name": "Alice" }, "text_body": "...", "submitted_at": "2026-11-05T10:00:00Z", "grade": 85, "feedback": "Good job", "files": [...] },
-  { "id": null, "student": { "id": "2", "name": "Bob" }, "text_body": null, "submitted_at": null, "grade": null, "feedback": null, "files": null }
+  { "id": "400", "student": { "id": "1", "name": "Alice" }, "text_body": "...", "submitted_at": "2026-11-05T10:00:00Z", "feedback": "Good job", "files": [...] },
+  { "id": null, "student": { "id": "2", "name": "Bob" }, "text_body": null, "submitted_at": null, "feedback": null, "files": null }
 ]
 ```
 
 ---
 
-### POST /submissions/:id/grade
+### POST /submissions/:id/feedback
 
-Auth: required (lecturer/admin enrolled in the module owning this submission's assignment).
+Auth: required (mentor/admin enrolled in the module owning this submission's assignment).
 
 Body:
 ```json
-{ "grade": 85, "feedback": "Good job" }
+{ "feedback": "Good job" }
 ```
 
 Success 200:
 ```json
-{ "id": "400", "grade": 85, "feedback": "Good job", "graded_by": "1", "graded_at": "2026-11-06T09:00:00Z" }
+{ "id": "400", "student_id": "1", "text_body": "...", "submitted_at": "2026-11-05T10:00:00Z", "feedback": "Good job", "graded_by": "1", "graded_at": "2026-11-06T09:00:00Z", "files": [...] }
 ```
 
-Rule: `0 <= grade <= max_points` (enforced in application code).
-
-Errors: 403 (not lecturer of this module), 404, 422 (grade out of bounds).
+Errors: 403 (not mentor/admin of this module), 404, 422.
 
 ---
 
@@ -586,6 +601,8 @@ Auth: required (lecturer or admin only — creator of the event or admin).
 
 Body (partial): any of `title`, `kind`, `starts_at`, `ends_at`, `all_day`, `location`, `description`, `module_id`.
 
+If the event was previously synced to Google Calendar (has `google_event_id`), the update is also pushed to Google Calendar. Non-fatal: if the Google Calendar update fails, the LMS update still succeeds.
+
 Success 200: updated event row.
 
 Errors: 400 (invalid dates / cycle), 403, 404.
@@ -595,6 +612,8 @@ Errors: 400 (invalid dates / cycle), 403, 404.
 ### DELETE /events/:id
 
 Auth: required (lecturer or admin only — creator of the event or admin).
+
+If the event was previously synced to Google Calendar (has `google_event_id`), it is also deleted from Google Calendar. Non-fatal: if the Google Calendar delete fails, the LMS soft-delete still succeeds.
 
 Success 204: empty body.
 

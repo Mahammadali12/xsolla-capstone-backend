@@ -31,14 +31,12 @@ type ContentItem struct {
 	CreatedBy   *int64
 	CreatedAt   time.Time
 	DueAt       *time.Time
-	MaxPoints   int
 }
 
 // Assignment represents an assignment extension of a content item.
 type Assignment struct {
 	ContentItemID int64
 	DueAt         *time.Time
-	MaxPoints     int
 }
 
 // CreateContentItem inserts a new content item.
@@ -58,7 +56,7 @@ func (s *StoreImpl) GetContentItemByID(ctx context.Context, id int64) (*ContentI
 	var ci ContentItem
 	err := s.DB().GetContentItemByID(ctx, id).Scan(
 		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt,
-		&ci.DueAt, &ci.MaxPoints,
+		&ci.DueAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -80,7 +78,7 @@ func (s *StoreImpl) GetContentItemsForModule(ctx context.Context, moduleID int64
 	var items []ContentItem
 	for rows.Next() {
 		var ci ContentItem
-		if err := rows.Scan(&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt, &ci.DueAt, &ci.MaxPoints); err != nil {
+		if err := rows.Scan(&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt, &ci.DueAt); err != nil {
 			return nil, err
 		}
 		items = append(items, ci)
@@ -93,7 +91,7 @@ func (s *StoreImpl) UpdateContentItem(ctx context.Context, id int64, title strin
 	var ci ContentItem
 	err := s.DB().UpdateContentItem(ctx, id, title, description, position, isVisible, parentID, fileID, dueAt, url).Scan(
 		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt,
-		&ci.DueAt, &ci.MaxPoints,
+		&ci.DueAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -118,9 +116,9 @@ func (s *StoreImpl) DeleteContentItem(ctx context.Context, id int64) error {
 }
 
 // CreateAssignment creates an assignment extension for a content item.
-func (s *StoreImpl) CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) (*Assignment, error) {
+func (s *StoreImpl) CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time) (*Assignment, error) {
 	var a Assignment
-	err := s.DB().CreateAssignment(ctx, contentItemID, dueAt, maxPoints).Scan(&a.ContentItemID, &a.DueAt, &a.MaxPoints)
+	err := s.DB().CreateAssignment(ctx, contentItemID, dueAt).Scan(&a.ContentItemID, &a.DueAt)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +128,7 @@ func (s *StoreImpl) CreateAssignment(ctx context.Context, contentItemID int64, d
 // GetAssignmentByContentItemID returns the assignment for a content item.
 func (s *StoreImpl) GetAssignmentByContentItemID(ctx context.Context, contentItemID int64) (*Assignment, error) {
 	var a Assignment
-	err := s.DB().GetAssignmentByContentItemID(ctx, contentItemID).Scan(&a.ContentItemID, &a.DueAt, &a.MaxPoints)
+	err := s.DB().GetAssignmentByContentItemID(ctx, contentItemID).Scan(&a.ContentItemID, &a.DueAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrContentItemNotFound
@@ -140,10 +138,10 @@ func (s *StoreImpl) GetAssignmentByContentItemID(ctx context.Context, contentIte
 	return &a, nil
 }
 
-// UpdateAssignment updates an assignment's due_at and max_points.
-func (s *StoreImpl) UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) (*Assignment, error) {
+// UpdateAssignment updates an assignment's due_at.
+func (s *StoreImpl) UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time) (*Assignment, error) {
 	var a Assignment
-	err := s.DB().UpdateAssignment(ctx, contentItemID, dueAt, maxPoints).Scan(&a.ContentItemID, &a.DueAt, &a.MaxPoints)
+	err := s.DB().UpdateAssignment(ctx, contentItemID, dueAt).Scan(&a.ContentItemID, &a.DueAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrContentItemNotFound

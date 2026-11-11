@@ -19,7 +19,8 @@ type SubmissionService interface {
 	GetSubmissionByID(ctx context.Context, userID int64, roles []string, submissionID int64) (*store.Submission, error)
 	GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*store.Submission, error)
 	GetSubmissionsForAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64) ([]store.Submission, error)
-	UpdateSubmissionGrade(ctx context.Context, userID int64, roles []string, submissionID int64, grade *float64, feedback string) (*store.Submission, error)
+	UpdateSubmissionFeedback(ctx context.Context, userID int64, roles []string, submissionID int64, feedback string) (*store.Submission, error)
+	UpdateModuleGrade(ctx context.Context, userID int64, roles []string, moduleID int64, grade string) (*store.Module, error)
 	DeleteSubmission(ctx context.Context, userID int64, roles []string, submissionID int64) error
 }
 
@@ -76,7 +77,6 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 		StudentID:    ci.StudentID,
 		TextBody:     ci.TextBody,
 		SubmittedAt:  ci.SubmittedAt,
-		Grade:        ci.Grade,
 		Feedback:     feedbackString(ci.Feedback),
 		GradedBy:     ci.GradedBy,
 		GradedAt:     ci.GradedAt,
@@ -119,7 +119,6 @@ func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Requ
 			StudentID:    s.StudentID,
 			TextBody:     s.TextBody,
 			SubmittedAt:  s.SubmittedAt,
-			Grade:        s.Grade,
 			Feedback:     feedbackString(s.Feedback),
 			GradedBy:     s.GradedBy,
 			GradedAt:     s.GradedAt,
@@ -157,7 +156,6 @@ func (h *SubmissionHandlers) GetMySubmission(w http.ResponseWriter, r *http.Requ
 		StudentID:    s.StudentID,
 		TextBody:     s.TextBody,
 		SubmittedAt:  s.SubmittedAt,
-		Grade:        s.Grade,
 		Feedback:     feedbackString(s.Feedback),
 		GradedBy:     s.GradedBy,
 		GradedAt:     s.GradedAt,
@@ -166,8 +164,8 @@ func (h *SubmissionHandlers) GetMySubmission(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// POST /submissions/:id/grade
-func (h *SubmissionHandlers) GradeSubmission(w http.ResponseWriter, r *http.Request) {
+// POST /submissions/:id/feedback — submit feedback for a submission (mentor/admin only).
+func (h *SubmissionHandlers) SubmitFeedback(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	roles := middleware.CtxRoles(r.Context())
 
@@ -177,23 +175,22 @@ func (h *SubmissionHandlers) GradeSubmission(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var req dto.GradeSubmissionRequest
+	var req dto.FeedbackSubmissionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
 
-	grade := req.Grade
-	s, err := h.svc.UpdateSubmissionGrade(r.Context(), userID, roles, submissionID, &grade, req.Feedback)
+	s, err := h.svc.UpdateSubmissionFeedback(r.Context(), userID, roles, submissionID, req.Feedback)
 	if err != nil {
-		log.Printf("submission handler: GradeSubmission error: %v", err)
+		log.Printf("submission handler: SubmitFeedback error: %v", err)
 		switch {
 		case errors.Is(err, store.ErrNotModuleTeacher):
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		case errors.Is(err, store.ErrSubmissionNotFound):
 			writeError(w, 404, "not_found", "submission not found", nil)
 		default:
-			writeError(w, 500, "server_error", "could not grade submission", nil)
+			writeError(w, 500, "server_error", "could not submit feedback", nil)
 		}
 		return
 	}
@@ -204,7 +201,6 @@ func (h *SubmissionHandlers) GradeSubmission(w http.ResponseWriter, r *http.Requ
 		StudentID:    s.StudentID,
 		TextBody:     s.TextBody,
 		SubmittedAt:  s.SubmittedAt,
-		Grade:        s.Grade,
 		Feedback:     feedbackString(s.Feedback),
 		GradedBy:     s.GradedBy,
 		GradedAt:     s.GradedAt,
@@ -245,4 +241,45 @@ func (h *SubmissionHandlers) GetSubmissionFiles(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, 200, dto.FileList(sub.Files))
+}
+
+// PATCH /modules/:id/grade — grade a module (mentor/admin only).
+func (h *SubmissionHandlers) GradeModule(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	roles := middleware.CtxRoles(r.Context())
+
+	moduleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid module ID", nil)
+		return
+	}
+
+	var req dto.GradeModuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+
+	m, err := h.svc.UpdateModuleGrade(r.Context(), userID, roles, moduleID, req.Grade)
+	if err != nil {
+		log.Printf("submission handler: GradeModule error: %v", err)
+		switch {
+		case errors.Is(err, store.ErrNotModuleTeacher):
+			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
+		case errors.Is(err, store.ErrModuleNotFound):
+			writeError(w, 404, "not_found", "module not found", nil)
+		default:
+			writeError(w, 500, "server_error", "could not grade module", nil)
+		}
+		return
+	}
+
+	writeJSON(w, 200, dto.ModuleResponse{
+		ID:          m.ID,
+		Title:       m.Title,
+		Description: m.Description,
+		CreatedBy:   m.CreatedBy,
+		Grade:       m.Grade,
+		CreatedAt:   m.CreatedAt,
+	})
 }

@@ -131,8 +131,10 @@ func main() {
 	mux.Handle("POST /modules/{moduleId}/content-items/{assignmentId}/submissions", authenticator.Middleware(http.HandlerFunc(submissionH.CreateSubmission)))
 	mux.Handle("GET /modules/{moduleId}/content-items/{assignmentId}/submissions", authenticator.Middleware(http.HandlerFunc(submissionH.ListSubmissions)))
 	mux.Handle("GET /modules/{moduleId}/content-items/{assignmentId}/submissions/me", authenticator.Middleware(http.HandlerFunc(submissionH.GetMySubmission)))
-	mux.Handle("POST /submissions/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeSubmission)))
+	mux.Handle("POST /submissions/{id}/feedback", authenticator.Middleware(http.HandlerFunc(submissionH.SubmitFeedback)))
 	mux.Handle("GET /submissions/{id}/files", authenticator.Middleware(http.HandlerFunc(submissionH.GetSubmissionFiles)))
+
+	mux.Handle("PATCH /modules/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeModule)))
 
 	mux.Handle("GET /events", authenticator.Middleware(http.HandlerFunc(eventH.ListEvents)))
 	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))

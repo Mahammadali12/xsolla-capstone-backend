@@ -178,9 +178,9 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 	return submissions, nil
 }
 
-// UpdateSubmissionGrade updates a submission's grade and feedback.
+// UpdateSubmissionFeedback updates a submission's feedback.
 // Only the mentor of the module or an admin can grade. Lecturers cannot grade.
-func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID int64, roles []string, submissionID int64, grade *float64, feedback string) (*store.Submission, error) {
+func (s *SubmissionService) UpdateSubmissionFeedback(ctx context.Context, userID int64, roles []string, submissionID int64, feedback string) (*store.Submission, error) {
 	if _, err := s.store.GetSubmissionByID(ctx, submissionID); err != nil {
 		return nil, err
 	}
@@ -193,13 +193,40 @@ func (s *SubmissionService) UpdateSubmissionGrade(ctx context.Context, userID in
 		return nil, store.ErrNotModuleTeacher
 	}
 
-	updated, err := s.store.UpdateSubmissionGrade(ctx, submissionID, grade, feedback, userID)
+	updated, err := s.store.UpdateSubmissionFeedback(ctx, submissionID, feedback, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Reload attached files
 	updated.Files, err = s.store.GetSubmissionFiles(ctx, updated.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return updated, nil
+}
+
+// UpdateModuleGrade updates a module's grade (red/yellow/green).
+// Only the mentor of the module or an admin can grade.
+func (s *SubmissionService) UpdateModuleGrade(ctx context.Context, userID int64, roles []string, moduleID int64, grade string) (*store.Module, error) {
+	if auth.HasRole(roles, "admin") {
+		// Admin can grade any module
+	} else if auth.HasRole(roles, "mentor") {
+		// Mentor can grade
+	} else {
+		return nil, store.ErrNotModuleTeacher
+	}
+
+	// Validate grade value
+	switch grade {
+	case "red", "yellow", "green":
+		// valid
+	default:
+		return nil, errors.New("grade must be one of: red, yellow, green")
+	}
+
+	updated, err := s.store.UpdateModuleGrade(ctx, moduleID, &grade, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -218,9 +245,9 @@ func (s *SubmissionService) DeleteSubmission(ctx context.Context, userID int64, 
 		return s.store.DeleteSubmission(ctx, submissionID)
 	}
 
-	// Student can delete their own submission (before grading)
+	// Student can delete their own submission (before feedback)
 	if sub.StudentID == userID {
-		if sub.Grade != nil {
+		if sub.Feedback != nil && *sub.Feedback != "" {
 			return errors.New("cannot delete a graded submission")
 		}
 		return s.store.DeleteSubmission(ctx, submissionID)

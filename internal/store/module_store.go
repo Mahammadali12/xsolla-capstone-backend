@@ -26,6 +26,7 @@ type Module struct {
 	Title       string
 	Description string
 	CreatedBy   int64
+	Grade       *string
 	CreatedAt   time.Time
 }
 
@@ -43,7 +44,7 @@ type Enrollment struct {
 // CreateModule inserts a new module.
 func (s *StoreImpl) CreateModule(ctx context.Context, title string, description string, createdBy int64) (*Module, error) {
 	var m Module
-	err := s.DB().CreateModule(ctx, title, description, createdBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt)
+	err := s.DB().CreateModule(ctx, title, description, createdBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func (s *StoreImpl) CreateModule(ctx context.Context, title string, description 
 // GetModuleByID returns a module by ID if it exists and is not deleted.
 func (s *StoreImpl) GetModuleByID(ctx context.Context, id int64) (*Module, error) {
 	var m Module
-	err := s.DB().GetModuleByID(ctx, id).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt)
+	err := s.DB().GetModuleByID(ctx, id).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrModuleNotFound
@@ -74,7 +75,7 @@ func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles [
 	var modules []Module
 	for rows.Next() {
 		var m Module
-		if err := rows.Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		modules = append(modules, m)
@@ -85,7 +86,20 @@ func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles [
 // PatchModule updates a module title/description if the user is authorized.
 func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool) (*Module, error) {
 	var m Module
-	err := s.DB().PatchModule(ctx, id, title, description, createdBy, isAdmin).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.CreatedAt)
+	err := s.DB().PatchModule(ctx, id, title, description, createdBy, isAdmin).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrModuleNotFound
+		}
+		return nil, err
+	}
+	return &m, nil
+}
+
+// UpdateModuleGrade updates a module's grade.
+func (s *StoreImpl) UpdateModuleGrade(ctx context.Context, id int64, grade *string, gradedBy int64) (*Module, error) {
+	var m Module
+	err := s.DB().UpdateModuleGrade(ctx, id, grade, gradedBy).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrModuleNotFound

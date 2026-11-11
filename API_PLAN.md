@@ -17,7 +17,7 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `user_roles(user_id, role, expires_at)` junction table for role assignments with optional end dates.
 
 **MODULES** (renamed from courses — frontend refers to them as modules)
-- `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
+- `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `grade text CHECK grade IN ('red','yellow','green') NULL`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
 
 **ENROLLMENTS**
 - `id bigint PK`, `module_id bigint FK` (index, CASCADE with module), `user_id bigint FK` (index, CASCADE with user), `created_at timestamptz`
@@ -30,18 +30,18 @@ JWT with refresh tokens, reusing the checkout-api pattern. Endpoints: `/auth/sig
 - `UNIQUE (module_id, parent_id, position)` — no duplicate positions under the same parent
 
 **ASSIGNMENTS** (1:1 extension of a content item)
-- `content_item_id bigint PK, FK` (CASCADE), `due_at timestamptz`, `max_points int CHECK max_points > 0`, `deleted_at timestamptz NULL` (soft delete)
+- `content_item_id bigint PK, FK` (CASCADE), `due_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
 - Creating an assignment = insert CONTENT_ITEMS row + ASSIGNMENTS row in the same transaction
 
 **FILES**
 - `id bigint PK`, `uploaded_by bigint FK` (index), `original_name text`, `storage_key text`, `mime_type text`, `size_bytes bigint`, `deleted_at timestamptz NULL` (soft delete), `created_at timestamptz`
 
 **SUBMISSIONS** (multiple attempts per student per assignment)
-- `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `grade numeric CHECK grade >= 0`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
+- `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
 - Each POST inserts a new row; a student may have many submissions for one assignment. `GET /me` returns the latest attempt; the roster/list returns all attempts.
 - Multiple attempts are allowed — each POST inserts a new submission row (new `id`, new `submitted_at`).
 - File ownership: student may only attach `file_ids` they uploaded.
-- Allowed while ungraded and before `due_at`.
+- Feedback is given by mentors/admins instead of numeric grades.
 
 **SUBMISSION_FILES**
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK` — no duplicate file links on one submission
@@ -258,10 +258,18 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 - Full enrolled roster: `enrollments LEFT JOIN submissions` — one row per enrolled student, missing work shown as null
 - Teacher must be enrolled in the module
 
-**POST /submissions/:id/grade**
-- Body: `{ grade, feedback }`
-- Rule: caller is `lecturer` or `admin` AND enrolled in the module owning the submission
-- Sets `graded_by = auth user`, `graded_at = now`, `grade CHECK 0 <= grade <= max_points` (enforced in app code)
+**POST /submissions/:id/feedback**
+- Body: `{ feedback }`
+- Rule: caller is `mentor` or `admin` AND enrolled in the module owning the submission
+- Sets `graded_by = auth user`, `graded_at = now` (enforced in app code)
+
+**GET /submissions/:id/files**
+- List of files attached to this submission. Access: owner or grader.
+
+**PATCH /modules/:id/grade**
+- Body: `{ grade }` where grade is one of: `red`, `yellow`, `green`
+- Rule: caller is `mentor` or `admin` AND enrolled in the module
+- Sets `grade` on the module
 
 **GET /submissions/:id/files**
 - List of files attached to this submission. Access: owner or grader.
@@ -280,13 +288,10 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **PATCH /events/:id** (lecturer/admin only)
 - Body: partial event fields
-- Updates event. Creator or admin.
+- Updates event. If the event was previously synced to Google Calendar (has `google_event_id`), the update is also pushed to Google Calendar. Creator or admin.
 
 **DELETE /events/:id** (lecturer/admin only)
-- Soft delete.
-
-**DELETE /events/:id** (lecturer/admin only)
-- Soft delete.
+- Soft delete. If the event was previously synced to Google Calendar (has `google_event_id`), it is also deleted from Google Calendar.
 
 ### Google OAuth
 

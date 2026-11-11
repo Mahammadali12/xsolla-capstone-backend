@@ -1,3 +1,4 @@
+-- 002_refresh_tokens: JWT refresh tokens
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id          BIGSERIAL PRIMARY KEY,
     user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

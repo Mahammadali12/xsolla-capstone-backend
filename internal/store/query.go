@@ -179,14 +179,14 @@ func (q *Query) DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, 
 
 func (q *Query) CreateModule(ctx context.Context, title string, description string, createdBy int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO modules (title, description, created_by) VALUES ($1, $2, $3) RETURNING id, title, description, created_by, created_at`,
+		`INSERT INTO modules (title, description, created_by, grade) VALUES ($1, $2, $3, NULL) RETURNING id, title, description, created_by, grade, created_at`,
 		title, description, createdBy,
 	)
 }
 
 func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, title, description, created_by, created_at FROM modules WHERE id = $1 AND deleted_at IS NULL`,
+		`SELECT id, title, description, created_by, grade, created_at FROM modules WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
 }
@@ -201,12 +201,12 @@ func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []str
 	}
 	if isAdmin {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT m.id, m.title, m.description, m.created_by, m.created_at
+			`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at
 			 FROM modules m WHERE m.deleted_at IS NULL`,
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT m.id, m.title, m.description, m.created_by, m.created_at
+		`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at
 		 FROM modules m
 		 JOIN enrollments e ON e.module_id = m.id
 		 WHERE m.deleted_at IS NULL AND e.user_id = $1`,
@@ -219,15 +219,25 @@ func (q *Query) PatchModule(ctx context.Context, id int64, title string, descrip
 		return q.DBTX.QueryRowContext(ctx,
 			`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description)
 			 WHERE id = $1 AND deleted_at IS NULL
-			 RETURNING id, title, description, created_by, created_at`,
+			 RETURNING id, title, description, created_by, grade, created_at`,
 			id, title, description,
 		)
 	}
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description)
 		 WHERE id = $1 AND created_by = $4 AND deleted_at IS NULL
-		 RETURNING id, title, description, created_by, created_at`,
+		 RETURNING id, title, description, created_by, grade, created_at`,
 		id, title, description, createdBy,
+	)
+}
+
+// UpdateModuleGrade updates a module's grade (red/yellow/green).
+func (q *Query) UpdateModuleGrade(ctx context.Context, id int64, grade *string, gradedBy int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE modules SET grade = COALESCE($2, grade)
+		 WHERE id = $1 AND deleted_at IS NULL
+		 RETURNING id, title, description, created_by, grade, created_at`,
+		id, grade,
 	)
 }
 
@@ -326,7 +336,7 @@ func (q *Query) CreateContentItem(ctx context.Context, moduleID int64, parentID 
 func (q *Query) GetContentItemByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
-			 a.due_at, COALESCE(a.max_points, 0)
+			 a.due_at
 		 FROM content_items ci
 		 LEFT JOIN assignments a ON a.content_item_id = ci.id
 		 WHERE ci.id = $1 AND ci.deleted_at IS NULL`,
@@ -338,7 +348,7 @@ func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, vi
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
-			 a.due_at, COALESCE(a.max_points, 0)
+			 a.due_at
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
 			 WHERE ci.module_id = $1 AND ci.is_visible = true AND ci.deleted_at IS NULL
@@ -348,7 +358,7 @@ func (q *Query) GetContentItemsForModule(ctx context.Context, moduleID int64, vi
 	}
 	return q.DBTX.QueryContext(ctx,
 		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
-			 a.due_at, COALESCE(a.max_points, 0)
+			 a.due_at
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
 			 WHERE ci.module_id = $1 AND ci.deleted_at IS NULL
@@ -361,7 +371,7 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 	if visibleOnly {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
-			 a.due_at, COALESCE(a.max_points, 0)
+			 a.due_at
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
 			 WHERE ci.parent_id = $1 AND ci.is_visible = true AND ci.deleted_at IS NULL
@@ -371,7 +381,7 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 	}
 	return q.DBTX.QueryContext(ctx,
 		`SELECT ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
-			 a.due_at, COALESCE(a.max_points, 0)
+			 a.due_at
 			 FROM content_items ci
 			 LEFT JOIN assignments a ON a.content_item_id = ci.id
 			 WHERE ci.parent_id = $1 AND ci.deleted_at IS NULL
@@ -392,8 +402,7 @@ func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, d
 		     url = COALESCE($8, url)
 		 WHERE ci.id = $1 AND ci.deleted_at IS NULL
 		 RETURNING ci.id, ci.module_id, ci.parent_id, ci.type, ci.title, ci.description, ci.position, ci.is_visible, ci.file_id, ci.url, ci.created_by, ci.created_at,
-		     (SELECT a.due_at FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL),
-		     COALESCE((SELECT a.max_points FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL), 0)`,
+		     (SELECT a.due_at FROM assignments a WHERE a.content_item_id = ci.id AND a.deleted_at IS NULL)`,
 		id, title, description, position, isVisible, parentID, fileID, url,
 	)
 }
@@ -407,29 +416,28 @@ func (q *Query) DeleteContentItem(ctx context.Context, id int64) (sql.Result, er
 
 // Assignment queries
 
-func (q *Query) CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) *sql.Row {
+func (q *Query) CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO assignments (content_item_id, due_at, max_points) VALUES ($1, $2, $3)
-		 RETURNING content_item_id, due_at, max_points`,
-		contentItemID, dueAt, maxPoints,
+		`INSERT INTO assignments (content_item_id, due_at) VALUES ($1, $2)
+		 RETURNING content_item_id, due_at`,
+		contentItemID, dueAt,
 	)
 }
 
 func (q *Query) GetAssignmentByContentItemID(ctx context.Context, contentItemID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT content_item_id, due_at, max_points FROM assignments WHERE content_item_id = $1 AND deleted_at IS NULL`,
+		`SELECT content_item_id, due_at FROM assignments WHERE content_item_id = $1 AND deleted_at IS NULL`,
 		contentItemID,
 	)
 }
 
-func (q *Query) UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) *sql.Row {
+func (q *Query) UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE assignments
-		 SET due_at = COALESCE($2, due_at),
-		     max_points = COALESCE($3, max_points)
+		 SET due_at = COALESCE($2, due_at)
 		 WHERE content_item_id = $1 AND deleted_at IS NULL
-		 RETURNING content_item_id, due_at, max_points`,
-		contentItemID, dueAt, maxPoints,
+		 RETURNING content_item_id, due_at`,
+		contentItemID, dueAt,
 	)
 }
 
@@ -506,14 +514,14 @@ func (q *Query) CreateSubmission(ctx context.Context, contentItemID int64, stude
 	return q.DBTX.QueryRowContext(ctx,
 		`INSERT INTO submissions (content_item_id, student_id, text_body)
 		 VALUES ($1, $2, $3)
-		 RETURNING id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at`,
+		 RETURNING id, content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at, created_at`,
 		contentItemID, studentID, textBody,
 	)
 }
 
 func (q *Query) GetSubmissionByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at
+		`SELECT id, content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at, created_at
 		 FROM submissions WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
@@ -521,7 +529,7 @@ func (q *Query) GetSubmissionByID(ctx context.Context, id int64) *sql.Row {
 
 func (q *Query) GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at
+		`SELECT id, content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at, created_at
 		 FROM submissions
 		 WHERE student_id = $1 AND content_item_id = $2 AND deleted_at IS NULL
 		 ORDER BY submitted_at DESC
@@ -544,7 +552,7 @@ func (q *Query) GetSubmissionsByStudentAndAssignment(ctx context.Context, studen
 
 func (q *Query) GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT s.id, s.content_item_id, s.student_id, s.text_body, s.submitted_at, s.grade, s.feedback, s.graded_by, s.graded_at, s.created_at,
+		`SELECT s.id, s.content_item_id, s.student_id, s.text_body, s.submitted_at, s.feedback, s.graded_by, s.graded_at, s.created_at,
 		       u.id, u.email, u.name
 		 FROM submissions s
 		 JOIN users u ON u.id = s.student_id
@@ -554,16 +562,15 @@ func (q *Query) GetSubmissionsForAssignment(ctx context.Context, contentItemID i
 	)
 }
 
-func (q *Query) UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) *sql.Row {
+func (q *Query) UpdateSubmissionFeedback(ctx context.Context, id int64, feedback string, gradedBy int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE submissions
-		 SET grade = COALESCE($2, grade),
-		     feedback = COALESCE($3, feedback),
-		     graded_by = $4,
+		 SET feedback = COALESCE($2, feedback),
+		     graded_by = $3,
 		     graded_at = NOW()
 		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at`,
-		id, grade, feedback, gradedBy,
+		 RETURNING id, content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at, created_at`,
+		id, feedback, gradedBy,
 	)
 }
 

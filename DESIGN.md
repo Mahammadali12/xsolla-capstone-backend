@@ -59,7 +59,7 @@ Extensions: `CREATE EXTENSION citext;`
 - `user_roles(user_id, role, expires_at)` junction table for role assignments with optional end dates.
 
 **modules** (frontend refers to these as "modules"; backend DB table renamed from `courses`)
-- `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
+- `id bigint PK`, `title text`, `description text`, `created_by bigint FK`, `grade text CHECK grade IN ('red','yellow','green') NULL`, `created_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
 
 **enrollments**
 - `id bigint PK`, `module_id bigint FK` (index, CASCADE), `user_id bigint FK` (index, CASCADE), `created_at timestamptz`
@@ -72,16 +72,16 @@ Extensions: `CREATE EXTENSION citext;`
 - `UNIQUE (module_id, parent_id, position)`
 
 **assignments** (1:1 extension of a content item)
-- `content_item_id bigint PK, FK` (CASCADE), `due_at timestamptz`, `max_points int CHECK max_points > 0`, `deleted_at timestamptz NULL` (soft delete)
+- `content_item_id bigint PK, FK` (CASCADE), `due_at timestamptz`, `deleted_at timestamptz NULL` (soft delete)
 - Creating an assignment = insert content_items row + assignments row in the same transaction
 
 **files**
 - `id bigint PK`, `uploaded_by bigint FK` (index), `original_name text`, `storage_key text`, `mime_type text`, `size_bytes bigint`, `deleted_at timestamptz NULL` (soft delete), `created_at timestamptz`
 
 **submissions** (multiple attempts per student per assignment)
-- `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `grade numeric CHECK grade >= 0`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
-- Each POST inserts a new row; a student may have many submissions for one assignment. `GET /me` returns the latest attempt; each attempt keeps its own grade/feedback.
-- `grade <= max_points` enforced in application code
+- `id bigint PK`, `assignment_id bigint FK` (index, CASCADE), `student_id bigint FK` (index), `text_body text`, `submitted_at timestamptz`, `feedback text nullable`, `graded_by bigint FK nullable` (index), `graded_at timestamptz nullable`, `deleted_at timestamptz NULL`
+- Each POST inserts a new row; a student may have many submissions for one assignment. `GET /me` returns the latest attempt; each attempt keeps its own feedback.
+- `feedback` is given by mentors/admins instead of numeric grades.
 
 **submission_files**
 - `submission_id bigint FK, PK`, `file_id bigint FK, PK`
@@ -124,6 +124,7 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | GET /modules/:id | if enrolled | if enrolled / lecturer | any | else 403 |
 | PATCH /modules/:id | — | if created_by | if created_by | — |
 | DELETE /modules/:id | — | if created_by | any | soft delete; collect storage keys first |
+| PATCH /modules/:id/grade | — | if enrolled as mentor | any | mentor/admin AND enrolled in module |
 | POST /modules/:id/enrollments | self only | any user | any | 409 duplicate |
 | DELETE /modules/:id/enrollments/:userId | self only | any | any | — |
 | GET /modules/:id/enrollments | if enrolled | if enrolled / lecturer | any | — |
@@ -139,12 +140,12 @@ Role bootstrap: first registered user = `admin`. After that, no self-service pro
 | POST /content-items/:id/submissions | self only | — | — | multiple attempts allowed; file ownership check |
 | GET /content-items/:id/submissions/me | self only | — | — | own submission |
 | GET /modules/:id/content-items/:assignmentId/submissions | if enrolled (own) | if enrolled / lecturer (all) | any | LEFT JOIN enrollments |
-| POST /submissions/:id/grade | — | if enrolled as mentor | any | mentor/admin AND enrolled in module |
+| POST /submissions/:id/feedback | — | if enrolled as mentor | any | mentor/admin AND enrolled in module |
 | GET /submissions/:id/files | if owns submission | if may grade | any | — |
 | GET /events?from=&to= | if modules open | if enrolled/lecturer | any | date range filter |
 | POST /events | — | create | create | lecturer/admin only |
-| PATCH /events/:id | — | if created | any | lecturer/admin only |
-| DELETE /events/:id | — | if created | any | soft delete |
+| PATCH /events/:id | — | if created | any | lecturer/admin only; syncs to Google Calendar if google_event_id exists |
+| DELETE /events/:id | — | if created | any | soft delete; deletes from Google Calendar if google_event_id exists |
 | GET /auth/google/login | any | any | any | JWT via header or ?access_token= |
 | GET /auth/google/callback | any | any | any | Google redirect target |
 | GET /auth/google/me | any | any | any | 404 if Google not connected |
@@ -199,9 +200,9 @@ A lecturer cannot download a random student's upload unless it's attached to a s
 
 **Content items** (single route set; no separate `/assignments/*`): list (with `is_visible` server-side filter), create, get, patch, delete (soft). Sections removed — flat list of files and assignments.
 
-**Submissions:** create (multiple attempts allowed), get mine (latest), get roster (left join — missing work shown), grade, list files
+**Submissions:** create (multiple attempts allowed), get mine (latest), get roster (left join — missing work shown), give feedback, list files
 
-**Calendar events:** list (date range), create (with optional `sync_to_google` to push to Google Calendar on the creator's calendar), patch, delete (soft)
+**Calendar events:** list (date range), create (with optional `sync_to_google` to push to Google Calendar on the creator's calendar), patch (syncs to Google Calendar if synced), delete (soft; deletes from Google Calendar if synced)
 
 **1:1 mentor slots:** list, open window, delete, book, cancel booking
 

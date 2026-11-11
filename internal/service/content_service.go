@@ -29,7 +29,7 @@ func NewContentService(s store.Store) *ContentService {
 // CreateContentItem creates a new content item.
 // Only file, assignment, and link types are supported (sections are removed).
 // Assignments require a non-nil due_at. Links require a non-nil url.
-func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, maxPoints int, url *string) (*store.ContentItem, error) {
+func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error) {
 	// Only lecturer or admin can create content items
 	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, store.ErrNotModuleTeacher
@@ -72,13 +72,6 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 	if err != nil {
 		log.Printf("content service: CreateContentItem store error: %v", err)
 		return nil, err
-	}
-
-	// If type is assignment, create the assignment extension
-	if itemType == "assignment" {
-		if _, err := s.store.CreateAssignment(ctx, ci.ID, dueAt, maxPoints); err != nil {
-			return nil, err
-		}
 	}
 
 	return ci, nil
@@ -155,7 +148,7 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 	}
 
 	if ci.Type == "assignment" && dueAt != nil {
-		if _, err := s.store.UpdateAssignment(ctx, itemID, dueAt, 0); err != nil {
+		if _, err := s.store.UpdateAssignment(ctx, itemID, dueAt); err != nil {
 			return nil, err
 		}
 	}
@@ -210,7 +203,7 @@ func (s *ContentService) GetAssignmentByContentItemID(ctx context.Context, userI
 }
 
 // UpdateAssignment updates an assignment if the user is authorized.
-func (s *ContentService) UpdateAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64, dueAt *time.Time, maxPoints int) (*store.Assignment, error) {
+func (s *ContentService) UpdateAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64, dueAt *time.Time) (*store.Assignment, error) {
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
 	if err != nil {
 		return nil, err
@@ -226,5 +219,5 @@ func (s *ContentService) UpdateAssignment(ctx context.Context, userID int64, rol
 		}
 	}
 
-	return s.store.UpdateAssignment(ctx, contentItemID, dueAt, maxPoints)
+	return s.store.UpdateAssignment(ctx, contentItemID, dueAt)
 }

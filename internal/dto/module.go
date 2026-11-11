@@ -20,7 +20,13 @@ type ModuleResponse struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	CreatedBy   int64     `json:"created_by"`
+	Grade       *string   `json:"grade,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// GradeModuleRequest is the payload for PATCH /modules/:id/grade.
+type GradeModuleRequest struct {
+	Grade string `json:"grade"`
 }
 
 // EnrollRequest is the payload for POST /modules/:moduleId/enrollments.

@@ -19,7 +19,6 @@ type Submission struct {
 	StudentID    int64
 	TextBody     string
 	SubmittedAt  time.Time
-	Grade        *float64
 	Feedback     *string
 	GradedBy     *int64
 	GradedAt     *time.Time
@@ -43,7 +42,7 @@ func (s *StoreImpl) CreateSubmission(ctx context.Context, contentItemID int64, s
 	var sub Submission
 	err := s.DB().CreateSubmission(ctx, contentItemID, studentID, textBody).Scan(
 		&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
-		&sub.Grade, &sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
+		&sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -66,7 +65,7 @@ func (s *StoreImpl) GetSubmissionByID(ctx context.Context, id int64) (*Submissio
 	var gradedAt *time.Time
 	err := s.DB().GetSubmissionByID(ctx, id).Scan(
 		&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
-		&sub.Grade, &sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
+		&sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -86,7 +85,7 @@ func (s *StoreImpl) GetSubmissionByStudentAndAssignment(ctx context.Context, stu
 	var gradedAt *time.Time
 	err := s.DB().GetSubmissionByStudentAndAssignment(ctx, studentID, contentItemID).Scan(
 		&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
-		&sub.Grade, &sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
+		&sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -115,7 +114,7 @@ func (s *StoreImpl) GetSubmissionsByStudentAndAssignment(ctx context.Context, st
 		var gradedAt *time.Time
 		if err := rows.Scan(
 			&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
-			&sub.Grade, &sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
+			&sub.Feedback, &gradedBy, &gradedAt, &sub.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -141,7 +140,7 @@ func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItem
 		var studentName, studentEmail string
 		err := rows.Scan(
 			&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
-			&sub.Grade, &sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
+			&sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
 			&studentID, &studentEmail, &studentName,
 		)
 		if err != nil {
@@ -153,14 +152,14 @@ func (s *StoreImpl) GetSubmissionsForAssignment(ctx context.Context, contentItem
 	return submissions, nil
 }
 
-// UpdateSubmissionGrade updates a submission's grade and feedback.
-func (s *StoreImpl) UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) (*Submission, error) {
+// UpdateSubmissionFeedback updates a submission's feedback.
+func (s *StoreImpl) UpdateSubmissionFeedback(ctx context.Context, id int64, feedback string, gradedBy int64) (*Submission, error) {
 	var sub Submission
 	var gradedByPtr *int64
 	var gradedAt *time.Time
-	err := s.DB().UpdateSubmissionGrade(ctx, id, grade, feedback, gradedBy).Scan(
+	err := s.DB().UpdateSubmissionFeedback(ctx, id, feedback, gradedBy).Scan(
 		&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
-		&sub.Grade, &sub.Feedback, &gradedByPtr, &gradedAt, &sub.CreatedAt,
+		&sub.Feedback, &gradedByPtr, &gradedAt, &sub.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

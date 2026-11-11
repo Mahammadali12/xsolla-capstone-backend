@@ -54,9 +54,9 @@ type Store interface {
 	DeleteContentItem(ctx context.Context, id int64) error
 
 	// Assignment methods
-	CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) (*Assignment, error)
+	CreateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time) (*Assignment, error)
 	GetAssignmentByContentItemID(ctx context.Context, contentItemID int64) (*Assignment, error)
-	UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time, maxPoints int) (*Assignment, error)
+	UpdateAssignment(ctx context.Context, contentItemID int64, dueAt *time.Time) (*Assignment, error)
 	DeleteAssignment(ctx context.Context, contentItemID int64) error
 
 	// File methods
@@ -74,7 +74,7 @@ type Store interface {
 	GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*Submission, error)
 	GetSubmissionsByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) ([]Submission, error)
 	GetSubmissionsForAssignment(ctx context.Context, contentItemID int64) ([]Submission, error)
-	UpdateSubmissionGrade(ctx context.Context, id int64, grade *float64, feedback string, gradedBy int64) (*Submission, error)
+	UpdateSubmissionFeedback(ctx context.Context, id int64, feedback string, gradedBy int64) (*Submission, error)
 	DeleteSubmission(ctx context.Context, id int64) error
 	CreateSubmissionFile(ctx context.Context, submissionID int64, fileID int64) (sql.Result, error)
 	DeleteSubmissionFiles(ctx context.Context, submissionID int64) (sql.Result, error)
@@ -87,6 +87,7 @@ type Store interface {
 	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
 	UpdateEventGoogleID(ctx context.Context, eventID int64, googleEventID string) error
 	DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error
+	UpdateModuleGrade(ctx context.Context, id int64, grade *string, gradedBy int64) (*Module, error)
 
 	// Team methods
 	GetAllTeams(ctx context.Context) ([]Team, error)

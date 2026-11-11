@@ -15,7 +15,6 @@ type SubmissionResponse struct {
 	StudentID    int64     `json:"student_id"`
 	TextBody     string    `json:"text_body"`
 	SubmittedAt  time.Time `json:"submitted_at"`
-	Grade        *float64  `json:"grade,omitempty"`
 	Feedback     string    `json:"feedback,omitempty"`
 	GradedBy     *int64    `json:"graded_by,omitempty"`
 	GradedAt     *time.Time `json:"graded_at,omitempty"`
@@ -23,10 +22,9 @@ type SubmissionResponse struct {
 	Files        []FileResponse `json:"files,omitempty"`
 }
 
-// GradeSubmissionRequest is the payload for POST /submissions/:id/grade.
-type GradeSubmissionRequest struct {
-	Grade    float64 `json:"grade"`
-	Feedback string  `json:"feedback"`
+// FeedbackSubmissionRequest is the payload for POST /submissions/:id/feedback.
+type FeedbackSubmissionRequest struct {
+	Feedback string `json:"feedback"`
 }
 
 // SubmissionRosterEntry is a student's submission summary for the teacher roster.

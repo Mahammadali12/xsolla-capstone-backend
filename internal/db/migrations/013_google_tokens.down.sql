@@ -1,2 +1,2 @@
--- 020_google_tokens: down
+-- 013_google_tokens: down
 DROP TABLE IF EXISTS google_tokens;

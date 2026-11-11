@@ -12,7 +12,6 @@ type CreateContentItemRequest struct {
 	IsVisible   *bool    `json:"is_visible"`
 	FileID      *int64   `json:"file_id"`
 	DueAt       *time.Time `json:"due_at"`
-	MaxPoints   int      `json:"max_points"`
 	Url         *string  `json:"url,omitempty"`
 }
 
@@ -40,7 +39,6 @@ type ContentItemResponse struct {
 	ParentID    *int64      `json:"parent_id"`
 	CreatedAt   time.Time   `json:"created_at"`
 	DueAt       *time.Time  `json:"due_at,omitempty"`
-	MaxPoints   int         `json:"max_points,omitempty"`
 	Url         *string     `json:"url,omitempty"`
 	Children    []ContentItemResponse `json:"children,omitempty"`
 }
@@ -49,7 +47,6 @@ type ContentItemResponse struct {
 type AssignmentResponse struct {
 	ContentItemID int64     `json:"content_item_id"`
 	DueAt         *time.Time `json:"due_at"`
-	MaxPoints     int       `json:"max_points"`
 }
 
 // ContentTreeResponse is the tree response for GET /modules/:moduleId/content-items.
@@ -65,6 +62,5 @@ type ContentTreeNode struct {
 	FileID      *int64               `json:"file_id"`
 	Url         *string              `json:"url,omitempty"`
 	DueAt       *time.Time           `json:"due_at,omitempty"`
-	MaxPoints   int                  `json:"max_points,omitempty"`
 	Children    []*ContentTreeNode   `json:"children,omitempty"`
 }
