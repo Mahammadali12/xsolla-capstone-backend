@@ -63,45 +63,9 @@ func (s *FileService) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]
 	return s.store.GetFilesForUser(ctx, uploadedBy)
 }
 
-// CanReadFile checks the link-rule access and returns the file if readable.
+// CanReadFile returns the file if it exists. Any authenticated user can download any file.
 func (s *FileService) CanReadFile(ctx context.Context, userID int64, roles []string, fileID int64) (*store.File, error) {
-	f, err := s.store.GetFileByID(ctx, fileID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Owner or admin can always read
-	if f.UploadedBy == userID || auth.HasRole(roles, "admin") {
-		return f, nil
-	}
-
-	// Linked to a visible content item in an enrolled/teacher module
-	if ci, err := s.store.GetContentItemForFile(ctx, fileID); err == nil && ci != nil {
-		if enrolled, _ := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID); enrolled {
-			return f, nil
-		}
-		if auth.HasRole(roles, "lecturer") {
-			if teacher, _ := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID); teacher {
-				return f, nil
-			}
-		}
-	}
-
-	// Linked to a submission you own, or may grade (lecturer/admin enrolled in module)
-	if sub, err := s.store.GetSubmissionForFile(ctx, fileID); err == nil && sub != nil {
-		if sub.StudentID == userID {
-			return f, nil
-		}
-		if auth.HasRole(roles, "lecturer") || auth.HasRole(roles, "admin") {
-			if ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID); err == nil && ci != nil {
-				if teacher, _ := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID); teacher {
-					return f, nil
-				}
-			}
-		}
-	}
-
-	return nil, errors.New("forbidden")
+	return s.store.GetFileByID(ctx, fileID)
 }
 
 // DeleteFile soft-deletes a file if authorized and not referenced.
