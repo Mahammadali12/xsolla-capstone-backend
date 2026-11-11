@@ -1,0 +1,26 @@
+info:
+  name: Grade enrollment
+  type: http
+  seq: 12
+
+http:
+  method: PATCH
+  url: http://localhost:8080/modules/1/enrollments/2/grade
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "grade": "green"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

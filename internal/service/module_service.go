@@ -170,6 +170,28 @@ func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int6
 	return s.store.GetEnrollmentsForModule(ctx, moduleID)
 }
 
+// UpdateEnrollmentGrade sets a student's grade for a module (mentor/admin only).
+func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64, roles []string, moduleID int64, studentID int64, grade string) (*store.Enrollment, error) {
+	if auth.HasRole(roles, "admin") {
+		// Admin can grade any enrollment
+	} else if auth.HasRole(roles, "mentor") {
+		// Mentor can grade
+	} else {
+		return nil, store.ErrNotModuleTeacher
+	}
+
+	// Validate grade value
+	switch grade {
+	case "red", "yellow", "green":
+		// valid
+	default:
+		return nil, errors.New("grade must be one of: red, yellow, green")
+	}
+
+	gradePtr := &grade
+	return s.store.UpdateEnrollmentGrade(ctx, moduleID, studentID, gradePtr)
+}
+
 // ErrNotModuleTeacher is re-exported from the store package for handler use.
 var ErrNotModuleTeacher = store.ErrNotModuleTeacher
 

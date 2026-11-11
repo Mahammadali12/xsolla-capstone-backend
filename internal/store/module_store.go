@@ -36,6 +36,7 @@ type Enrollment struct {
 	ModuleID  int64
 	UserID    int64
 	CreatedAt time.Time
+	Grade     *string
 	Email     string
 	Name      string
 	Role      string
@@ -149,6 +150,19 @@ func (s *StoreImpl) DeleteEnrollment(ctx context.Context, moduleID int64, userID
 	return nil
 }
 
+// UpdateEnrollmentGrade sets a student's module grade (red/yellow/green).
+func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string) (*Enrollment, error) {
+	var e Enrollment
+	err := s.DB().UpdateEnrollmentGrade(ctx, moduleID, userID, grade).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotEnrolled
+		}
+		return nil, err
+	}
+	return &e, nil
+}
+
 // GetEnrollmentsForModule returns all enrollments for a module with user details.
 func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64) ([]Enrollment, error) {
 	rows, err := s.DB().GetEnrollmentsForModule(ctx, moduleID)
@@ -160,7 +174,7 @@ func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64)
 	var enrollments []Enrollment
 	for rows.Next() {
 		var e Enrollment
-		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Email, &e.Name); err != nil {
+		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.Email, &e.Name); err != nil {
 			return nil, err
 		}
 		enrollments = append(enrollments, e)

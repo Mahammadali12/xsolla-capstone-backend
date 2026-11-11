@@ -121,6 +121,7 @@ func main() {
 	mux.Handle("POST /modules/{moduleId}/enrollments", authenticator.Middleware(http.HandlerFunc(moduleH.CreateEnrollment)))
 	mux.Handle("DELETE /modules/{moduleId}/enrollments/{userId}", authenticator.Middleware(http.HandlerFunc(moduleH.DeleteEnrollment)))
 	mux.Handle("GET /modules/{moduleId}/enrollments", authenticator.Middleware(http.HandlerFunc(moduleH.ListEnrollments)))
+	mux.Handle("PATCH /modules/{moduleId}/enrollments/{userId}/grade", authenticator.Middleware(http.HandlerFunc(moduleH.GradeEnrollment)))
 
 	mux.Handle("POST /modules/{moduleId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.CreateContentItem)))
 	mux.Handle("GET /modules/{moduleId}/content-items", authenticator.Middleware(http.HandlerFunc(contentH.ListContentItems)))

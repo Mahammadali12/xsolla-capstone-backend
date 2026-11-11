@@ -23,6 +23,7 @@ type ModuleService interface {
 	CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error)
 	DeleteEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) error
 	GetEnrollmentsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.Enrollment, error)
+	UpdateEnrollmentGrade(ctx context.Context, userID int64, roles []string, moduleID int64, studentID int64, grade string) (*store.Enrollment, error)
 }
 
 type ModuleHandlers struct {
@@ -366,8 +367,65 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 			ID:        e.ID,
 			ModuleID:  e.ModuleID,
 			UserID:    e.UserID,
+			Grade:     e.Grade,
 			CreatedAt: e.CreatedAt,
 		}
 	}
 	writeJSON(w, 200, resp)
+}
+
+// @Summary     Grade enrollment
+// @Description Set a student's module grade red/yellow/green (mentor/admin only)
+// @Tags        enrollments
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       moduleId path int true "Module ID"
+// @Param       userId path int true "Student ID"
+// @Param       request body dto.GradeEnrollmentRequest true "Grade"
+// @Success     200 {object} dto.EnrollmentResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /modules/{moduleId}/enrollments/{userId}/grade [patch]
+func (h *ModuleHandlers) GradeEnrollment(w http.ResponseWriter, r *http.Request) {
+	actorID := middleware.CtxUserID(r.Context())
+	actorRoles := middleware.CtxRoles(r.Context())
+
+	moduleID, err := strconv.ParseInt(r.PathValue("moduleId"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid module ID", nil)
+		return
+	}
+	studentID, err := strconv.ParseInt(r.PathValue("userId"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid user ID", nil)
+		return
+	}
+
+	var req dto.GradeEnrollmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+
+	e, err := h.svc.UpdateEnrollmentGrade(r.Context(), actorID, actorRoles, moduleID, studentID, req.Grade)
+	if err != nil {
+		if errors.Is(err, store.ErrNotModuleTeacher) {
+			writeError(w, 403, "forbidden", "only mentors and admins can grade enrollments", nil)
+		} else if errors.Is(err, store.ErrNotEnrolled) {
+			writeError(w, 404, "not_found", "enrollment not found", nil)
+		} else {
+			writeError(w, 500, "server_error", "could not grade enrollment", nil)
+		}
+		return
+	}
+
+	writeJSON(w, 200, dto.EnrollmentResponse{
+		ID:        e.ID,
+		ModuleID:  e.ModuleID,
+		UserID:    e.UserID,
+		Grade:     e.Grade,
+		CreatedAt: e.CreatedAt,
+	})
 }

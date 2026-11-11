@@ -15,10 +15,10 @@ http:
     type: json
     data: |-
       {
-        "email": "newuser@xsolla.com",
+        "email": "newuser5@xsolla.com",
         "name": "New User",
         "password": "Secret123",
-        "roles": ["mentor"]
+        "roles": ["student"]
       }
   auth: inherit
 

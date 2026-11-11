@@ -272,11 +272,21 @@ func (q *Query) DeleteEnrollment(ctx context.Context, moduleID int64, userID int
 
 func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.module_id, e.user_id, e.created_at, u.email, u.name
+		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, u.email, u.name
 		 FROM enrollments e
 		 JOIN users u ON u.id = e.user_id
 		 WHERE e.module_id = $1`,
 		moduleID,
+	)
+}
+
+func (q *Query) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE enrollments
+		 SET grade = $3
+		 WHERE module_id = $1 AND user_id = $2
+		 RETURNING id, module_id, user_id, grade, created_at`,
+		moduleID, userID, grade,
 	)
 }
 
