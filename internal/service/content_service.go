@@ -74,6 +74,15 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 		return nil, err
 	}
 
+	// the deadline lives in the assignments table (GET reads it from there)
+	if itemType == "assignment" {
+		a, err := s.store.CreateAssignment(ctx, ci.ID, dueAt)
+		if err != nil {
+			return nil, err
+		}
+		ci.DueAt = a.DueAt
+	}
+
 	return ci, nil
 }
 

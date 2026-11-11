@@ -313,6 +313,7 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			Position:    ci.Position,
 			IsVisible:   ci.IsVisible,
 			FileID:      ci.FileID,
+			Url:         ci.Url,
 			DueAt:       ci.DueAt,
 		}
 	}

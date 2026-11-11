@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"xsolla-capstone-api/internal/dto"
@@ -19,7 +20,7 @@ type ModuleService interface {
 	CreateModule(ctx context.Context, userID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error)
 	GetModuleByID(ctx context.Context, userID int64, roles []string, moduleID int64) (*store.Module, error)
 	GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error)
-	PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error)
+	PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title *string, description string, opensAt, closesAt time.Time) (*store.Module, error)
 	DeleteModule(ctx context.Context, userID int64, roles []string, moduleID int64) error
 	CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error)
 	DeleteEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) error
@@ -61,6 +62,7 @@ func (h *ModuleHandlers) CreateModule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
+	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
 		writeError(w, 400, "bad_request", "title is required", nil)
 		return
@@ -200,6 +202,14 @@ func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
+	}
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		if trimmed == "" {
+			writeError(w, 400, "bad_request", "title is required", nil)
+			return
+		}
+		req.Title = &trimmed
 	}
 
 	m, err := h.svc.PatchModule(r.Context(), userID, roles, moduleID, req.Title, req.Description, req.OpensAt, req.ClosesAt)

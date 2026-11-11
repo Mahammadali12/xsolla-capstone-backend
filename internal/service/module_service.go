@@ -73,7 +73,7 @@ func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, rol
 }
 
 // PatchModule updates a module if the user is authorized.
-func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title string, description string, opensAt, closesAt time.Time) (*store.Module, error) {
+func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []string, moduleID int64, title *string, description string, opensAt, closesAt time.Time) (*store.Module, error) {
 	opensAt, closesAt, err := s.resolvePatchDates(ctx, moduleID, opensAt, closesAt)
 	if err != nil {
 		return nil, err

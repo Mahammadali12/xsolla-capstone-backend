@@ -12,10 +12,10 @@ type CreateModuleRequest struct {
 
 // UpdateModuleRequest is the payload for PATCH /modules/:id.
 type UpdateModuleRequest struct {
-	Title       string    `json:"title,omitempty"`
-	Description string    `json:"description,omitempty"`
-	OpensAt     time.Time `json:"opens_at"`
-	ClosesAt    time.Time `json:"closes_at"`
+	Title       *string    `json:"title,omitempty"`
+	Description string     `json:"description,omitempty"`
+	OpensAt     time.Time  `json:"opens_at"`
+	ClosesAt    time.Time  `json:"closes_at"`
 }
 
 // ModuleResponse is the module object returned in responses.

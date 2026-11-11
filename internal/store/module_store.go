@@ -87,7 +87,7 @@ func (s *StoreImpl) GetModulesForUser(ctx context.Context, userID int64, roles [
 }
 
 // PatchModule updates a module title/description if the user is authorized.
-func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) (*Module, error) {
+func (s *StoreImpl) PatchModule(ctx context.Context, id int64, title *string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) (*Module, error) {
 	var m Module
 	err := s.DB().PatchModule(ctx, id, title, description, createdBy, isAdmin, opensAt, closesAt).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
 	if err != nil {

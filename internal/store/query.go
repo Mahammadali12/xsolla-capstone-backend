@@ -222,7 +222,7 @@ func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []str
 	)
 }
 
-func (q *Query) PatchModule(ctx context.Context, id int64, title string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) *sql.Row {
+func (q *Query) PatchModule(ctx context.Context, id int64, title *string, description string, createdBy int64, isAdmin bool, opensAt, closesAt time.Time) *sql.Row {
 	if isAdmin {
 		return q.DBTX.QueryRowContext(ctx,
 			`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description), opens_at = $4, closes_at = $5
