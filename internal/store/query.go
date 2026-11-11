@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -894,6 +895,207 @@ func (q *Query) PatchTeam(ctx context.Context, id int64, name *string, mentorID 
 		 RETURNING id, name, mentor_id, created_at`,
 		id, name, mentorID,
 	)
+}
+
+// Mentor slot queries
+
+func (q *Query) CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`INSERT INTO mentor_slots (mentor_id, starts_at, ends_at)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, mentor_id, starts_at, ends_at, booked_by, created_at`,
+		mentorID, startsAt, endsAt,
+	)
+}
+
+// MentorSlotsOverlap returns the count of non-deleted slots for a mentor that overlap a given range.
+// Touching ends (15:00-15:30 and 15:30-16:00) do not overlap.
+func (q *Query) MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mentor_slots
+		 WHERE mentor_id = $1 AND deleted_at IS NULL
+		   AND starts_at < $3 AND ends_at > $2`,
+		mentorID, startsAt, endsAt,
+	)
+}
+
+// ListMentorSlots returns slots visible to the caller:
+// admin: all non-deleted slots
+// mentor: their own non-deleted slots
+// student: their team mentor's non-deleted slots
+// otherwise: none
+func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []string) (*sql.Rows, error) {
+	isAdmin := false
+	isMentor := false
+	isStudent := false
+	for _, r := range roles {
+		switch r {
+		case "admin":
+			isAdmin = true
+		case "mentor":
+			isMentor = true
+		case "student":
+			isStudent = true
+		}
+	}
+	if isAdmin {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+			 FROM mentor_slots s
+			 LEFT JOIN users m ON m.id = s.mentor_id
+			 LEFT JOIN users bu ON bu.id = s.booked_by
+			 WHERE s.deleted_at IS NULL
+			 ORDER BY s.starts_at`,
+		)
+	}
+	if isMentor {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+			 FROM mentor_slots s
+			 LEFT JOIN users m ON m.id = s.mentor_id
+			 LEFT JOIN users bu ON bu.id = s.booked_by
+			 WHERE s.deleted_at IS NULL
+			   AND s.mentor_id = $1
+			 ORDER BY s.starts_at`,
+			userID,
+		)
+	}
+	if isStudent {
+		return q.DBTX.QueryContext(ctx,
+			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+			 FROM mentor_slots s
+			 JOIN teams t ON t.id = (
+			     SELECT tm.team_id FROM team_members tm WHERE tm.student_id = $1 LIMIT 1
+			 )
+			 LEFT JOIN users m ON m.id = s.mentor_id
+			 LEFT JOIN users bu ON bu.id = s.booked_by
+			 WHERE s.deleted_at IS NULL
+			   AND s.mentor_id = t.mentor_id
+			 ORDER BY s.starts_at`,
+			userID,
+		)
+	}
+	return q.DBTX.QueryContext(ctx,
+		`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+		 FROM mentor_slots s
+		 LEFT JOIN users m ON m.id = s.mentor_id
+		 LEFT JOIN users bu ON bu.id = s.booked_by
+		 WHERE 1 = 0`,
+	)
+}
+
+func (q *Query) GetMentorSlotByID(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT id, mentor_id, starts_at, ends_at, booked_by, created_at
+		 FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+}
+
+func (q *Query) DeleteMentorSlot(ctx context.Context, userID int64, roles []string, id int64) (sql.Result, error) {
+	isAdmin := false
+	isMentor := false
+	for _, r := range roles {
+		if r == "admin" {
+			isAdmin = true
+		}
+		if r == "mentor" {
+			isMentor = true
+		}
+	}
+	if isAdmin {
+		return q.DBTX.ExecContext(ctx,
+			`UPDATE mentor_slots SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+			id,
+		)
+	}
+	if isMentor {
+		return q.DBTX.ExecContext(ctx,
+			`UPDATE mentor_slots SET deleted_at = NOW()
+			 WHERE id = $1 AND deleted_at IS NULL AND mentor_id = $2 AND booked_by IS NULL`,
+			id, userID,
+		)
+	}
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE mentor_slots SET deleted_at = NOW() WHERE 1 = 0`,
+	)
+}
+
+func (q *Query) BookMentorSlotPrecheck(ctx context.Context, studentID int64) (int, error) {
+	var existing int
+	if err := q.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mentor_slots WHERE booked_by = $1 AND starts_at > NOW() AND deleted_at IS NULL`,
+		studentID,
+	).Scan(&existing); err != nil {
+		return 0, err
+	}
+	return existing, nil
+}
+
+func (q *Query) BookMentorSlot(ctx context.Context, slotID int64, studentID int64) (*sql.Row, error) {
+	// The slot must exist, be free, and not have started.
+	var bookedBy *int64
+	var startsAt time.Time
+	if err := q.QueryRowContext(ctx,
+		`SELECT booked_by, starts_at FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
+		slotID,
+	).Scan(&bookedBy, &startsAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMentorSlotNotFound
+		}
+		return nil, err
+	}
+	if bookedBy != nil {
+		return nil, ErrSlotNotBookable
+	}
+	if !startsAt.After(time.Now()) {
+		return nil, ErrSlotNotBookable
+	}
+
+	// Claim the slot atomically.
+	return q.QueryRowContext(ctx,
+		`UPDATE mentor_slots
+		 SET booked_by = $2
+		 WHERE id = $1 AND deleted_at IS NULL AND booked_by IS NULL AND starts_at > NOW()
+		 RETURNING id, mentor_id, starts_at, ends_at, booked_by, created_at`,
+		slotID, studentID,
+	), nil
+}
+
+func (q *Query) CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*sql.Row, error) {
+	// Determine who may cancel: booking student, slot's mentor, or admin.
+	// First fetch the slot and its booking.
+	var mentorID int64
+	var bookedBy *int64
+	err := q.DBTX.QueryRowContext(ctx,
+		`SELECT mentor_id, booked_by FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
+		slotID,
+	).Scan(&mentorID, &bookedBy)
+	if err != nil {
+		return nil, err
+	}
+	if bookedBy == nil {
+		return nil, sql.ErrNoRows // not booked
+	}
+	allowed := *bookedBy == userID || mentorID == userID
+	if !allowed {
+		for _, r := range roles {
+			if r == "admin" {
+				allowed = true
+				break
+			}
+		}
+	}
+	if !allowed {
+		return nil, sql.ErrNoRows // caller translates to forbidden
+	}
+	return q.DBTX.QueryRowContext(ctx,
+		`UPDATE mentor_slots
+		 SET booked_by = NULL
+		 WHERE id = $1 AND deleted_at IS NULL AND starts_at > NOW()
+		 RETURNING id, mentor_id, starts_at, ends_at, booked_by, created_at`,
+		slotID,
+	), nil
 }
 
 // ExecContext passthrough for raw SQL execution.

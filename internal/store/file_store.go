@@ -149,6 +149,28 @@ type Event struct {
 // ErrEventNotFound is returned when an event does not exist or is deleted.
 var ErrEventNotFound = errors.New("event not found")
 
+// ErrMentorSlotNotFound is returned when a mentor slot does not exist or is deleted.
+var ErrMentorSlotNotFound = errors.New("mentor slot not found")
+
+// ErrStudentHasBooking is returned when a student already has an upcoming booking.
+var ErrStudentHasBooking = errors.New("student already has an upcoming booking")
+
+// ErrSlotNotBookable is returned when a slot is already booked or has started.
+var ErrSlotNotBookable = errors.New("slot is not bookable")
+
+// MentorSlot is a single bookable 1:1 time offered by a mentor.
+// booked_by IS NULL means the slot is free; set means it is booked by that student.
+type MentorSlot struct {
+	ID            int64
+	MentorID      int64
+	MentorName    string
+	StartsAt      time.Time
+	EndsAt        time.Time
+	BookedBy      *int64
+	BookedByName  *string
+	CreatedAt     time.Time
+}
+
 // CreateEvent inserts a new event record.
 func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
 	var e Event
@@ -254,4 +276,168 @@ func (s *StoreImpl) DeleteEvent(ctx context.Context, id int64, userID int64, isA
 		return ErrEventNotFound
 	}
 	return nil
+}
+
+// CreateMentorSlot inserts a single bookable 1:1 slot.
+func (s *StoreImpl) CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (*MentorSlot, error) {
+	var id, mentorIDCol int64
+	var starts, ends, created time.Time
+	var bookedBy *int64
+	err := s.DB().CreateMentorSlot(ctx, mentorID, startsAt, endsAt).Scan(
+		&id, &mentorIDCol, &starts, &ends, &bookedBy, &created,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &MentorSlot{
+		ID:         id,
+		MentorID:   mentorIDCol,
+		StartsAt:   starts,
+		EndsAt:     ends,
+		BookedBy:   bookedBy,
+		CreatedAt:  created,
+	}, nil
+}
+
+// MentorSlotsOverlap returns the count of non-deleted slots for a mentor that overlap a given range.
+func (s *StoreImpl) MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error) {
+	var count int
+	err := s.DB().MentorSlotsOverlap(ctx, mentorID, startsAt, endsAt).Scan(&count)
+	return count, err
+}
+
+// ListMentorSlots returns slots visible to the caller.
+func (s *StoreImpl) ListMentorSlots(ctx context.Context, userID int64, roles []string) ([]MentorSlot, error) {
+	rows, err := s.DB().ListMentorSlots(ctx, userID, roles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var slots []MentorSlot
+	for rows.Next() {
+		var slot MentorSlot
+		var bookedBy *int64
+		var bookedByName *string
+		var mentorName string
+		if err := rows.Scan(&slot.ID, &slot.MentorID, &mentorName, &slot.StartsAt, &slot.EndsAt, &bookedBy, &bookedByName, &slot.CreatedAt); err != nil {
+			return nil, err
+		}
+		slot.BookedBy = bookedBy
+		slot.BookedByName = bookedByName
+		slot.MentorName = mentorName
+		slots = append(slots, slot)
+	}
+	return slots, nil
+}
+
+// GetMentorSlotByID returns a non-deleted slot by ID.
+func (s *StoreImpl) GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlot, error) {
+	var slotID, mentorIDCol int64
+	var starts, ends, created time.Time
+	var bookedBy *int64
+	err := s.DB().GetMentorSlotByID(ctx, id).Scan(
+		&slotID, &mentorIDCol, &starts, &ends, &bookedBy, &created,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMentorSlotNotFound
+		}
+		return nil, err
+	}
+	return &MentorSlot{
+		ID:        slotID,
+		MentorID:  mentorIDCol,
+		StartsAt:  starts,
+		EndsAt:    ends,
+		BookedBy:  bookedBy,
+		CreatedAt: created,
+	}, nil
+}
+
+// DeleteMentorSlot soft-deletes a slot if the caller is authorized and it is free.
+func (s *StoreImpl) DeleteMentorSlot(ctx context.Context, userID int64, roles []string, id int64) error {
+	result, err := s.DB().DeleteMentorSlot(ctx, userID, roles, id)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return ErrMentorSlotNotFound
+	}
+	return nil
+}
+
+// BookMentorSlot atomically books a free, not-yet-started slot for a student.
+func (s *StoreImpl) BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
+	// Serialize concurrent bookings by the same student.
+	if err := q.QueryRowContext(ctx, `SELECT id FROM users WHERE id = $1 FOR UPDATE`, studentID).Scan(&studentID); err != nil {
+		return nil, err
+	}
+
+	// Student may have at most one upcoming booking.
+	existing, err := q.BookMentorSlotPrecheck(ctx, studentID)
+	if err != nil {
+		return nil, err
+	}
+	if existing > 0 {
+		return nil, ErrStudentHasBooking
+	}
+
+	// Claim the slot atomically within the transaction.
+	row, err := q.BookMentorSlot(ctx, slotID, studentID)
+	if err != nil {
+		return nil, err
+	}
+
+	var id, mentorIDCol int64
+	var starts, ends, created time.Time
+	var bookedBy *int64
+	if err := row.Scan(&id, &mentorIDCol, &starts, &ends, &bookedBy, &created); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &MentorSlot{
+		ID:        id,
+		MentorID:  mentorIDCol,
+		StartsAt:  starts,
+		EndsAt:    ends,
+		BookedBy:  bookedBy,
+		CreatedAt: created,
+	}, nil
+}
+
+// CancelMentorSlotBooking clears a booking if the caller is authorized and the slot hasn't started.
+func (s *StoreImpl) CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error) {
+	row, err := s.DB().CancelMentorSlotBooking(ctx, userID, roles, slotID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMentorSlotNotFound
+		}
+		return nil, err
+	}
+	var id, mentorIDCol int64
+	var starts, ends, created time.Time
+	var bookedBy *int64
+	if err := row.Scan(&id, &mentorIDCol, &starts, &ends, &bookedBy, &created); err != nil {
+		return nil, err
+	}
+	return &MentorSlot{
+		ID:        id,
+		MentorID:  mentorIDCol,
+		StartsAt:  starts,
+		EndsAt:    ends,
+		BookedBy:  bookedBy,
+		CreatedAt: created,
+	}, nil
 }

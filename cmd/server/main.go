@@ -56,6 +56,7 @@ func main() {
 	eventSvc := service.NewEventServiceWithGoogle(store, authSvc)
 	userSvc := service.NewUserService(store)
 	teamSvc := service.NewTeamService(store)
+	mentorSlotSvc := service.NewMentorSlotService(store)
 
 	// S3 object storage
 	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)
@@ -78,6 +79,7 @@ func main() {
 	eventH := handlers.NewEventHandlers(eventSvc)
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
+	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -142,6 +144,13 @@ func main() {
 	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))
 	mux.Handle("PATCH /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.UpdateEvent)))
 	mux.Handle("DELETE /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.DeleteEvent)))
+
+	// Mentor 1:1 slots
+	mux.Handle("GET /mentor-slots", authenticator.Middleware(http.HandlerFunc(mentorSlotH.ListSlots)))
+	mux.Handle("POST /mentor-slots", authenticator.Middleware(http.HandlerFunc(mentorSlotH.CreateAvailability)))
+	mux.Handle("DELETE /mentor-slots/{id}", authenticator.Middleware(http.HandlerFunc(mentorSlotH.RemoveSlot)))
+	mux.Handle("POST /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.BookSlot)))
+	mux.Handle("DELETE /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.CancelBooking)))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
 	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))

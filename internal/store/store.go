@@ -112,6 +112,15 @@ type Store interface {
 	// Google OAuth token storage
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
+
+	// Mentor slot methods
+	CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (*MentorSlot, error)
+	ListMentorSlots(ctx context.Context, userID int64, roles []string) ([]MentorSlot, error)
+	GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlot, error)
+	DeleteMentorSlot(ctx context.Context, userID int64, roles []string, id int64) error
+	BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error)
+	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
+	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)
 }
 
 // Store wraps the database connection and provides access to queries.
