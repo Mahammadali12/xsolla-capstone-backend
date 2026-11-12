@@ -3,9 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
+	"xsolla-capstone-api/internal/service/google"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -32,6 +35,7 @@ type MentorSlot struct {
 	Booked       bool
 	BookedBy     *int64
 	BookedByName *string
+	Attendees    []Attendee
 	CreatedAt    time.Time
 }
 
@@ -51,11 +55,17 @@ func mentorSlotFromStore(s store.MentorSlot) *MentorSlot {
 
 // MentorSlotService coordinates mentor slot operations.
 type MentorSlotService struct {
-	store store.Store
+	store     store.Store
+	googleSvc google.Service
 }
 
 func NewMentorSlotService(s store.Store) *MentorSlotService {
 	return &MentorSlotService{store: s}
+}
+
+// NewMentorSlotServiceWithGoogle adds Google Calendar invitations for bookings.
+func NewMentorSlotServiceWithGoogle(s store.Store, g google.Service) *MentorSlotService {
+	return &MentorSlotService{store: s, googleSvc: g}
 }
 
 // ListSlots returns slots visible to the caller.
@@ -66,19 +76,56 @@ func (s *MentorSlotService) ListSlots(ctx context.Context, userID int64, roles [
 		return nil, err
 	}
 	slots := make([]MentorSlot, len(storeSlots))
-	isStudent := auth.HasRole(roles, "student")
 	for i, slot := range storeSlots {
-		booked := slot.BookedBy != nil // capture before privacy filter
-		// Students never see another student's booking identity, but the slot stays "booked".
-		if isStudent && slot.BookedBy != nil && *slot.BookedBy != userID {
-			slot.BookedBy = nil
-			slot.BookedByName = nil
+		slots[i] = *mentorSlotFromStore(slot)
+	}
+	if err := s.attachAttendees(ctx, slots, userID, roles); err != nil {
+		return nil, err
+	}
+	// Students never see another student's booking identity, but the slot stays "booked".
+	if auth.HasRole(roles, "student") {
+		for i := range slots {
+			if slots[i].BookedBy != nil && *slots[i].BookedBy != userID {
+				slots[i].BookedBy = nil
+				slots[i].BookedByName = nil
+			}
 		}
-		ms := mentorSlotFromStore(slot)
-		ms.Booked = booked
-		slots[i] = *ms
 	}
 	return slots, nil
+}
+
+// attachAttendees fills every slot's attendee list with one user lookup.
+func (s *MentorSlotService) attachAttendees(ctx context.Context, slots []MentorSlot, viewerID int64, roles []string) error {
+	ids := make([]int64, 0, len(slots)*2)
+	for _, slot := range slots {
+		ids = append(ids, slot.MentorID)
+		if slot.BookedBy != nil {
+			ids = append(ids, *slot.BookedBy)
+		}
+	}
+	briefs, err := s.store.GetActiveUsersByIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	byID := make(map[int64]Attendee, len(briefs))
+	for _, b := range briefs {
+		byID[b.ID] = Attendee{ID: b.ID, Name: b.Name, Email: b.Email}
+	}
+	for i := range slots {
+		mentor, ok := byID[slots[i].MentorID]
+		if !ok {
+			// Fall back to the slot's joined name if the mentor is inactive.
+			mentor = Attendee{ID: slots[i].MentorID, Name: slots[i].MentorName}
+		}
+		var student *Attendee
+		if slots[i].BookedBy != nil {
+			if a, ok := byID[*slots[i].BookedBy]; ok {
+				student = &a
+			}
+		}
+		slots[i].Attendees = slotAttendees(mentor, student, viewerID, roles)
+	}
+	return nil
 }
 
 // CreateAvailability cuts a time window into 30-minute slots for the caller (mentor or admin).
@@ -112,6 +159,9 @@ func (s *MentorSlotService) CreateAvailability(ctx context.Context, userID int64
 		}
 		slots = append(slots, *mentorSlotFromStore(*slot))
 		t = slotEnd
+	}
+	if err := s.attachAttendees(ctx, slots, userID, roles); err != nil {
+		return nil, err
 	}
 	return slots, nil
 }
@@ -157,14 +207,94 @@ func (s *MentorSlotService) BookSlot(ctx context.Context, userID int64, roles []
 	if err != nil {
 		return nil, err
 	}
-	return mentorSlotFromStore(*slot), nil
+	if s.googleSvc != nil {
+		if err := s.createBookingCalendarEvent(ctx, *slot); err != nil {
+			// Non-fatal: the booking still stands in the LMS.
+			log.Printf("mentor slot service: Google Calendar sync failed for slot %d: %v", slot.ID, err)
+		}
+	}
+	slots := []MentorSlot{*mentorSlotFromStore(*slot)}
+	if err := s.attachAttendees(ctx, slots, userID, roles); err != nil {
+		return nil, err
+	}
+	return &slots[0], nil
 }
 
 // CancelBooking clears a booking if the caller is authorized and the slot hasn't started.
 func (s *MentorSlotService) CancelBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error) {
+	// Read the Google event id before the cancel clears it.
+	existing, err := s.store.GetMentorSlotByID(ctx, slotID)
+	if err != nil {
+		return nil, err
+	}
 	slot, err := s.store.CancelMentorSlotBooking(ctx, userID, roles, slotID)
 	if err != nil {
 		return nil, err
 	}
-	return mentorSlotFromStore(*slot), nil
+	if s.googleSvc != nil && existing.GoogleEventID != nil && *existing.GoogleEventID != "" {
+		if err := s.deleteBookingCalendarEvent(ctx, existing.MentorID, *existing.GoogleEventID); err != nil {
+			// Non-fatal: the booking is already cancelled in the LMS.
+			log.Printf("mentor slot service: Google Calendar delete failed for slot %d: %v", slotID, err)
+		}
+	}
+	slots := []MentorSlot{*mentorSlotFromStore(*slot)}
+	if err := s.attachAttendees(ctx, slots, userID, roles); err != nil {
+		return nil, err
+	}
+	return &slots[0], nil
+}
+
+// createBookingCalendarEvent puts the booking on the mentor's calendar and invites the student.
+func (s *MentorSlotService) createBookingCalendarEvent(ctx context.Context, slot store.MentorSlot) error {
+	if slot.BookedBy == nil {
+		return nil
+	}
+	briefs, err := s.store.GetActiveUsersByIDs(ctx, []int64{slot.MentorID, *slot.BookedBy})
+	if err != nil {
+		return err
+	}
+	var mentorName, studentName, studentEmail string
+	for _, b := range briefs {
+		switch b.ID {
+		case slot.MentorID:
+			mentorName = b.Name
+		case *slot.BookedBy:
+			studentName = b.Name
+			studentEmail = b.Email
+		}
+	}
+	if studentEmail == "" {
+		return errors.New("booked student has no email")
+	}
+
+	accessToken, err := s.googleSvc.GetValidAccessToken(ctx, slot.MentorID)
+	if err != nil {
+		return err
+	}
+	client := google.NewClient(slot.MentorID, s.googleSvc, accessToken)
+
+	created, err := client.CreateCalendarEvent(ctx, google.CalendarEvent{
+		Summary:     fmt.Sprintf("1:1: %s & %s", mentorName, studentName),
+		Description: "Booked through Xsolla LMS",
+		Start:       google.EventTime{DateTime: slot.StartsAt.Format(time.RFC3339), TimeZone: "UTC"},
+		End:         google.EventTime{DateTime: slot.EndsAt.Format(time.RFC3339), TimeZone: "UTC"},
+		Attendees:   []google.Attendee{{Email: studentEmail}},
+	})
+	if err != nil {
+		return err
+	}
+	if created.ID == "" {
+		return nil
+	}
+	return s.store.UpdateMentorSlotGoogleID(ctx, slot.ID, created.ID)
+}
+
+// deleteBookingCalendarEvent removes the booking from the mentor's calendar.
+func (s *MentorSlotService) deleteBookingCalendarEvent(ctx context.Context, mentorID int64, googleEventID string) error {
+	accessToken, err := s.googleSvc.GetValidAccessToken(ctx, mentorID)
+	if err != nil {
+		return err
+	}
+	client := google.NewClient(mentorID, s.googleSvc, accessToken)
+	return client.DeleteCalendarEvent(ctx, googleEventID)
 }

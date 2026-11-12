@@ -13,7 +13,7 @@ import (
 
 // EventService coordinates event operations.
 type EventService struct {
-	store   store.Store
+	store     store.Store
 	googleSvc google.Service
 }
 
@@ -54,6 +54,7 @@ type Event struct {
 	Description   *string
 	ModuleID      *int64
 	GoogleEventID *string
+	Attendees     []Attendee
 	CreatedAt     time.Time
 }
 
@@ -83,10 +84,41 @@ func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.T
 		return nil, err
 	}
 	events := make([]Event, len(storeEvents))
+	attendeeCache := make(map[int64][]Attendee)
 	for i, e := range storeEvents {
-		events[i] = eventFromStore(e)
+		ev := eventFromStore(e)
+		if e.ModuleID != nil {
+			attendees, ok := attendeeCache[*e.ModuleID]
+			if !ok {
+				var err error
+				attendees, err = s.attendeesForModule(ctx, *e.ModuleID)
+				if err != nil {
+					return nil, err
+				}
+				attendeeCache[*e.ModuleID] = attendees
+			}
+			ev.Attendees = attendees
+		}
+		events[i] = ev
 	}
 	return events, nil
+}
+
+// attendeesForModule returns the module creator plus every enrolled user.
+func (s *EventService) attendeesForModule(ctx context.Context, moduleID int64) ([]Attendee, error) {
+	m, err := s.store.GetModuleByID(ctx, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	creator, err := s.store.GetUserByID(ctx, m.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	enrollments, err := s.store.GetEnrollmentsForModule(ctx, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	return moduleAttendees(Attendee{ID: creator.ID, Name: creator.Name, Email: creator.Email}, enrollments), nil
 }
 
 // GetEventByID returns an event by ID with authorization check.
@@ -96,11 +128,7 @@ func (s *EventService) GetEventByID(ctx context.Context, userID int64, roles []s
 		return nil, err
 	}
 
-	if auth.HasRole(roles, "admin") {
-		return eventFromStorePtr(e), nil
-	}
-
-	if e.ModuleID != nil {
+	if !auth.HasRole(roles, "admin") && e.ModuleID != nil {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, *e.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -110,7 +138,15 @@ func (s *EventService) GetEventByID(ctx context.Context, userID int64, roles []s
 		}
 	}
 
-	return eventFromStorePtr(e), nil
+	ev := eventFromStorePtr(e)
+	if e.ModuleID != nil {
+		attendees, err := s.attendeesForModule(ctx, *e.ModuleID)
+		if err != nil {
+			return nil, err
+		}
+		ev.Attendees = attendees
+	}
+	return ev, nil
 }
 
 func eventFromStorePtr(e *store.Event) *Event {
@@ -169,6 +205,14 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []st
 	}
 	ev := eventFromStore(*storeEvent)
 
+	if ev.ModuleID != nil {
+		attendees, err := s.attendeesForModule(ctx, *ev.ModuleID)
+		if err != nil {
+			return nil, err
+		}
+		ev.Attendees = attendees
+	}
+
 	// Push to Google Calendar if requested
 	if syncToGoogle && s.googleSvc != nil {
 		if err := s.pushEventToGoogle(ctx, userID, ev); err != nil {
@@ -203,6 +247,7 @@ func (s *EventService) pushEventToGoogle(ctx context.Context, userID int64, ev E
 			DateTime: ev.EndsAt.Format(time.RFC3339),
 			TimeZone: "UTC",
 		},
+		Attendees: googleAttendees(ev.Attendees),
 	}
 
 	created, err := client.CreateCalendarEvent(ctx, googleEvent)
@@ -243,6 +288,7 @@ func (s *EventService) patchEventToGoogle(ctx context.Context, userID int64, eve
 			DateTime: ev.EndsAt.Format(time.RFC3339),
 			TimeZone: "UTC",
 		},
+		Attendees: googleAttendees(ev.Attendees),
 	}
 
 	_, err = client.UpdateCalendarEvent(ctx, eventID, googleEvent)
@@ -307,6 +353,14 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, roles []st
 		return nil, err
 	}
 	ev := eventFromStore(*storeEvent)
+
+	if ev.ModuleID != nil {
+		attendees, err := s.attendeesForModule(ctx, *ev.ModuleID)
+		if err != nil {
+			return nil, err
+		}
+		ev.Attendees = attendees
+	}
 
 	// Push update to Google Calendar if the event was previously synced
 	if ev.GoogleEventID != nil && *ev.GoogleEventID != "" && s.googleSvc != nil {

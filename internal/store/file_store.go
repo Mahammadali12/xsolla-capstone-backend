@@ -31,8 +31,8 @@ type ContentItemRef struct {
 
 // SubmissionRef links a file to its submission.
 type SubmissionRef struct {
-	ID           int64
-	StudentID    int64
+	ID            int64
+	StudentID     int64
 	ContentItemID int64
 }
 
@@ -168,6 +168,7 @@ type MentorSlot struct {
 	EndsAt        time.Time
 	BookedBy      *int64
 	BookedByName  *string
+	GoogleEventID *string
 	CreatedAt     time.Time
 }
 
@@ -290,12 +291,12 @@ func (s *StoreImpl) CreateMentorSlot(ctx context.Context, mentorID int64, starts
 		return nil, err
 	}
 	return &MentorSlot{
-		ID:         id,
-		MentorID:   mentorIDCol,
-		StartsAt:   starts,
-		EndsAt:     ends,
-		BookedBy:   bookedBy,
-		CreatedAt:  created,
+		ID:        id,
+		MentorID:  mentorIDCol,
+		StartsAt:  starts,
+		EndsAt:    ends,
+		BookedBy:  bookedBy,
+		CreatedAt: created,
 	}, nil
 }
 
@@ -336,8 +337,9 @@ func (s *StoreImpl) GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlo
 	var slotID, mentorIDCol int64
 	var starts, ends, created time.Time
 	var bookedBy *int64
+	var googleEventID *string
 	err := s.DB().GetMentorSlotByID(ctx, id).Scan(
-		&slotID, &mentorIDCol, &starts, &ends, &bookedBy, &created,
+		&slotID, &mentorIDCol, &starts, &ends, &bookedBy, &googleEventID, &created,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -346,13 +348,20 @@ func (s *StoreImpl) GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlo
 		return nil, err
 	}
 	return &MentorSlot{
-		ID:        slotID,
-		MentorID:  mentorIDCol,
-		StartsAt:  starts,
-		EndsAt:    ends,
-		BookedBy:  bookedBy,
-		CreatedAt: created,
+		ID:            slotID,
+		MentorID:      mentorIDCol,
+		StartsAt:      starts,
+		EndsAt:        ends,
+		BookedBy:      bookedBy,
+		GoogleEventID: googleEventID,
+		CreatedAt:     created,
 	}, nil
+}
+
+// UpdateMentorSlotGoogleID stores the Google Calendar event linked to a booking.
+func (s *StoreImpl) UpdateMentorSlotGoogleID(ctx context.Context, slotID int64, googleEventID string) error {
+	_, err := s.DB().UpdateMentorSlotGoogleID(ctx, slotID, googleEventID)
+	return err
 }
 
 // DeleteMentorSlot soft-deletes a slot if the caller is authorized and it is free.

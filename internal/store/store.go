@@ -117,6 +117,7 @@ type Store interface {
 	CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (*MentorSlot, error)
 	ListMentorSlots(ctx context.Context, userID int64, roles []string) ([]MentorSlot, error)
 	GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlot, error)
+	UpdateMentorSlotGoogleID(ctx context.Context, slotID int64, googleEventID string) error
 	DeleteMentorSlot(ctx context.Context, userID int64, roles []string, id int64) error
 	BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error)
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)

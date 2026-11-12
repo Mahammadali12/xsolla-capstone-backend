@@ -69,7 +69,7 @@ func (h *ContentHandlers) ListContentItems(w http.ResponseWriter, r *http.Reques
 }
 
 // @Summary     Create content item
-// @Description Create a file or assignment (teacher or admin only)
+// @Description Create a file, assignment or link (lecturer or admin only)
 // @Tags        content-items
 // @Accept      json
 // @Produce     json
@@ -204,7 +204,7 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 }
 
 // @Summary     Update content item
-// @Description Update content item fields (teacher or admin only)
+// @Description Update content item fields (lecturer or admin only)
 // @Tags        content-items
 // @Accept      json
 // @Produce     json
@@ -266,7 +266,7 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 }
 
 // @Summary     Delete content item
-// @Description Soft-delete a content item (teacher or admin only)
+// @Description Soft-delete a content item (lecturer or admin only)
 // @Tags        content-items
 // @Security    BearerAuth
 // @Param       id path int true "Content item ID"

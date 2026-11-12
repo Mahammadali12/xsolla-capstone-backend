@@ -54,7 +54,6 @@ func (q *Query) GetUserCount(ctx context.Context) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`)
 }
 
-
 func (q *Query) InsertRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (sql.Result, error) {
 	return q.DBTX.ExecContext(ctx,
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
@@ -201,14 +200,15 @@ func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 }
 
 func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []string) (*sql.Rows, error) {
-	isAdmin := false
+	// Admins and lecturers see every module; students and mentors are filtered below.
+	seesAll := false
 	for _, r := range roles {
-		if r == "admin" {
-			isAdmin = true
+		if r == "admin" || r == "lecturer" {
+			seesAll = true
 			break
 		}
 	}
-	if isAdmin {
+	if seesAll {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at, m.opens_at, m.closes_at
 			 FROM modules m WHERE m.deleted_at IS NULL`,
@@ -986,9 +986,17 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 
 func (q *Query) GetMentorSlotByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, mentor_id, starts_at, ends_at, booked_by, created_at
+		`SELECT id, mentor_id, starts_at, ends_at, booked_by, google_event_id, created_at
 		 FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
 		id,
+	)
+}
+
+// UpdateMentorSlotGoogleID links a slot booking to its Google Calendar event.
+func (q *Query) UpdateMentorSlotGoogleID(ctx context.Context, slotID int64, googleEventID string) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE mentor_slots SET google_event_id = $2 WHERE id = $1 AND deleted_at IS NULL`,
+		slotID, googleEventID,
 	)
 }
 
@@ -1091,7 +1099,7 @@ func (q *Query) CancelMentorSlotBooking(ctx context.Context, userID int64, roles
 	}
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE mentor_slots
-		 SET booked_by = NULL
+		 SET booked_by = NULL, google_event_id = NULL
 		 WHERE id = $1 AND deleted_at IS NULL AND starts_at > NOW()
 		 RETURNING id, mentor_id, starts_at, ends_at, booked_by, created_at`,
 		slotID,
@@ -1112,4 +1120,3 @@ func (q *Query) QueryContext(ctx context.Context, query string, args ...any) (*s
 func (q *Query) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx, query, args...)
 }
-

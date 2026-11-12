@@ -40,18 +40,7 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 		return nil, ErrUnsupportedContentType
 	}
 
-	// Teacher must be enrolled in/teach the module
-	if auth.HasRole(roles, "lecturer") {
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if !teacher {
-			return nil, store.ErrNotModuleTeacher
-		}
-	}
-
-	// If parent_id is set, validate it belongs to the same module and is a section (not supported anymore — sections removed)
+	// If parent_id is set, reject it: sections have been removed and every item is a root item.
 	if parentID != nil {
 		return nil, errors.New("parent_id is not supported; sections have been removed")
 	}
@@ -97,8 +86,8 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 		return ci, nil
 	}
 
-	if auth.HasRole(roles, "mentor") {
-		// Mentors can view any content item without being enrolled
+	if auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer") {
+		// Mentors and lecturers can view any content item without being enrolled
 		if !ci.IsVisible {
 			return nil, store.ErrNotEnrolled
 		}
@@ -127,8 +116,8 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 		return s.store.GetContentItemsForModule(ctx, moduleID, false)
 	}
 
-	if auth.HasRole(roles, "mentor") {
-		// Mentors can view content items in any module without being enrolled
+	if auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer") {
+		// Mentors and lecturers can view content items in any module without being enrolled
 		return s.store.GetContentItemsForModule(ctx, moduleID, true)
 	}
 
@@ -159,7 +148,7 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 		return nil, err
 	}
 
-	if !auth.HasRole(roles, "admin") {
+	if !auth.HasRole(roles, "admin") && !auth.HasRole(roles, "lecturer") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -185,7 +174,7 @@ func (s *ContentService) DeleteContentItem(ctx context.Context, userID int64, ro
 		return err
 	}
 
-	if !auth.HasRole(roles, "admin") {
+	if !auth.HasRole(roles, "admin") && !auth.HasRole(roles, "lecturer") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return err
@@ -205,7 +194,7 @@ func (s *ContentService) GetAssignmentByContentItemID(ctx context.Context, userI
 		return nil, err
 	}
 
-	if !auth.HasRole(roles, "admin") {
+	if !auth.HasRole(roles, "admin") && !auth.HasRole(roles, "lecturer") {
 		enrolled, err := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID)
 		if err != nil {
 			return nil, err

@@ -29,8 +29,8 @@ import (
 	"xsolla-capstone-api/internal/storage"
 	"xsolla-capstone-api/internal/store"
 
-	"github.com/swaggo/http-swagger"
 	_ "github.com/swaggo/files"
+	"github.com/swaggo/http-swagger"
 	_ "xsolla-capstone-api/docs"
 )
 
@@ -56,7 +56,7 @@ func main() {
 	eventSvc := service.NewEventServiceWithGoogle(store, authSvc)
 	userSvc := service.NewUserService(store)
 	teamSvc := service.NewTeamService(store)
-	mentorSlotSvc := service.NewMentorSlotService(store)
+	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
 
 	// S3 object storage
 	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)

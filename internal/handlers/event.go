@@ -33,6 +33,28 @@ func NewEventHandlers(svc EventService) *EventHandlers {
 	return &EventHandlers{svc: svc}
 }
 
+// eventResponse converts a service event to its DTO, including attendees.
+func eventResponse(e service.Event) dto.EventResponse {
+	attendees := make([]dto.Attendee, len(e.Attendees))
+	for i, a := range e.Attendees {
+		attendees[i] = dto.Attendee{ID: a.ID, Name: a.Name, Email: a.Email}
+	}
+	return dto.EventResponse{
+		ID:            e.ID,
+		Title:         e.Title,
+		Kind:          e.Kind,
+		StartsAt:      e.StartsAt,
+		EndsAt:        e.EndsAt,
+		AllDay:        e.AllDay,
+		Location:      e.Location,
+		Description:   e.Description,
+		ModuleID:      e.ModuleID,
+		GoogleEventID: e.GoogleEventID,
+		Attendees:     attendees,
+		CreatedAt:     e.CreatedAt,
+	}
+}
+
 // GET /events?from=&to=
 func (h *EventHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
@@ -71,19 +93,7 @@ func (h *EventHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]dto.EventResponse, len(events))
 	for i, e := range events {
-		resp[i] = dto.EventResponse{
-			ID:            e.ID,
-			Title:         e.Title,
-			Kind:          e.Kind,
-			StartsAt:      e.StartsAt,
-			EndsAt:        e.EndsAt,
-			AllDay:        e.AllDay,
-			Location:      e.Location,
-			Description:   e.Description,
-			ModuleID:      e.ModuleID,
-			GoogleEventID: e.GoogleEventID,
-			CreatedAt:     e.CreatedAt,
-		}
+		resp[i] = eventResponse(e)
 	}
 	writeJSON(w, 200, resp)
 }
@@ -155,19 +165,7 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 201, dto.EventResponse{
-		ID:            e.ID,
-		Title:         e.Title,
-		Kind:          e.Kind,
-		StartsAt:      e.StartsAt,
-		EndsAt:        e.EndsAt,
-		AllDay:        e.AllDay,
-		Location:      e.Location,
-		Description:   e.Description,
-		ModuleID:      e.ModuleID,
-		GoogleEventID: e.GoogleEventID,
-		CreatedAt:     e.CreatedAt,
-	})
+	writeJSON(w, 201, eventResponse(*e))
 }
 
 // PATCH /events/:id
@@ -274,19 +272,7 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 200, dto.EventResponse{
-		ID:            e.ID,
-		Title:         e.Title,
-		Kind:          e.Kind,
-		StartsAt:      e.StartsAt,
-		EndsAt:        e.EndsAt,
-		AllDay:        e.AllDay,
-		Location:      e.Location,
-		Description:   e.Description,
-		ModuleID:      e.ModuleID,
-		GoogleEventID: e.GoogleEventID,
-		CreatedAt:     e.CreatedAt,
-	})
+	writeJSON(w, 200, eventResponse(*e))
 }
 
 // DELETE /events/:id
