@@ -19,7 +19,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/xsolla-capstone-api
+          images: ${{ vars.DOCKERHUB_USERNAME }}/xsolla-capstone-api
           tags: |
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
