@@ -3,18 +3,44 @@ services:
     image: postgres:16-alpine
     container_name: lms-db
     environment:
-      POSTGRES_USER: maqa
-      POSTGRES_PASSWORD: maqa
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms
       POSTGRES_DB: lms
     ports:
       - "5432:5432"
     volumes:
       - lms_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U maqa -d lms"]
+      test: ["CMD-SHELL", "pg_isready -U lms -d lms"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+
+  api:
+    build: .
+    container_name: lms-api
+    restart: unless-stopped
+    # the app exits on its own if Postgres is not ready, so wait for the healthcheck
+    depends_on:
+      db:
+        condition: service_healthy
+    # S3 and Google credentials come from .env; Compose needs that file to exist.
+    env_file: .env
+    environment:
+      # the container reaches Postgres by service name, not by 127.0.0.1
+      DATABASE_URL: host=db port=5432 user=lms password=lms dbname=lms sslmode=disable
+      PORT: ":8080"
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # any answer, even 401, means the HTTP server is up
+      test: ["CMD-SHELL", "wget -qS -O /dev/null http://localhost:8080/mentor-slots 2>&1 | grep -q 'HTTP/'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 volumes:
   lms_db_data:
