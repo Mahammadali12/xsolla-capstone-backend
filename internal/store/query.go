@@ -698,61 +698,22 @@ func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
-func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) (*sql.Rows, error) {
-	isAdmin := false
-	isLecturer := false
-	for _, r := range roles {
-		if r == "admin" {
-			isAdmin = true
-		}
-		if r == "lecturer" {
-			isLecturer = true
-		}
-	}
-	if isAdmin {
-		return q.DBTX.QueryContext(ctx,
-			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at
-			 FROM events e
-			 WHERE e.deleted_at IS NULL
-			   AND e.starts_at <= $2
-			   AND e.ends_at >= $1
-			 ORDER BY e.starts_at`,
-			from, to,
-		)
-	}
-	// Lecturer: events for modules they teach
-	if isLecturer {
-		return q.DBTX.QueryContext(ctx,
-			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at
-			 FROM events e
-			 LEFT JOIN modules m ON m.id = e.module_id
-			 WHERE e.deleted_at IS NULL
-			   AND e.starts_at <= $3
-			   AND e.ends_at >= $2
-			   AND (m.id IS NULL OR m.deleted_at IS NULL)
-			   AND (m.id IS NULL OR m.id IN (
-			     SELECT m.id FROM modules m WHERE m.created_by = $1 AND m.deleted_at IS NULL
-			   ))
-			 ORDER BY e.starts_at`,
-			userID, from, to,
-		)
-	}
-	// Student: only events from modules in modules they're enrolled in
+// ListEventsByRange returns every non-deleted event overlapping [from, to].
+// The route authenticates the caller; event visibility is intentionally not
+// filtered by role. Soft-deleted events and events of soft-deleted modules
+// stay hidden (data integrity, not authorization).
+func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
 		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at
 		 FROM events e
-		 LEFT JOIN modules m ON m.id = e.module_id
 		 WHERE e.deleted_at IS NULL
-		   AND e.starts_at <= $3
-		   AND e.ends_at >= $2
-		   AND (m.id IS NULL OR m.deleted_at IS NULL)
-		   AND (m.id IS NULL OR m.id IN (
-		     SELECT m.id FROM modules m
-		     JOIN enrollments en ON en.module_id = m.id
-		     WHERE m.deleted_at IS NULL AND en.user_id = $1
+		   AND e.starts_at <= $2
+		   AND e.ends_at >= $1
+		   AND (e.module_id IS NULL OR EXISTS (
+		     SELECT 1 FROM modules m WHERE m.id = e.module_id AND m.deleted_at IS NULL
 		   ))
 		 ORDER BY e.starts_at`,
-		userID, from, to,
+		from, to,
 	)
 }
 

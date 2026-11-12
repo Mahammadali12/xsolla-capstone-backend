@@ -17,7 +17,7 @@ import (
 
 // EventService is the interface that event handlers depend on.
 type EventService interface {
-	ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]service.Event, error)
+	ListEvents(ctx context.Context, from time.Time, to time.Time) ([]service.Event, error)
 	GetEventByID(ctx context.Context, userID int64, roles []string, id int64) (*service.Event, error)
 	CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, syncToGoogle bool) (*service.Event, error)
 	UpdateEvent(ctx context.Context, userID int64, roles []string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*service.Event, error)
@@ -58,9 +58,6 @@ func eventResponse(e service.Event) dto.EventResponse {
 
 // GET /events?from=&to=
 func (h *EventHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.CtxUserID(r.Context())
-	roles := middleware.CtxRoles(r.Context())
-
 	fromStr := r.URL.Query().Get("from")
 	toStr := r.URL.Query().Get("to")
 
@@ -85,7 +82,7 @@ func (h *EventHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		to = time.Now().AddDate(0, 2, 0)
 	}
 
-	events, err := h.svc.ListEvents(r.Context(), from, to, userID, roles)
+	events, err := h.svc.ListEvents(r.Context(), from, to)
 	if err != nil {
 		log.Printf("event handler: ListEvents error: %v", err)
 		writeError(w, 500, "server_error", "could not list events", nil)

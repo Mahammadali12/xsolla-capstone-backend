@@ -92,12 +92,10 @@ func eventFromStore(e store.Event) Event {
 	}
 }
 
-// ListEvents returns events in the given date range.
-// Students see only events from modules in courses they're enrolled in.
-// Lecturers see events for modules they create.
-// Admins see all events.
-func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error) {
-	storeEvents, err := s.store.ListEventsByRange(ctx, from, to, userID, roles)
+// ListEvents returns every non-deleted event in the given date range for any
+// signed-in user: the read side deliberately applies no role or enrollment rules.
+func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.Time) ([]Event, error) {
+	storeEvents, err := s.store.ListEventsByRange(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +109,14 @@ func (s *EventService) ListEvents(ctx context.Context, from time.Time, to time.T
 				var err error
 				attendees, err = s.attendeesForModule(ctx, *e.ModuleID)
 				if err != nil {
-					return nil, err
+					// A module can be soft-deleted between the event query and this
+					// lookup; that must not fail the whole calendar.
+					if errors.Is(err, store.ErrModuleNotFound) {
+						log.Printf("event service: module %d is gone, leaving attendees empty: %v", *e.ModuleID, err)
+						attendees = nil
+					} else {
+						return nil, err
+					}
 				}
 				attendeeCache[*e.ModuleID] = attendees
 			}

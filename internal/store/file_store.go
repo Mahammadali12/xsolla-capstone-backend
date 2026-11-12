@@ -220,9 +220,10 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 	return &e, nil
 }
 
-// ListEventsByRange returns events in the given date range, filtered by user access.
-func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error) {
-	rows, err := s.DB().ListEventsByRange(ctx, from, to, userID, roles)
+// ListEventsByRange returns every non-deleted event in the given date range,
+// whatever the caller's role (the route already authenticated them).
+func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to time.Time) ([]Event, error) {
+	rows, err := s.DB().ListEventsByRange(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
