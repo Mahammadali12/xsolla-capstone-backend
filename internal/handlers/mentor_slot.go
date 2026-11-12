@@ -47,6 +47,7 @@ func toResponse(slots []service.MentorSlot) []dto.MentorSlotResponse {
 			Booked:       s.Booked,
 			BookedBy:     s.BookedBy,
 			BookedByName: s.BookedByName,
+			MeetingURL:   s.MeetingURL,
 			Attendees:    attendees,
 		}
 	}

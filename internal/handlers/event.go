@@ -19,8 +19,8 @@ import (
 type EventService interface {
 	ListEvents(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]service.Event, error)
 	GetEventByID(ctx context.Context, userID int64, roles []string, id int64) (*service.Event, error)
-	CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, syncToGoogle bool) (*service.Event, error)
-	UpdateEvent(ctx context.Context, userID int64, roles []string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*service.Event, error)
+	CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, syncToGoogle bool) (*service.Event, error)
+	UpdateEvent(ctx context.Context, userID int64, roles []string, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*service.Event, error)
 	DeleteEvent(ctx context.Context, userID int64, roles []string, id int64) error
 }
 
@@ -48,6 +48,7 @@ func eventResponse(e service.Event) dto.EventResponse {
 		AllDay:        e.AllDay,
 		Location:      e.Location,
 		Description:   e.Description,
+		MeetingURL:    e.MeetingURL,
 		ModuleID:      e.ModuleID,
 		GoogleEventID: e.GoogleEventID,
 		Attendees:     attendees,
@@ -140,12 +141,16 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	if req.Description != "" {
 		description = &req.Description
 	}
+	var meetingURL *string
+	if req.MeetingURL != "" {
+		meetingURL = &req.MeetingURL
+	}
 	var moduleID *int64
 	if req.ModuleID != 0 {
 		moduleID = &req.ModuleID
 	}
 
-	e, err := h.svc.CreateEvent(r.Context(), userID, roles, req.Title, req.Kind, startsAt, endsAt, req.AllDay, location, description, moduleID, req.SyncToGoogle)
+	e, err := h.svc.CreateEvent(r.Context(), userID, roles, req.Title, req.Kind, startsAt, endsAt, req.AllDay, location, description, meetingURL, moduleID, req.SyncToGoogle)
 	if err != nil {
 		log.Printf("event handler: CreateEvent error: %v", err)
 		switch {
@@ -154,6 +159,8 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrOnlyStaffCanCreateEvent):
 			writeError(w, 403, "forbidden", "only lecturers and admins can create events", nil)
 		case errors.Is(err, service.ErrEndsBeforeStarts):
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		case errors.Is(err, service.ErrInvalidMeetingURL):
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		case errors.Is(err, service.ErrModuleNotFound):
 			writeError(w, 404, "not_found", "module not found", nil)
@@ -247,6 +254,15 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	} else {
 		description = existing.Description
 	}
+	// A pasted empty link clears it; leaving the field out keeps the current one.
+	meetingURL := existing.MeetingURL
+	if req.MeetingURL != nil {
+		if *req.MeetingURL == "" {
+			meetingURL = nil
+		} else {
+			meetingURL = req.MeetingURL
+		}
+	}
 	var moduleID *int64
 	if req.ModuleID != nil {
 		moduleID = req.ModuleID
@@ -254,7 +270,7 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		moduleID = existing.ModuleID
 	}
 
-	e, err := h.svc.UpdateEvent(r.Context(), userID, roles, eventID, title, kind, startsAt, endsAt, allDay, location, description, moduleID)
+	e, err := h.svc.UpdateEvent(r.Context(), userID, roles, eventID, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID)
 	if err != nil {
 		log.Printf("event handler: UpdateEvent error: %v", err)
 		switch {
@@ -263,6 +279,8 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrOnlyStaffCanCreateEvent):
 			writeError(w, 403, "forbidden", "only lecturers and admins can update events", nil)
 		case errors.Is(err, service.ErrEndsBeforeStarts):
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		case errors.Is(err, service.ErrInvalidMeetingURL):
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		case errors.Is(err, service.ErrNotTeacherOfModule):
 			writeError(w, 403, "forbidden", "not the lecturer of this module", nil)

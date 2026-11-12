@@ -141,6 +141,7 @@ type Event struct {
 	AllDay        bool
 	Location      *string
 	Description   *string
+	MeetingURL    *string
 	ModuleID      *int64
 	GoogleEventID *string
 	CreatedAt     time.Time
@@ -169,14 +170,15 @@ type MentorSlot struct {
 	BookedBy      *int64
 	BookedByName  *string
 	GoogleEventID *string
+	MeetingURL    *string
 	CreatedAt     time.Time
 }
 
 // CreateEvent inserts a new event record.
-func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error) {
+func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*Event, error) {
 	var e Event
-	err := s.DB().CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, moduleID).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.ModuleID, &e.GoogleEventID, &e.CreatedAt,
+	err := s.DB().CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID).Scan(
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.MeetingURL, &e.ModuleID, &e.GoogleEventID, &e.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -184,11 +186,11 @@ func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, 
 	return &e, nil
 }
 
-// UpdateEventGoogleID sets the google_event_id for an event.
-func (s *StoreImpl) UpdateEventGoogleID(ctx context.Context, eventID int64, googleEventID string) error {
+// UpdateEventGoogle links an event to its Google Calendar event and stores the Meet link Google returned.
+func (s *StoreImpl) UpdateEventGoogle(ctx context.Context, eventID int64, googleEventID *string, meetingURL *string) error {
 	_, err := s.DB().ExecContext(ctx,
-		`UPDATE events SET google_event_id = $1 WHERE id = $2`,
-		googleEventID, eventID,
+		`UPDATE events SET google_event_id = COALESCE($1, google_event_id), meeting_url = COALESCE($2, meeting_url) WHERE id = $3`,
+		googleEventID, meetingURL, eventID,
 	)
 	return err
 }
@@ -198,10 +200,11 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 	var e Event
 	var location *string
 	var description *string
+	var meetingURL *string
 	var moduleID *int64
 	var googleEventID *string
 	err := s.DB().GetEventByID(ctx, id).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &googleEventID, &e.CreatedAt,
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &meetingURL, &moduleID, &googleEventID, &e.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -211,6 +214,7 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 	}
 	e.Location = location
 	e.Description = description
+	e.MeetingURL = meetingURL
 	e.ModuleID = moduleID
 	e.GoogleEventID = googleEventID
 	return &e, nil
@@ -229,13 +233,15 @@ func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to ti
 		var e Event
 		var location *string
 		var description *string
+		var meetingURL *string
 		var moduleID *int64
 		var googleEventID *string
-		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &moduleID, &googleEventID, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &meetingURL, &moduleID, &googleEventID, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		e.Location = location
 		e.Description = description
+		e.MeetingURL = meetingURL
 		e.ModuleID = moduleID
 		e.GoogleEventID = googleEventID
 		events = append(events, e)
@@ -244,14 +250,15 @@ func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to ti
 }
 
 // UpdateEvent updates an event record.
-func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error) {
+func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error) {
 	var e Event
 	var loc *string
 	var desc *string
+	var meet *string
 	var modID *int64
 	var googleEventID *string
-	err := s.DB().UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID, isAdmin).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &modID, &googleEventID, &e.CreatedAt,
+	err := s.DB().UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, userID, isAdmin).Scan(
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &meet, &modID, &googleEventID, &e.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -261,6 +268,7 @@ func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kin
 	}
 	e.Location = loc
 	e.Description = desc
+	e.MeetingURL = meet
 	e.ModuleID = modID
 	e.GoogleEventID = googleEventID
 	return &e, nil
@@ -320,12 +328,14 @@ func (s *StoreImpl) ListMentorSlots(ctx context.Context, userID int64, roles []s
 		var slot MentorSlot
 		var bookedBy *int64
 		var bookedByName *string
+		var meetingURL *string
 		var mentorName string
-		if err := rows.Scan(&slot.ID, &slot.MentorID, &mentorName, &slot.StartsAt, &slot.EndsAt, &bookedBy, &bookedByName, &slot.CreatedAt); err != nil {
+		if err := rows.Scan(&slot.ID, &slot.MentorID, &mentorName, &slot.StartsAt, &slot.EndsAt, &bookedBy, &bookedByName, &meetingURL, &slot.CreatedAt); err != nil {
 			return nil, err
 		}
 		slot.BookedBy = bookedBy
 		slot.BookedByName = bookedByName
+		slot.MeetingURL = meetingURL
 		slot.MentorName = mentorName
 		slots = append(slots, slot)
 	}
@@ -338,8 +348,9 @@ func (s *StoreImpl) GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlo
 	var starts, ends, created time.Time
 	var bookedBy *int64
 	var googleEventID *string
+	var meetingURL *string
 	err := s.DB().GetMentorSlotByID(ctx, id).Scan(
-		&slotID, &mentorIDCol, &starts, &ends, &bookedBy, &googleEventID, &created,
+		&slotID, &mentorIDCol, &starts, &ends, &bookedBy, &googleEventID, &meetingURL, &created,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -354,13 +365,18 @@ func (s *StoreImpl) GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlo
 		EndsAt:        ends,
 		BookedBy:      bookedBy,
 		GoogleEventID: googleEventID,
+		MeetingURL:    meetingURL,
 		CreatedAt:     created,
 	}, nil
 }
 
-// UpdateMentorSlotGoogleID stores the Google Calendar event linked to a booking.
-func (s *StoreImpl) UpdateMentorSlotGoogleID(ctx context.Context, slotID int64, googleEventID string) error {
-	_, err := s.DB().UpdateMentorSlotGoogleID(ctx, slotID, googleEventID)
+// UpdateMentorSlotGoogle links a booking to its Google Calendar event and Meet link.
+func (s *StoreImpl) UpdateMentorSlotGoogle(ctx context.Context, slotID int64, googleEventID *string, meetingURL *string) error {
+	_, err := s.DB().ExecContext(ctx,
+		`UPDATE mentor_slots SET google_event_id = COALESCE($2, google_event_id), meeting_url = COALESCE($3, meeting_url)
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		slotID, googleEventID, meetingURL,
+	)
 	return err
 }
 

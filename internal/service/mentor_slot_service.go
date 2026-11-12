@@ -35,6 +35,7 @@ type MentorSlot struct {
 	Booked       bool
 	BookedBy     *int64
 	BookedByName *string
+	MeetingURL   *string
 	Attendees    []Attendee
 	CreatedAt    time.Time
 }
@@ -49,6 +50,7 @@ func mentorSlotFromStore(s store.MentorSlot) *MentorSlot {
 		Booked:       s.BookedBy != nil,
 		BookedBy:     s.BookedBy,
 		BookedByName: s.BookedByName,
+		MeetingURL:   s.MeetingURL,
 		CreatedAt:    s.CreatedAt,
 	}
 }
@@ -88,6 +90,7 @@ func (s *MentorSlotService) ListSlots(ctx context.Context, userID int64, roles [
 			if slots[i].BookedBy != nil && *slots[i].BookedBy != userID {
 				slots[i].BookedBy = nil
 				slots[i].BookedByName = nil
+				slots[i].MeetingURL = nil
 			}
 		}
 	}
@@ -208,9 +211,11 @@ func (s *MentorSlotService) BookSlot(ctx context.Context, userID int64, roles []
 		return nil, err
 	}
 	if s.googleSvc != nil {
-		if err := s.createBookingCalendarEvent(ctx, *slot); err != nil {
+		if meet, err := s.createBookingCalendarEvent(ctx, *slot); err != nil {
 			// Non-fatal: the booking still stands in the LMS.
 			log.Printf("mentor slot service: Google Calendar sync failed for slot %d: %v", slot.ID, err)
+		} else {
+			slot.MeetingURL = meet
 		}
 	}
 	slots := []MentorSlot{*mentorSlotFromStore(*slot)}
@@ -244,14 +249,15 @@ func (s *MentorSlotService) CancelBooking(ctx context.Context, userID int64, rol
 	return &slots[0], nil
 }
 
-// createBookingCalendarEvent puts the booking on the mentor's calendar and invites the student.
-func (s *MentorSlotService) createBookingCalendarEvent(ctx context.Context, slot store.MentorSlot) error {
+// createBookingCalendarEvent puts the booking on the mentor's calendar, invites the student,
+// and returns the Google Meet link Google created for it.
+func (s *MentorSlotService) createBookingCalendarEvent(ctx context.Context, slot store.MentorSlot) (*string, error) {
 	if slot.BookedBy == nil {
-		return nil
+		return nil, nil
 	}
 	briefs, err := s.store.GetActiveUsersByIDs(ctx, []int64{slot.MentorID, *slot.BookedBy})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var mentorName, studentName, studentEmail string
 	for _, b := range briefs {
@@ -264,29 +270,37 @@ func (s *MentorSlotService) createBookingCalendarEvent(ctx context.Context, slot
 		}
 	}
 	if studentEmail == "" {
-		return errors.New("booked student has no email")
+		return nil, errors.New("booked student has no email")
 	}
 
 	accessToken, err := s.googleSvc.GetValidAccessToken(ctx, slot.MentorID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	client := google.NewClient(slot.MentorID, s.googleSvc, accessToken)
 
 	created, err := client.CreateCalendarEvent(ctx, google.CalendarEvent{
-		Summary:     fmt.Sprintf("1:1: %s & %s", mentorName, studentName),
-		Description: "Booked through Xsolla LMS",
-		Start:       google.EventTime{DateTime: slot.StartsAt.Format(time.RFC3339), TimeZone: "UTC"},
-		End:         google.EventTime{DateTime: slot.EndsAt.Format(time.RFC3339), TimeZone: "UTC"},
-		Attendees:   []google.Attendee{{Email: studentEmail}},
+		Summary:        fmt.Sprintf("1:1: %s & %s", mentorName, studentName),
+		Description:    "Booked through Xsolla LMS",
+		Start:          google.EventTime{DateTime: slot.StartsAt.Format(time.RFC3339), TimeZone: "UTC"},
+		End:            google.EventTime{DateTime: slot.EndsAt.Format(time.RFC3339), TimeZone: "UTC"},
+		Attendees:      []google.Attendee{{Email: studentEmail}},
+		ConferenceData: google.NewMeetConference(),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if created.ID == "" {
-		return nil
+		return nil, nil
 	}
-	return s.store.UpdateMentorSlotGoogleID(ctx, slot.ID, created.ID)
+	var meet *string
+	if link := created.MeetLink(); link != "" {
+		meet = &link
+	}
+	if err := s.store.UpdateMentorSlotGoogle(ctx, slot.ID, &created.ID, meet); err != nil {
+		return nil, err
+	}
+	return meet, nil
 }
 
 // deleteBookingCalendarEvent removes the booking from the mentor's calendar.

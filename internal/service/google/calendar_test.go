@@ -10,29 +10,35 @@ import (
 )
 
 func TestCalendarEventRequestsSendUpdatesAll(t *testing.T) {
-	var gotMethod, gotPath, gotQuery string
+	var gotMethod, gotPath, gotQuery, gotConferenceVersion, gotConferenceType string
 	var gotAttendees []Attendee
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
 		gotPath = r.URL.Path
 		gotQuery = r.URL.Query().Get("sendUpdates")
+		gotConferenceVersion = r.URL.Query().Get("conferenceDataVersion")
+		gotConferenceType = ""
 
 		raw, _ := io.ReadAll(r.Body)
 		if len(raw) > 0 {
 			var body struct {
-				Attendees []Attendee `json:"attendees"`
+				Attendees      []Attendee      `json:"attendees"`
+				ConferenceData *ConferenceData `json:"conferenceData"`
 			}
 			if err := json.Unmarshal(raw, &body); err != nil {
 				t.Errorf("%s body is not valid JSON: %v", r.Method, err)
 			}
 			gotAttendees = body.Attendees
+			if body.ConferenceData != nil && body.ConferenceData.CreateRequest != nil {
+				gotConferenceType = body.ConferenceData.CreateRequest.ConferenceSolutionKey.Type
+			}
 		} else {
 			gotAttendees = nil
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"id":"evt-1"}`)
+		io.WriteString(w, `{"id":"evt-1","hangoutLink":"https://meet.google.com/abc-defg-hij"}`)
 	}))
 	defer srv.Close()
 
@@ -43,12 +49,15 @@ func TestCalendarEventRequestsSendUpdatesAll(t *testing.T) {
 		End:       EventTime{DateTime: "2026-01-01T10:30:00Z"},
 		Attendees: []Attendee{{Email: "student@example.com"}},
 	}
+	meetEv := ev
+	meetEv.ConferenceData = NewMeetConference()
 
 	tests := []struct {
 		name       string
 		method     string
 		path       string
 		wantEmails int
+		wantMeet   bool
 		call       func() error
 	}{
 		{
@@ -56,10 +65,14 @@ func TestCalendarEventRequestsSendUpdatesAll(t *testing.T) {
 			method:     "POST",
 			path:       "/calendar/v3/calendars/primary/events",
 			wantEmails: 1,
+			wantMeet:   true,
 			call: func() error {
-				created, err := c.CreateCalendarEvent(context.Background(), ev)
+				created, err := c.CreateCalendarEvent(context.Background(), meetEv)
 				if err == nil && created.ID != "evt-1" {
 					t.Errorf("expected created event id evt-1, got %q", created.ID)
+				}
+				if err == nil && created.MeetLink() != "https://meet.google.com/abc-defg-hij" {
+					t.Errorf("expected the Meet link, got %q", created.MeetLink())
 				}
 				return err
 			},
@@ -97,7 +110,27 @@ func TestCalendarEventRequestsSendUpdatesAll(t *testing.T) {
 			if len(gotAttendees) != tc.wantEmails {
 				t.Errorf("expected %d attendees, got %+v", tc.wantEmails, gotAttendees)
 			}
+			if tc.wantMeet {
+				if gotConferenceVersion != "1" {
+					t.Errorf("expected conferenceDataVersion=1, got %q", gotConferenceVersion)
+				}
+				if gotConferenceType != "hangoutsMeet" {
+					t.Errorf("expected a hangoutsMeet conference, got %q", gotConferenceType)
+				}
+			} else if gotConferenceType != "" {
+				t.Errorf("%s must not create a conference, got %q", tc.name, gotConferenceType)
+			}
 		})
+	}
+}
+
+func TestMeetLinkFallsBackToEntryPoints(t *testing.T) {
+	ev := createdEvent{ConferenceData: &ConferenceData{EntryPoints: []EntryPoint{
+		{EntryPointType: "phone", URI: "tel:+123"},
+		{EntryPointType: "video", URI: "https://meet.google.com/xyz-abcd-efg"},
+	}}}
+	if got := ev.MeetLink(); got != "https://meet.google.com/xyz-abcd-efg" {
+		t.Fatalf("expected the video entry point, got %q", got)
 	}
 }
 

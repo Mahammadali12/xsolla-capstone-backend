@@ -12,6 +12,7 @@ type EventResponse struct {
 	AllDay        bool       `json:"all_day"`
 	Location      *string    `json:"location,omitempty"`
 	Description   *string    `json:"description,omitempty"`
+	MeetingURL    *string    `json:"meeting_url,omitempty"`
 	ModuleID      *int64     `json:"module_id,omitempty"`
 	GoogleEventID *string    `json:"google_event_id,omitempty"`
 	Attendees     []Attendee `json:"attendees"`
@@ -27,6 +28,7 @@ type CreateEventRequest struct {
 	AllDay       bool   `json:"all_day"`
 	Location     string `json:"location,omitempty"`
 	Description  string `json:"description,omitempty"`
+	MeetingURL   string `json:"meeting_url,omitempty"`
 	ModuleID     int64  `json:"module_id,omitempty"`
 	SyncToGoogle bool   `json:"sync_to_google"`
 }
@@ -40,5 +42,6 @@ type UpdateEventRequest struct {
 	AllDay      *bool   `json:"all_day,omitempty"`
 	Location    *string `json:"location,omitempty"`
 	Description *string `json:"description,omitempty"`
+	MeetingURL  *string `json:"meeting_url,omitempty"`
 	ModuleID    *int64  `json:"module_id,omitempty"`
 }

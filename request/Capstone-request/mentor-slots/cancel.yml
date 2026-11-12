@@ -1,0 +1,18 @@
+info:
+  name: Cancel booking on slot 26 (student or mentor)
+  type: http
+  seq: 4
+
+http:
+  method: DELETE
+  url: http://localhost:8080/mentor-slots/26/book
+  headers:
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

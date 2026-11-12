@@ -1,0 +1,31 @@
+info:
+  name: Create workshop (no module, no attendees)
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: http://localhost:8080/events
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Off-campus Workshop",
+        "kind": "off-campus",
+        "starts_at": "2026-12-02T10:00:00Z",
+        "ends_at": "2026-12-02T11:00:00Z",
+        "location": "Studio 2",
+        "description": "Workshop without a module, so attendees stay empty"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

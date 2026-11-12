@@ -12,6 +12,7 @@ type MentorSlotResponse struct {
 	Booked       bool       `json:"booked"`
 	BookedBy     *int64     `json:"booked_by,omitempty"`
 	BookedByName *string    `json:"booked_by_name,omitempty"`
+	MeetingURL   *string    `json:"meeting_url,omitempty"`
 	Attendees    []Attendee `json:"attendees"`
 }
 
