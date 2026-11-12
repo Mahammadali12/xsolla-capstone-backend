@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
 )
 
 func TestCalendarEventRequestsSendUpdatesAll(t *testing.T) {
@@ -149,5 +151,56 @@ func TestCalendarEventEmptyAttendeesMarshalAsArray(t *testing.T) {
 	}
 	if arr, ok := attendees.([]any); !ok || len(arr) != 0 {
 		t.Fatalf("expected an empty attendees array, got %#v", attendees)
+	}
+}
+
+func TestListCalendarEventsFollowsPages(t *testing.T) {
+	var queries []url.Values
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries = append(queries, r.URL.Query())
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if len(queries) == 1 {
+			io.WriteString(w, `{"items":[{"id":"a","summary":"Talk","start":{"dateTime":"2026-11-20T10:00:00Z"},"end":{"dateTime":"2026-11-20T11:00:00Z"},"hangoutLink":"https://meet.google.com/abc-defg-hij"}],"nextPageToken":"p2"}`)
+			return
+		}
+		io.WriteString(w, `{"items":[{"id":"b","summary":"Lunch","start":{"dateTime":"2026-11-20T12:00:00Z"},"end":{"dateTime":"2026-11-20T13:00:00Z"}}]}`)
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), baseURL: srv.URL}
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+
+	events, err := c.ListCalendarEvents(context.Background(), from, to)
+	if err != nil {
+		t.Fatalf("ListCalendarEvents failed: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected both pages, got %d events", len(events))
+	}
+	if events[0].MeetLink() != "https://meet.google.com/abc-defg-hij" {
+		t.Errorf("expected the hangout link, got %q", events[0].MeetLink())
+	}
+	if len(queries) != 2 {
+		t.Fatalf("expected two requests (one page token), got %d", len(queries))
+	}
+	for i, q := range queries {
+		if paths[i] != "/calendar/v3/calendars/primary/events" {
+			t.Errorf("request %d: expected the primary events path, got %q", i, paths[i])
+		}
+		if q.Get("singleEvents") != "true" || q.Get("orderBy") != "startTime" || q.Get("showDeleted") != "false" {
+			t.Errorf("request %d: unexpected query %v", i, q)
+		}
+		if q.Get("timeMin") != from.Format(time.RFC3339) || q.Get("timeMax") != to.Format(time.RFC3339) {
+			t.Errorf("request %d: unexpected range %v", i, q)
+		}
+	}
+	if queries[0].Get("pageToken") != "" {
+		t.Errorf("first request must not carry a page token, got %q", queries[0].Get("pageToken"))
+	}
+	if queries[1].Get("pageToken") != "p2" {
+		t.Errorf("second request must carry the page token, got %q", queries[1].Get("pageToken"))
 	}
 }

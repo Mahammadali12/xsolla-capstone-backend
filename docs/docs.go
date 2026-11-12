@@ -23,6 +23,89 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/google/callback": {
+            "get": {
+                "description": "Handle Google OAuth redirect, exchange code for tokens, store encrypted refresh token",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Google OAuth callback",
+                "responses": {
+                    "302": {
+                        "description": "Redirect to frontend",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google/login": {
+            "get": {
+                "description": "Redirect user to Google consent screen to connect their Google account",
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Google OAuth login",
+                "responses": {
+                    "302": {
+                        "description": "Redirect to Google",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Return the connected Google account profile for the signed-in user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Google user profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.googleUserInfo"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticate with email and password to receive JWT and refresh tokens",
@@ -258,7 +341,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Soft-delete a content item (teacher or admin only)",
+                "description": "Soft-delete a content item (lecturer or admin only)",
                 "tags": [
                     "content-items"
                 ],
@@ -305,7 +388,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update content item fields (teacher or admin only)",
+                "description": "Update content item fields (lecturer or admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -422,6 +505,72 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/google/calendar/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "All events of the signed-in user's primary Google Calendar in the given range (read-only). Requires the user to have connected Google.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "google"
+                ],
+                "summary": "List my Google Calendar events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start of the range (RFC 3339). Default: one month ago.",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the range (RFC 3339). Default: two months ahead.",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.GoogleCalendarEventResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -581,7 +730,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Soft-delete a module (teacher or admin only)",
+                "description": "Soft-delete a module (lecturer or admin only)",
                 "tags": [
                     "modules"
                 ],
@@ -628,7 +777,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Update module title/description (teacher or admin only)",
+                "description": "Update module title/description (lecturer or admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -745,7 +894,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a file or assignment (teacher or admin only)",
+                "description": "Create a file, assignment or link (lecturer or admin only)",
                 "consumes": [
                     "application/json"
                 ],
@@ -981,6 +1130,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/modules/{moduleId}/enrollments/{userId}/grade": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Set a student's module grade red/yellow/green (mentor/admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrollments"
+                ],
+                "summary": "Grade enrollment",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Module ID",
+                        "name": "moduleId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Student ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Grade",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GradeEnrollmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.EnrollmentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "get": {
                 "security": [
@@ -1061,9 +1281,6 @@ const docTemplate = `{
                 "is_visible": {
                     "type": "boolean"
                 },
-                "max_points": {
-                    "type": "integer"
-                },
                 "parent_id": {
                     "type": "integer"
                 },
@@ -1105,9 +1322,6 @@ const docTemplate = `{
                 "is_visible": {
                     "type": "boolean"
                 },
-                "max_points": {
-                    "type": "integer"
-                },
                 "position": {
                     "type": "integer"
                 },
@@ -1137,9 +1351,6 @@ const docTemplate = `{
                 "is_visible": {
                     "type": "boolean"
                 },
-                "max_points": {
-                    "type": "integer"
-                },
                 "parent_id": {
                     "type": "integer"
                 },
@@ -1160,7 +1371,13 @@ const docTemplate = `{
         "dto.CreateModuleRequest": {
             "type": "object",
             "properties": {
+                "closes_at": {
+                    "type": "string"
+                },
                 "description": {
+                    "type": "string"
+                },
+                "opens_at": {
                     "type": "string"
                 },
                 "title": {
@@ -1180,6 +1397,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
+                    "type": "string"
+                },
+                "grade": {
                     "type": "string"
                 },
                 "id": {
@@ -1216,6 +1436,48 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GoogleCalendarEventResponse": {
+            "type": "object",
+            "properties": {
+                "all_day": {
+                    "type": "boolean"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "ends_at": {
+                    "description": "EndsAt is RFC 3339, or the last covered day (inclusive) for all-day events.",
+                    "type": "string"
+                },
+                "html_link": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "meeting_url": {
+                    "type": "string"
+                },
+                "starts_at": {
+                    "description": "StartsAt is RFC 3339 for timed events, YYYY-MM-DD for all-day ones.",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.GradeEnrollmentRequest": {
+            "type": "object",
+            "properties": {
+                "grade": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.LoginRequest": {
             "type": "object",
             "properties": {
@@ -1240,6 +1502,9 @@ const docTemplate = `{
         "dto.ModuleResponse": {
             "type": "object",
             "properties": {
+                "closes_at": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -1249,8 +1514,14 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "grade": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
+                },
+                "opens_at": {
+                    "type": "string"
                 },
                 "title": {
                     "type": "string"
@@ -1325,7 +1596,13 @@ const docTemplate = `{
         "dto.UpdateModuleRequest": {
             "type": "object",
             "properties": {
+                "closes_at": {
+                    "type": "string"
+                },
                 "description": {
+                    "type": "string"
+                },
+                "opens_at": {
                     "type": "string"
                 },
                 "title": {
@@ -1393,6 +1670,38 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.googleUserInfo": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "family_name": {
+                    "type": "string"
+                },
+                "given_name": {
+                    "type": "string"
+                },
+                "hd": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "locale": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "picture": {
+                    "type": "string"
+                },
+                "verified_email": {
+                    "type": "boolean"
                 }
             }
         }

@@ -57,6 +57,7 @@ func main() {
 	userSvc := service.NewUserService(store)
 	teamSvc := service.NewTeamService(store)
 	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
+	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage
 	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)
@@ -80,6 +81,7 @@ func main() {
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
+	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -91,6 +93,7 @@ func main() {
 	mux.Handle("GET /auth/google/login", authenticator.OptionalAuth(http.HandlerFunc(authH.GoogleLogin)))
 	mux.HandleFunc("GET /auth/google/callback", authH.GoogleCallback)
 	mux.Handle("GET /auth/google/me", authenticator.Middleware(http.HandlerFunc(authH.GoogleMe)))
+	mux.Handle("GET /google/calendar/events", authenticator.Middleware(http.HandlerFunc(googleCalendarH.ListEvents)))
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
 
 	// Admin-only user management (4.1)

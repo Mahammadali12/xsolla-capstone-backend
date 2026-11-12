@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -84,10 +85,19 @@ type createdEvent struct {
 
 // MeetLink returns the Google Meet URL of the event, if Google created one.
 func (e *createdEvent) MeetLink() string {
-	if e.HangoutLink != "" {
-		return e.HangoutLink
+	return meetLink(e.HangoutLink, e.ConferenceData)
+}
+
+// meetLink returns the video link of a Google event: hangoutLink when present,
+// otherwise the "video" conference entry point.
+func meetLink(hangout string, conf *ConferenceData) string {
+	if hangout != "" {
+		return hangout
 	}
-	for _, ep := range e.ConferenceData.EntryPoints {
+	if conf == nil {
+		return ""
+	}
+	for _, ep := range conf.EntryPoints {
 		if ep.EntryPointType == "video" && ep.URI != "" {
 			return ep.URI
 		}
@@ -154,4 +164,65 @@ func (c *Client) DeleteCalendarEvent(ctx context.Context, eventID string) error 
 	}
 
 	return c.doWithRetry(req, nil)
+}
+
+// ListedEvent is one event from Google's events.list response. Only the fields
+// the LMS calendar shows are decoded.
+type ListedEvent struct {
+	ID             string          `json:"id"`
+	Status         string          `json:"status"`
+	Summary        string          `json:"summary"`
+	Description    string          `json:"description"`
+	Location       string          `json:"location"`
+	Start          EventTime       `json:"start"`
+	End            EventTime       `json:"end"`
+	HangoutLink    string          `json:"hangoutLink"`
+	HTMLLink       string          `json:"htmlLink"`
+	ConferenceData *ConferenceData `json:"conferenceData"`
+}
+
+// MeetLink returns the Google Meet URL of a listed event, if it has one.
+func (e *ListedEvent) MeetLink() string {
+	return meetLink(e.HangoutLink, e.ConferenceData)
+}
+
+// eventsListResponse is the response from Google's events.list endpoint.
+type eventsListResponse struct {
+	Items         []ListedEvent `json:"items"`
+	NextPageToken string        `json:"nextPageToken"`
+}
+
+// maxCalendarPages caps pagination so one request cannot read a whole decade
+// of calendar history.
+const maxCalendarPages = 10
+
+// ListCalendarEvents lists the events of the user's primary Google Calendar in
+// [from, to]. Recurring events are expanded (singleEvents) and ordered by start.
+func (c *Client) ListCalendarEvents(ctx context.Context, from, to time.Time) ([]ListedEvent, error) {
+	var all []ListedEvent
+	pageToken := ""
+	for page := 0; page < maxCalendarPages; page++ {
+		query := url.Values{
+			"timeMin":      {from.UTC().Format(time.RFC3339)},
+			"timeMax":      {to.UTC().Format(time.RFC3339)},
+			"singleEvents": {"true"},
+			"orderBy":      {"startTime"},
+			"maxResults":   {"2500"},
+			"showDeleted":  {"false"},
+		}
+		if pageToken != "" {
+			query.Set("pageToken", pageToken)
+		}
+
+		var body eventsListResponse
+		if err := c.do("GET", "/calendar/v3/calendars/primary/events?"+query.Encode(), nil, &body); err != nil {
+			return nil, err
+		}
+		all = append(all, body.Items...)
+		if body.NextPageToken == "" {
+			return all, nil
+		}
+		pageToken = body.NextPageToken
+	}
+	return all, nil
 }
