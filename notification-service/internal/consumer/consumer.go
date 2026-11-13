@@ -9,6 +9,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"xsolla-notification-service/internal/broker"
+	"xsolla-notification-service/internal/channel"
 	"xsolla-notification-service/internal/events"
 )
 
@@ -83,6 +84,13 @@ func (c *Consumer) process(ctx context.Context, delivery amqp.Delivery) {
 			return
 		}
 		log.Printf("consumer: event %d attempt %d/%d failed: %v", event.ID, attempt, c.maxAttempts, err)
+		// Permanent failures (invalid recipient, bad auth) are not retried;
+		// temporary failures (network, 4xx) follow bounded retries.
+		if !channel.IsTemporary(err) {
+			log.Printf("consumer: event %d permanent failure, moving to %s", event.ID, broker.DeadQueue)
+			c.nack(delivery, false)
+			return
+		}
 		if attempt == c.maxAttempts {
 			break
 		}
