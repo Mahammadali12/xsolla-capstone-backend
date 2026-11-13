@@ -394,6 +394,26 @@ func (s *StoreImpl) DeleteMentorSlot(ctx context.Context, userID int64, roles []
 	return nil
 }
 
+// DeleteMentorSlotsByMentor soft-deletes every slot a mentor offers and returns the deleted rows.
+func (s *StoreImpl) DeleteMentorSlotsByMentor(ctx context.Context, mentorID int64) ([]MentorSlot, error) {
+	rows, err := s.DB().DeleteMentorSlotsByMentor(ctx, mentorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var slots []MentorSlot
+	for rows.Next() {
+		var slot MentorSlot
+		if err := rows.Scan(&slot.ID, &slot.GoogleEventID); err != nil {
+			return nil, err
+		}
+		slot.MentorID = mentorID
+		slots = append(slots, slot)
+	}
+	return slots, rows.Err()
+}
+
 // BookMentorSlot atomically books a free, not-yet-started slot for a student.
 func (s *StoreImpl) BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error) {
 	tx, err := s.db.BeginTx(ctx, nil)

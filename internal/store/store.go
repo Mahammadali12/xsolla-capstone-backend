@@ -119,6 +119,7 @@ type Store interface {
 	GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlot, error)
 	UpdateMentorSlotGoogle(ctx context.Context, slotID int64, googleEventID *string, meetingURL *string) error
 	DeleteMentorSlot(ctx context.Context, userID int64, roles []string, id int64) error
+	DeleteMentorSlotsByMentor(ctx context.Context, mentorID int64) ([]MentorSlot, error)
 	BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error)
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
 	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)

@@ -249,6 +249,28 @@ func (s *MentorSlotService) CancelBooking(ctx context.Context, userID int64, rol
 	return &slots[0], nil
 }
 
+// CancelSlotsForMentor deletes every slot a mentor offers and its Google event.
+// Used when the mentor stops leading a team.
+func (s *MentorSlotService) CancelSlotsForMentor(ctx context.Context, mentorID int64) error {
+	slots, err := s.store.DeleteMentorSlotsByMentor(ctx, mentorID)
+	if err != nil {
+		return err
+	}
+	if s.googleSvc == nil {
+		return nil
+	}
+	for _, slot := range slots {
+		if slot.GoogleEventID == nil || *slot.GoogleEventID == "" {
+			continue
+		}
+		if err := s.deleteBookingCalendarEvent(ctx, mentorID, *slot.GoogleEventID); err != nil {
+			// Non-fatal: the slots are already deleted in the LMS.
+			log.Printf("mentor slot service: Google Calendar delete failed for slot %d: %v", slot.ID, err)
+		}
+	}
+	return nil
+}
+
 // createBookingCalendarEvent puts the booking on the mentor's calendar, invites the student,
 // and returns the Google Meet link Google created for it.
 func (s *MentorSlotService) createBookingCalendarEvent(ctx context.Context, slot store.MentorSlot) (*string, error) {

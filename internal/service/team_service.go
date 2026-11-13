@@ -13,11 +13,13 @@ import (
 // TeamService manages teams and team membership (admin-only writes).
 type TeamService struct {
 	store store.Store
+	slots *MentorSlotService
 }
 
 // NewTeamService creates a TeamService backed by the given store.
-func NewTeamService(s store.Store) *TeamService {
-	return &TeamService{store: s}
+// slots is used to clear a mentor's availability when they leave a team.
+func NewTeamService(s store.Store, slots *MentorSlotService) *TeamService {
+	return &TeamService{store: s, slots: slots}
 }
 
 var (
@@ -108,7 +110,42 @@ func (s *TeamService) ReplaceTeams(ctx context.Context, inputs []store.TeamInput
 	// have 'student' role. A user with both mentor and student could technically
 	// be both, but that's an edge case we allow.
 
+	// shortcut: teams are matched by mentor membership, so a mentor moved to
+	// another team in the same call keeps their slots; upgrade by matching
+	// teams on student membership if swaps become common.
+	existing, err := s.store.GetAllTeams(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, mentorID := range removedMentors(existing, inputs) {
+		if err := s.slots.CancelSlotsForMentor(ctx, mentorID); err != nil {
+			return nil, err
+		}
+	}
+
 	return s.store.ReplaceTeams(ctx, inputs)
+}
+
+// removedMentors returns old mentors no longer assigned to any team in inputs.
+func removedMentors(old []store.Team, inputs []store.TeamInput) []int64 {
+	kept := make(map[int64]bool, len(inputs))
+	for _, input := range inputs {
+		if input.MentorID != nil {
+			kept[*input.MentorID] = true
+		}
+	}
+	removed := make(map[int64]bool)
+	for _, team := range old {
+		if team.MentorID != nil && !kept[*team.MentorID] {
+			removed[*team.MentorID] = true
+		}
+	}
+	ids := make([]int64, 0, len(removed))
+	for id := range removed {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
 // CreateTeam creates a single team.
@@ -213,10 +250,12 @@ func (s *TeamService) PatchTeam(ctx context.Context, id int64, name *string, men
 	if err != nil {
 		return nil, err
 	}
+	var oldMentor *int64
 	found := false
 	for _, t := range teams {
 		if t.ID == id {
 			found = true
+			oldMentor = t.MentorID
 			break
 		}
 	}
@@ -232,6 +271,13 @@ func (s *TeamService) PatchTeam(ctx context.Context, id int64, name *string, men
 		}
 		if len(users) == 0 || !slices.Contains(users[0].Roles, "mentor") {
 			return nil, ErrInvalidTeamConfig
+		}
+	}
+
+	// The replaced mentor loses their availability.
+	if mentorID != nil && oldMentor != nil && *mentorID != *oldMentor {
+		if err := s.slots.CancelSlotsForMentor(ctx, *oldMentor); err != nil {
+			return nil, err
 		}
 	}
 
@@ -269,10 +315,12 @@ func (s *TeamService) PutTeamMentor(ctx context.Context, teamID int64, mentorID 
 	if err != nil {
 		return err
 	}
+	var oldMentor *int64
 	found := false
 	for _, t := range teams {
 		if t.ID == teamID {
 			found = true
+			oldMentor = t.MentorID
 			break
 		}
 	}
@@ -288,6 +336,13 @@ func (s *TeamService) PutTeamMentor(ctx context.Context, teamID int64, mentorID 
 		}
 		if len(users) == 0 || !slices.Contains(users[0].Roles, "mentor") {
 			return ErrInvalidTeamConfig
+		}
+	}
+
+	// The removed mentor loses their availability.
+	if oldMentor != nil && (mentorID == nil || *mentorID != *oldMentor) {
+		if err := s.slots.CancelSlotsForMentor(ctx, *oldMentor); err != nil {
+			return err
 		}
 	}
 

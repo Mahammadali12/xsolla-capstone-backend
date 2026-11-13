@@ -55,8 +55,8 @@ func main() {
 	submissionSvc := service.NewSubmissionService(store)
 	eventSvc := service.NewEventServiceWithGoogle(store, authSvc)
 	userSvc := service.NewUserService(store)
-	teamSvc := service.NewTeamService(store)
 	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
+	teamSvc := service.NewTeamService(store, mentorSlotSvc)
 	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage

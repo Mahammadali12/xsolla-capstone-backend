@@ -940,6 +940,16 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 	)
 }
 
+// DeleteMentorSlotsByMentor soft-deletes every slot a mentor offers and returns the deleted rows.
+func (q *Query) DeleteMentorSlotsByMentor(ctx context.Context, mentorID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`UPDATE mentor_slots SET deleted_at = NOW()
+		 WHERE mentor_id = $1 AND deleted_at IS NULL
+		 RETURNING id, google_event_id`,
+		mentorID,
+	)
+}
+
 func (q *Query) GetMentorSlotByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`SELECT id, mentor_id, starts_at, ends_at, booked_by, google_event_id, meeting_url, created_at
