@@ -450,17 +450,36 @@ func (s *StoreImpl) BookMentorSlot(ctx context.Context, studentID int64, slotID 
 		return nil, err
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return &MentorSlot{
+	slot := MentorSlot{
 		ID:        id,
 		MentorID:  mentorIDCol,
 		StartsAt:  starts,
 		EndsAt:    ends,
 		BookedBy:  bookedBy,
 		CreatedAt: created,
-	}, nil
+	}
+
+	// The event joins the booking in this transaction: if either fails, both roll back.
+	mentorName, mentorEmail, err := q.userNameEmail(ctx, mentorIDCol)
+	if err != nil {
+		return nil, err
+	}
+	studentName, studentEmail, err := q.userNameEmail(ctx, studentID)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := mentorSlotBookedData(slot, mentorName, mentorEmail, studentName, studentEmail)
+	if err != nil {
+		return nil, err
+	}
+	if err := q.InsertOutboxEvent(ctx, MentorSlotBookedEventType, payload); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &slot, nil
 }
 
 // CancelMentorSlotBooking clears a booking if the caller is authorized and the slot hasn't started.

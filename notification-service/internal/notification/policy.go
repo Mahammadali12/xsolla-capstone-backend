@@ -29,3 +29,8 @@ func (r *Registry) Lookup(eventType string) (Policy, bool) {
 	policy, ok := r.byType[eventType]
 	return policy, ok
 }
+
+// Len reports how many event types have a policy.
+func (r *Registry) Len() int {
+	return len(r.byType)
+}

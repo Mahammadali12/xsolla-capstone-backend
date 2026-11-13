@@ -58,12 +58,17 @@ func Decode(body []byte) (Envelope, error) {
 	return envelope, nil
 }
 
+// ValidType reports whether t follows the domain.event naming convention.
+func ValidType(t string) bool {
+	return len(t) <= 128 && typePattern.MatchString(t)
+}
+
 // Validate checks the required envelope fields and the data object.
 func (e Envelope) Validate() error {
 	if e.ID <= 0 {
 		return fmt.Errorf("%w: id must be positive", ErrInvalidEnvelope)
 	}
-	if len(e.Type) > 128 || !typePattern.MatchString(e.Type) {
+	if !ValidType(e.Type) {
 		return fmt.Errorf("%w: type must look like domain.event", ErrInvalidEnvelope)
 	}
 	if e.Version < 1 {
