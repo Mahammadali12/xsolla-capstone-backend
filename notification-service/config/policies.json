@@ -4,5 +4,11 @@
     "recipients": ["mentor", "student"],
     "channels": ["email"],
     "template": "booking_confirmation"
+  },
+  "mentor_slot.canceled": {
+    "enabled": true,
+    "recipients": ["mentor", "student"],
+    "channels": ["email"],
+    "template": "booking_cancellation"
   }
 }
