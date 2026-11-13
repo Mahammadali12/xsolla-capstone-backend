@@ -583,7 +583,7 @@ func (q *Query) GetSubmissionByStudentAndAssignment(ctx context.Context, student
 // for an assignment, most recent first.
 func (q *Query) GetSubmissionsByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at
+		`SELECT id, content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at, created_at
 		 FROM submissions
 		 WHERE student_id = $1 AND content_item_id = $2 AND deleted_at IS NULL
 		 ORDER BY submitted_at DESC`,
