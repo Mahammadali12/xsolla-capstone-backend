@@ -164,8 +164,9 @@ func (s *StoreImpl) GetUsers(ctx context.Context, search, role, status string) (
 	return result, nil
 }
 
-// UpdateUser updates name and/or email, returning the updated user.
-func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email string) (*User, error) {
+// UpdateUser updates name and/or email, returning the updated user. Nil
+// pointers leave the corresponding field unchanged.
+func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email *string) (*User, error) {
 	var u User
 	var leftAt, deletedAt *time.Time
 	err := s.DB().UpdateUser(ctx, id, name, email).Scan(
@@ -174,6 +175,10 @@ func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email string
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrUserNotFound
+		}
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrEmailTaken
 		}
 		return nil, err
 	}

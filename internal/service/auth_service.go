@@ -63,6 +63,11 @@ func NewAuthService(userStore UserStore, refreshTokenStore RefreshTokenStore) *A
 // Signup creates a new user.
 // First user becomes admin, @xsolla.com emails become lecturer, rest are student.
 func (s *AuthService) Signup(ctx context.Context, email string, name string, password string) (int64, []string, error) {
+	email = normalizeEmail(email)
+	if err := ValidateEmail(email); err != nil {
+		return 0, nil, err
+	}
+
 	count, err := s.userStore.GetUserCount(ctx)
 	if err != nil {
 		return 0, nil, err

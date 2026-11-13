@@ -20,7 +20,7 @@ import (
 type UserService interface {
 	ListUsers(ctx context.Context, search, role, status string) ([]store.User, error)
 	CreateUser(ctx context.Context, email, name, password string, roles []string) (int64, []string, error)
-	UpdateUser(ctx context.Context, id int64, name, email string, active *bool) (*store.User, error)
+	UpdateUser(ctx context.Context, id int64, name, email *string, active *bool) (*store.User, error)
 	UpdatePassword(ctx context.Context, id int64, password string) error
 	DeleteUser(ctx context.Context, id, actorID int64) error
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
@@ -88,6 +88,10 @@ func (h *UserHandlers) CreateUser(w http.ResponseWriter, r *http.Request) {
 	id, roles, err := h.svc.CreateUser(r.Context(), req.Email, req.Name, req.Password, req.Roles)
 	if err != nil {
 		switch {
+		case errors.Is(err, service.ErrInvalidEmail):
+			writeError(w, 400, "bad_request", "enter a valid email address", nil)
+		case errors.Is(err, service.ErrInvalidName):
+			writeError(w, 400, "bad_request", "name cannot be empty", nil)
 		case errors.Is(err, service.ErrPasswordTooShort):
 			writeError(w, 400, "bad_request", "password must be at least 8 characters", nil)
 		case errors.Is(err, service.ErrInvalidRoleSet):
@@ -129,13 +133,14 @@ func (h *UserHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := ""
+	var name, email *string
 	if req.Name != nil {
-		name = strings.TrimSpace(*req.Name)
+		trimmed := strings.TrimSpace(*req.Name)
+		name = &trimmed
 	}
-	email := ""
 	if req.Email != nil {
-		email = strings.ToLower(strings.TrimSpace(*req.Email))
+		normalized := strings.ToLower(strings.TrimSpace(*req.Email))
+		email = &normalized
 	}
 
 	u, err := h.svc.UpdateUser(r.Context(), id, name, email, req.Active)
@@ -143,6 +148,12 @@ func (h *UserHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, store.ErrUserNotFound):
 			writeError(w, 404, "not_found", "user not found", nil)
+		case errors.Is(err, service.ErrInvalidEmail):
+			writeError(w, 400, "bad_request", "enter a valid email address", nil)
+		case errors.Is(err, service.ErrInvalidName):
+			writeError(w, 400, "bad_request", "name cannot be empty", nil)
+		case errors.Is(err, store.ErrEmailTaken):
+			writeError(w, 409, "conflict", "There is already an account with this email.", nil)
 		default:
 			log.Printf("user handler: UpdateUser error: %v", err)
 			writeError(w, 500, "server_error", "could not update user", nil)

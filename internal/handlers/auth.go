@@ -79,11 +79,14 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 
 	id, roles, err := h.svc.Signup(r.Context(), req.Email, req.Name, req.Password)
 	if err != nil {
-		if errors.Is(err, service.ErrEmailTaken) {
+		switch {
+		case errors.Is(err, service.ErrInvalidEmail):
+			writeError(w, 400, "bad_request", "enter a valid email address", nil)
+		case errors.Is(err, service.ErrEmailTaken):
 			writeError(w, 409, "conflict", "email already exists", nil)
-			return
+		default:
+			writeError(w, 500, "server_error", "could not create user", nil)
 		}
-		writeError(w, 500, "server_error", "could not create user", nil)
 		return
 	}
 
@@ -219,7 +222,7 @@ func (h *AuthHandlers) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		"client_id":     {os.Getenv("GOOGLE_OAUTH_CLIENT_ID")},
 		"redirect_uri":  {os.Getenv("GOOGLE_OAUTH_REDIRECT_URI")},
 		"response_type": {"code"},
-		"scope":         {
+		"scope": {
 			"https://www.googleapis.com/auth/calendar.events " +
 				"https://www.googleapis.com/auth/gmail.send " +
 				"openid email",

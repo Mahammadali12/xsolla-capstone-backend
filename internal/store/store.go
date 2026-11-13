@@ -16,7 +16,7 @@ type Store interface {
 	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
 	GetUserByID(ctx context.Context, id int64) (*User, error)
 	GetUsers(ctx context.Context, search, role, status string) ([]User, error)
-	UpdateUser(ctx context.Context, id int64, name, email string) (*User, error)
+	UpdateUser(ctx context.Context, id int64, name, email *string) (*User, error)
 	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)
 	SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error)
 	HardDeleteUser(ctx context.Context, id int64, transferTo int64) error

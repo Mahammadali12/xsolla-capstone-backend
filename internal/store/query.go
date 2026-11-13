@@ -132,8 +132,9 @@ func (q *Query) GetUserRoleExpiriesAll(ctx context.Context) (*sql.Rows, error) {
 	)
 }
 
-// UpdateUser updates name and/or email, returning the updated row.
-func (q *Query) UpdateUser(ctx context.Context, id int64, name, email string) *sql.Row {
+// UpdateUser updates name and/or email, returning the updated row. A nil
+// pointer leaves that column unchanged.
+func (q *Query) UpdateUser(ctx context.Context, id int64, name, email *string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email)
 		 WHERE id = $1
