@@ -33,6 +33,7 @@ type AuthService interface {
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
+	DeleteGoogleRefreshToken(ctx context.Context, userID int64) error
 }
 
 type AuthHandlers struct {
@@ -311,6 +312,31 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 	_ = h.svc.DeleteRefreshToken(r.Context(), req.RefreshToken)
 
 	w.WriteHeader(204)
+}
+
+// @Summary     Disconnect Google account
+// @Description Remove the signed-in user's Google OAuth credentials from the application
+// @Tags        auth
+// @Produce     json
+// @Security    BearerAuth
+// @Success     204 {string} string "No content"
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /auth/google/logout [post]
+func (h *AuthHandlers) GoogleLogout(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	if userID == 0 {
+		writeError(w, 401, "unauthorized", "missing user context", nil)
+		return
+	}
+
+	if err := h.svc.DeleteGoogleRefreshToken(r.Context(), userID); err != nil {
+		log.Printf("google logout: delete google refresh token failed for user %d: %v", userID, err)
+		writeError(w, 500, "server_error", "could not disconnect Google account", nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // @Summary     Get current user

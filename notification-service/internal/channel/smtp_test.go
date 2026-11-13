@@ -3,6 +3,7 @@ package channel
 import (
 	"bufio"
 	"context"
+	"errors"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -27,7 +28,8 @@ import (
 // fakeSMTP is a minimal in-process SMTP server for one message.
 type fakeSMTP struct {
 	ln         net.Listener
-	rejectRcpt bool
+	rejectRcpt bool   // RCPT TO returns 550 (permanent)
+	tempFail   bool   // RCPT TO returns 450 (temporary)
 	startTLS   bool
 	authMode   string // "", "ok", or "fail"
 	cert       tls.Certificate
@@ -40,10 +42,10 @@ type fakeSMTP struct {
 func newFakeSMTP(t *testing.T, mode string, rejectRcpt bool, authMode string) (*fakeSMTP, *x509.CertPool) {
 	t.Helper()
 	cert, roots := testCertificate(t)
-	return newFakeSMTPWithCert(t, mode, rejectRcpt, authMode, cert, roots)
+	return newFakeSMTPWithCert(t, mode, rejectRcpt, false, authMode, cert, roots)
 }
 
-func newFakeSMTPWithCert(t *testing.T, mode string, rejectRcpt bool, authMode string, cert tls.Certificate, roots *x509.CertPool) (*fakeSMTP, *x509.CertPool) {
+func newFakeSMTPWithCert(t *testing.T, mode string, rejectRcpt bool, tempFail bool, authMode string, cert tls.Certificate, roots *x509.CertPool) (*fakeSMTP, *x509.CertPool) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -55,6 +57,7 @@ func newFakeSMTPWithCert(t *testing.T, mode string, rejectRcpt bool, authMode st
 	f := &fakeSMTP{
 		ln:         ln,
 		rejectRcpt: rejectRcpt,
+		tempFail:   tempFail,
 		startTLS:   mode == "starttls",
 		authMode:   authMode,
 		cert:       cert,
@@ -174,6 +177,8 @@ func (f *fakeSMTP) handle(conn net.Conn) {
 		case strings.HasPrefix(upper, "RCPT TO"):
 			if f.rejectRcpt {
 				write("550 no such user\r\n")
+			} else if f.tempFail {
+				write("450 4.2.2 mailbox temporarily unavailable\r\n")
 			} else {
 				write("250 OK\r\n")
 			}
@@ -408,7 +413,7 @@ func TestSMTPSenderRejectsInvalidRecipient(t *testing.T) {
 
 func TestSMTPSenderVerifiesCertificateHostname(t *testing.T) {
 	cert, roots := testCertificateFor(t, false) // DNS SAN only, no 127.0.0.1
-	fake, _ := newFakeSMTPWithCert(t, "tls", false, "", cert, roots)
+	fake, _ := newFakeSMTPWithCert(t, "tls", false, false, "", cert, roots)
 	host, port := fake.hostPort(t)
 	sender, err := NewSMTPSender(SMTPConfig{
 		Host:    host,
@@ -511,6 +516,149 @@ func TestBuildMessageEncodesHeaderInjection(t *testing.T) {
 		t.Fatalf("body line endings not normalized: %q", message)
 	}
 }
+
+
+// TestSMTPSenderClassifiesAuthFailure tests that wrong credentials produce
+// a permanent error (not retried).
+func TestSMTPSenderClassifiesAuthFailure(t *testing.T) {
+fake, roots := newFakeSMTP(t, "starttls", false, "fail")
+host, port := fake.hostPort(t)
+sender, err := NewSMTPSender(SMTPConfig{
+Host:     host,
+Port:     port,
+Username: "user@example.com",
+Password: "wrong-password",
+From:     "no-reply@example.com",
+TLSMode:  "starttls",
+Timeout:  5 * time.Second,
+rootCAs:  roots,
+})
+if err != nil {
+t.Fatalf("new sender: %v", err)
+}
+
+err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+if err == nil {
+t.Fatal("want an auth failure error, got nil")
+}
+if IsTemporary(err) {
+t.Fatalf("auth failure should be permanent, got temporary error: %v", err)
+}
+}
+
+// TestSMTPSenderClassifiesUnreachableHost tests that an unreachable SMTP
+// host produces a temporary error (retried).
+func TestSMTPSenderClassifiesUnreachableHost(t *testing.T) {
+sender, err := NewSMTPSender(SMTPConfig{
+Host:     "10.255.255.1",
+Port:     "25",
+From:     "no-reply@example.com",
+TLSMode:  "starttls",
+Timeout:  200 * time.Millisecond,
+})
+if err != nil {
+t.Fatalf("new sender: %v", err)
+}
+
+err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+if err == nil {
+t.Fatal("want a dial error, got nil")
+}
+if !IsTemporary(err) {
+t.Fatalf("unreachable host should be temporary, got permanent error: %v", err)
+}
+}
+
+// TestSMTPSenderClassifiesInvalidRecipient tests that an invalid recipient
+// address produces a permanent error.
+func TestSMTPSenderClassifiesInvalidRecipient(t *testing.T) {
+fake, roots := newFakeSMTP(t, "starttls", false, "")
+host, port := fake.hostPort(t)
+sender, err := NewSMTPSender(SMTPConfig{
+Host:    host,
+Port:    port,
+From:    "no-reply@example.com",
+TLSMode: "starttls",
+Timeout: 5 * time.Second,
+rootCAs: roots,
+})
+if err != nil {
+t.Fatalf("new sender: %v", err)
+}
+
+err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "not-an-email"}, Message{Subject: "hi", Body: "body"})
+if err == nil {
+t.Fatal("want an invalid recipient error, got nil")
+}
+if IsTemporary(err) {
+t.Fatalf("invalid recipient should be permanent, got temporary error: %v", err)
+}
+}
+
+// TestSMTPSenderClassifiesTemporaryFailure tests that an SMTP 4xx response
+// produces a temporary error (retried).
+func TestSMTPSenderClassifiesTemporaryFailure(t *testing.T) {
+	cert, roots := testCertificate(t)
+	fake, _ := newFakeSMTPWithCert(t, "starttls", false, false, "", cert, roots)
+host, port := fake.hostPort(t)
+sender, err := NewSMTPSender(SMTPConfig{
+Host:    host,
+Port:    port,
+From:    "no-reply@example.com",
+TLSMode: "starttls",
+Timeout: 5 * time.Second,
+rootCAs: roots,
+})
+if err != nil {
+t.Fatalf("new sender: %v", err)
+}
+
+// Enable tempFail after creating the sender so RCPT TO returns 450.
+fake.tempFail = true
+
+err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+if err == nil {
+t.Fatal("want a temporary failure error, got nil")
+}
+if !IsTemporary(err) {
+t.Fatalf("4xx response should be temporary, got permanent error: %v", err)
+}
+}
+
+// TestSMTPSenderClassifiesPermanentFailure tests that an SMTP 5xx response
+// produces a permanent error (not retried).
+func TestSMTPSenderClassifiesPermanentFailure(t *testing.T) {
+fake, roots := newFakeSMTP(t, "starttls", true, "")
+host, port := fake.hostPort(t)
+sender, err := NewSMTPSender(SMTPConfig{
+Host:    host,
+Port:    port,
+From:    "no-reply@example.com",
+TLSMode: "starttls",
+Timeout: 5 * time.Second,
+rootCAs: roots,
+})
+if err != nil {
+t.Fatalf("new sender: %v", err)
+}
+
+err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+if err == nil {
+t.Fatal("want a permanent failure error, got nil")
+}
+if IsTemporary(err) {
+t.Fatalf("5xx response should be permanent, got temporary error: %v", err)
+}
+}
+
+// TestIsTemporaryWithNonSendError reports that non-sendError errors are
+// treated as temporary (conservative default for unknown failures).
+func TestIsTemporaryWithNonSendError(t *testing.T) {
+if IsTemporary(errors.New("some random error")) {
+t.Fatal("unknown error should not be classified as temporary")
+}
+}
+
 
 func mustAddress(t *testing.T, value string) *mail.Address {
 	t.Helper()

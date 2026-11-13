@@ -94,6 +94,15 @@ func (q *Query) UpsertGoogleRefreshToken(ctx context.Context, userID int64, encr
 	)
 }
 
+// DeleteGoogleRefreshToken removes the stored Google OAuth refresh token for a user.
+// It is idempotent: deleting a token that does not exist is still a success.
+func (q *Query) DeleteGoogleRefreshToken(ctx context.Context, userID int64) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`DELETE FROM google_tokens WHERE user_id = $1`,
+		userID,
+	)
+}
+
 func (q *Query) GetGoogleRefreshToken(ctx context.Context, userID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`SELECT encrypted_refresh_token, token_expires_at FROM google_tokens WHERE user_id = $1`,

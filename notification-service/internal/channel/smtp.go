@@ -34,6 +34,74 @@ type SMTPConfig struct {
 	rootCAs *x509.CertPool
 }
 
+// sendError wraps an SMTP send failure and classifies it as temporary or
+// permanent. Temporary failures (network errors, 4xx responses) may be retried;
+// permanent failures (auth failures, invalid recipients, 5xx responses) should
+// not be retried indefinitely.
+type sendError struct {
+	err       error
+	temporary bool
+}
+
+func (e *sendError) Error() string { return e.err.Error() }
+func (e *sendError) Unwrap() error { return e.err }
+
+// temporarySendError wraps err as a retryable failure.
+func TemporarySendError(err error) error { return &sendError{err: err, temporary: true} }
+
+// permanentSendError wraps err as a non-retryable failure.
+func PermanentSendError(err error) error { return &sendError{err: err, temporary: false} }
+
+// IsTemporary reports whether err is a retryable send failure.
+func IsTemporary(err error) bool {
+	var se *sendError
+	if errors.As(err, &se) {
+		return se.temporary
+	}
+	return false
+}
+
+// smtpStatusCode extracts the 3-digit SMTP status code from an error message,
+// such as "smtp: 450 4.2.2 mailbox temporarily unavailable" or
+// "smtp rcpt to: 550 no such user". Returns 0 if no code is found.
+func smtpStatusCode(err error) int {
+	msg := err.Error()
+	// Scan for a 3-digit code at the start of a word.
+	for i := 0; i < len(msg)-2; i++ {
+		if msg[i] < '0' || msg[i] > '9' {
+			continue
+		}
+		if i+2 < len(msg) && msg[i+1] >= '0' && msg[i+1] <= '9' && msg[i+2] >= '0' && msg[i+2] <= '9' {
+			// Check it's not part of a longer number
+			if i > 0 && msg[i-1] >= '0' && msg[i-1] <= '9' {
+				continue
+			}
+			if i+3 < len(msg) && msg[i+3] >= '0' && msg[i+3] <= '9' {
+				continue
+			}
+			code := 0
+			for j := i; j < i+3; j++ {
+				code = code*10 + int(msg[j]-'0')
+			}
+			return code
+		}
+	}
+	return 0
+}
+
+// temporaryIf4xx classifies an SMTP command error: 4xx codes are temporary,
+// 5xx codes are permanent, unknown codes default to temporary.
+func temporaryIf4xx(err error) error {
+	code := smtpStatusCode(err)
+	if code >= 400 && code < 500 {
+		return TemporarySendError(err)
+	}
+	if code >= 500 {
+		return PermanentSendError(err)
+	}
+	return TemporarySendError(err)
+}
+
 // SMTPSender delivers email through a configured SMTP server.
 type SMTPSender struct {
 	cfg  SMTPConfig
@@ -63,15 +131,15 @@ func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
 // Send delivers one plain-text message. Errors reach deliveries.last_error.
 func (s *SMTPSender) Send(ctx context.Context, recipient events.Recipient, message Message) error {
 	if strings.ContainsAny(recipient.Email, "\r\n") {
-		return fmt.Errorf("recipient %d email contains a newline", recipient.ID)
+		return PermanentSendError(fmt.Errorf("recipient %d email contains a newline", recipient.ID))
 	}
 	to, err := mail.ParseAddress(recipient.Email)
 	if err != nil {
-		return fmt.Errorf("recipient %d has no usable email: %w", recipient.ID, err)
+		return PermanentSendError(fmt.Errorf("recipient %d has no usable email: %w", recipient.ID, err))
 	}
 	body, err := buildMessage(s.from, to, message)
 	if err != nil {
-		return err
+		return PermanentSendError(err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
@@ -80,7 +148,7 @@ func (s *SMTPSender) Send(ctx context.Context, recipient events.Recipient, messa
 	dialer := &net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(s.cfg.Host, s.cfg.Port))
 	if err != nil {
-		return fmt.Errorf("smtp dial: %w", err)
+		return TemporarySendError(fmt.Errorf("smtp dial: %w", err))
 	}
 	defer conn.Close()
 
@@ -93,47 +161,47 @@ func (s *SMTPSender) Send(ctx context.Context, recipient events.Recipient, messa
 	if s.cfg.TLSMode == "tls" {
 		tlsConn := tls.Client(conn, s.tlsConfig())
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			return fmt.Errorf("smtp tls handshake: %w", err)
+			return TemporarySendError(fmt.Errorf("smtp tls handshake: %w", err))
 		}
 		conn = tlsConn
 	}
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		return fmt.Errorf("smtp client: %w", err)
+		return TemporarySendError(fmt.Errorf("smtp client: %w", err))
 	}
 	defer client.Close()
 
 	if s.cfg.TLSMode == "starttls" {
 		if ok, _ := client.Extension("STARTTLS"); !ok {
-			return errors.New("smtp server does not offer STARTTLS")
+			return PermanentSendError(errors.New("smtp server does not offer STARTTLS"))
 		}
 		if err := client.StartTLS(s.tlsConfig()); err != nil {
-			return fmt.Errorf("smtp starttls: %w", err)
+			return TemporarySendError(fmt.Errorf("smtp starttls: %w", err))
 		}
 	}
 	if s.cfg.Username != "" {
 		auth := smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
 		if err := client.Auth(auth); err != nil {
-			return fmt.Errorf("smtp auth: %w", err)
+			return PermanentSendError(fmt.Errorf("smtp auth: %w", err))
 		}
 	}
 	if err := client.Mail(s.from.Address); err != nil {
-		return fmt.Errorf("smtp mail from: %w", err)
+		return temporaryIf4xx(fmt.Errorf("smtp mail from: %w", err))
 	}
 	if err := client.Rcpt(to.Address); err != nil {
-		return fmt.Errorf("smtp rcpt to: %w", err)
+		return temporaryIf4xx(fmt.Errorf("smtp rcpt to: %w", err))
 	}
 	data, err := client.Data()
 	if err != nil {
-		return fmt.Errorf("smtp data: %w", err)
+		return temporaryIf4xx(fmt.Errorf("smtp data: %w", err))
 	}
 	if _, err := data.Write(body); err != nil {
 		data.Close()
-		return fmt.Errorf("smtp write: %w", err)
+		return TemporarySendError(fmt.Errorf("smtp write: %w", err))
 	}
 	if err := data.Close(); err != nil {
-		return fmt.Errorf("smtp finish: %w", err)
+		return TemporarySendError(fmt.Errorf("smtp finish: %w", err))
 	}
 	// The message is accepted; a dropped QUIT must not mark it failed.
 	if err := client.Quit(); err != nil {

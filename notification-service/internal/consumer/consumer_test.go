@@ -11,6 +11,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	"xsolla-notification-service/internal/channel"
 	"xsolla-notification-service/internal/events"
 )
 
@@ -124,7 +125,7 @@ func TestProcessRetriesThenAcks(t *testing.T) {
 	c := New(func(_ context.Context, _ events.Envelope) error {
 		calls++
 		if calls < 3 {
-			return errors.New("temporary failure")
+			return channel.TemporarySendError(errors.New("temporary failure"))
 		}
 		return nil
 	})
@@ -145,7 +146,7 @@ func TestProcessDeadLettersAfterRetries(t *testing.T) {
 	calls := 0
 	c := New(func(_ context.Context, _ events.Envelope) error {
 		calls++
-		return errors.New("still failing")
+		return channel.TemporarySendError(errors.New("still failing"))
 	})
 	c.backoff = 0
 	c.process(context.Background(), newDelivery(validMessage(t, 1), ack))
@@ -159,6 +160,28 @@ func TestProcessDeadLettersAfterRetries(t *testing.T) {
 	}
 	if len(requeues) != 1 || requeues[0] {
 		t.Fatalf("requeues=%v, want false", requeues)
+	}
+}
+
+func TestProcessPermanentFailureNotRetried(t *testing.T) {
+	ack := &fakeAcknowledger{}
+	calls := 0
+	c := New(func(_ context.Context, _ events.Envelope) error {
+		calls++
+		return channel.PermanentSendError(errors.New("invalid recipient"))
+	})
+	c.backoff = 0
+	c.process(context.Background(), newDelivery(validMessage(t, 1), ack))
+
+	if calls != 1 {
+		t.Fatalf("calls=%d, want 1 (permanent failure not retried)", calls)
+	}
+	acks, nacks, _, requeues := ack.counts()
+	if acks != 0 || nacks != 1 {
+		t.Fatalf("acks=%d nacks=%d, want one nack", acks, nacks)
+	}
+	if len(requeues) != 1 || requeues[0] {
+		t.Fatalf("requeues=%v, want false (no requeue for permanent failure)", requeues)
 	}
 }
 
