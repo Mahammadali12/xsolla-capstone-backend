@@ -1,11 +1,11 @@
 info:
-  name: Update event
+  name: Update event (attach module 1)
   type: http
-  seq: 3
+  seq: 4
 
 http:
   method: PATCH
-  url: http://localhost:8080/events/4
+  url: http://localhost:8080/events/2
   headers:
     - name: Content-Type
       value: application/json
@@ -16,7 +16,8 @@ http:
     data: |-
       {
         "title": "Updated Lecture",
-        "location": "Building A"
+        "location": "Building A",
+        "module_id": 1
       }
   auth: inherit
 

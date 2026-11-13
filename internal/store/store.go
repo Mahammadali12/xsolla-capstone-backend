@@ -16,10 +16,10 @@ type Store interface {
 	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
 	GetUserByID(ctx context.Context, id int64) (*User, error)
 	GetUsers(ctx context.Context, search, role, status string) ([]User, error)
-	UpdateUser(ctx context.Context, id int64, name, email string) (*User, error)
+	UpdateUser(ctx context.Context, id int64, name, email *string) (*User, error)
 	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)
 	SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error)
-	SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error)
+	HardDeleteUser(ctx context.Context, id int64, transferTo int64) error
 	CountAdmins(ctx context.Context) (int, error)
 	DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, error)
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
@@ -86,11 +86,11 @@ type Store interface {
 	GetSubmissionFiles(ctx context.Context, submissionID int64) ([]File, error)
 
 	// Event methods
-	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) (*Event, error)
+	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*Event, error)
 	GetEventByID(ctx context.Context, id int64) (*Event, error)
-	ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) ([]Event, error)
-	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
-	UpdateEventGoogleID(ctx context.Context, eventID int64, googleEventID string) error
+	ListEventsByRange(ctx context.Context, from time.Time, to time.Time) ([]Event, error)
+	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
+	UpdateEventGoogle(ctx context.Context, eventID int64, googleEventID *string, meetingURL *string) error
 	DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin bool) error
 	UpdateModuleGrade(ctx context.Context, id int64, grade *string, gradedBy int64) (*Module, error)
 
@@ -117,7 +117,9 @@ type Store interface {
 	CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (*MentorSlot, error)
 	ListMentorSlots(ctx context.Context, userID int64, roles []string) ([]MentorSlot, error)
 	GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlot, error)
+	UpdateMentorSlotGoogle(ctx context.Context, slotID int64, googleEventID *string, meetingURL *string) error
 	DeleteMentorSlot(ctx context.Context, userID int64, roles []string, id int64) error
+	DeleteMentorSlotsByMentor(ctx context.Context, mentorID int64) ([]MentorSlot, error)
 	BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error)
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
 	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)

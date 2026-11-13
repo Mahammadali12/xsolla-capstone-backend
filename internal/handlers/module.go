@@ -176,7 +176,7 @@ func (h *ModuleHandlers) GetModule(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary     Update module
-// @Description Update module title/description (teacher or admin only)
+// @Description Update module title/description (lecturer or admin only)
 // @Tags        modules
 // @Accept      json
 // @Produce     json
@@ -236,7 +236,7 @@ func (h *ModuleHandlers) PatchModule(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary     Delete module
-// @Description Soft-delete a module (teacher or admin only)
+// @Description Soft-delete a module (lecturer or admin only)
 // @Tags        modules
 // @Security    BearerAuth
 // @Param       id path int true "Module ID"

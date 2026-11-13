@@ -34,6 +34,10 @@ func NewMentorSlotHandlers(svc MentorSlotService) *MentorSlotHandlers {
 func toResponse(slots []service.MentorSlot) []dto.MentorSlotResponse {
 	resp := make([]dto.MentorSlotResponse, len(slots))
 	for i, s := range slots {
+		attendees := make([]dto.Attendee, len(s.Attendees))
+		for j, a := range s.Attendees {
+			attendees[j] = dto.Attendee{ID: a.ID, Name: a.Name, Email: a.Email}
+		}
 		resp[i] = dto.MentorSlotResponse{
 			ID:           strconv.FormatInt(s.ID, 10),
 			MentorID:     s.MentorID,
@@ -43,6 +47,8 @@ func toResponse(slots []service.MentorSlot) []dto.MentorSlotResponse {
 			Booked:       s.Booked,
 			BookedBy:     s.BookedBy,
 			BookedByName: s.BookedByName,
+			MeetingURL:   s.MeetingURL,
+			Attendees:    attendees,
 		}
 	}
 	return resp

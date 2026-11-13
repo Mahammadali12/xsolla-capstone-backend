@@ -82,37 +82,33 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 }
 
 // GetSubmissionByID returns a submission if the user is authorized to view it.
+// Access is cumulative: admin, the student themselves, a mentor of the student's
+// team, or the teacher of the submission's module (regardless of the other roles).
 func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64, roles []string, submissionID int64) (*store.Submission, error) {
 	sub, err := s.store.GetSubmissionByID(ctx, submissionID)
 	if err != nil {
 		return nil, err
 	}
 
-	if auth.HasRole(roles, "admin") {
-		// Admin can view any submission
-	} else if sub.StudentID == userID {
-		// Student can only view their own submission
-	} else if auth.HasRole(roles, "mentor") {
-		// Mentor can view submissions from students in their own team
+	allowed := auth.HasRole(roles, "admin") || sub.StudentID == userID
+
+	if !allowed && auth.HasRole(roles, "mentor") {
 		team, err := s.store.GetMentorTeamDetail(ctx, userID)
 		if err != nil {
-			if errors.Is(err, store.ErrTeamNotFound) {
-				return nil, store.ErrNotEnrolled
+			if !errors.Is(err, store.ErrTeamNotFound) {
+				return nil, err
 			}
-			return nil, err
-		}
-		found := false
-		for _, m := range team.Members {
-			if m.ID == sub.StudentID {
-				found = true
-				break
+		} else {
+			for _, m := range team.Members {
+				if m.ID == sub.StudentID {
+					allowed = true
+					break
+				}
 			}
 		}
-		if !found {
-			return nil, store.ErrNotEnrolled
-		}
-	} else {
-		// Lecturer must be the teacher of the module
+	}
+
+	if !allowed && auth.HasRole(roles, "lecturer") {
 		ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
 		if err != nil {
 			return nil, err
@@ -121,9 +117,11 @@ func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64,
 		if err != nil {
 			return nil, err
 		}
-		if !teacher {
-			return nil, store.ErrNotEnrolled
-		}
+		allowed = teacher
+	}
+
+	if !allowed {
+		return nil, store.ErrNotEnrolled
 	}
 
 	// Load attached files
@@ -148,8 +146,10 @@ func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Cont
 	return sub, nil
 }
 
-// GetSubmissionsForAssignment returns all submissions for an assignment.
-// Teachers see all students; mentors see only their team's students; students see only their own.
+// GetSubmissionsForAssignment returns the submissions for an assignment.
+// Access is cumulative: admins see all, the module's teacher sees all, a mentor
+// sees their own team's students (even when they also hold the lecturer role),
+// and a student sees only their own attempts.
 func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, userID int64, roles []string, contentItemID int64) ([]store.Submission, error) {
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
 	if err != nil {
@@ -160,50 +160,38 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 	}
 
 	var submissions []store.Submission
+	isAdmin := auth.HasRole(roles, "admin")
+	isLecturer := auth.HasRole(roles, "lecturer")
+	isMentor := auth.HasRole(roles, "mentor")
 
-	if auth.HasRole(roles, "admin") {
+	switch {
+	case isAdmin:
 		submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
-		if err != nil {
-			return nil, err
+
+	case isLecturer:
+		teacher, teacherErr := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
+		if teacherErr != nil {
+			return nil, teacherErr
 		}
-	} else if auth.HasRole(roles, "lecturer") {
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if !teacher {
+		if teacher {
+			// The teacher sees every student's work, even if they are also a mentor.
+			submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
+		} else if isMentor {
+			// A lecturer with an extra mentor role keeps the mentor's team access.
+			submissions, err = s.submissionsForMentor(ctx, userID, contentItemID)
+		} else {
 			return nil, store.ErrNotModuleTeacher
 		}
-		submissions, err = s.store.GetSubmissionsForAssignment(ctx, contentItemID)
-		if err != nil {
-			return nil, err
-		}
-	} else if auth.HasRole(roles, "mentor") {
-		// Mentor sees only submissions from students in their own team.
-		team, err := s.store.GetMentorTeamDetail(ctx, userID)
-		if err != nil {
-			if errors.Is(err, store.ErrTeamNotFound) {
-				return []store.Submission{}, nil
-			}
-			return nil, err
-		}
-		studentIDs := make([]int64, 0, len(team.Members))
-		for _, m := range team.Members {
-			studentIDs = append(studentIDs, m.ID)
-		}
-		if len(studentIDs) == 0 {
-			return []store.Submission{}, nil
-		}
-		submissions, err = s.store.GetSubmissionsForAssignmentByStudents(ctx, contentItemID, studentIDs)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Student: return all of their own attempts, most recent first
+
+	case isMentor:
+		submissions, err = s.submissionsForMentor(ctx, userID, contentItemID)
+
+	default:
+		// Student: all of their own attempts, most recent first
 		submissions, err = s.store.GetSubmissionsByStudentAndAssignment(ctx, userID, contentItemID)
-		if err != nil {
-			return nil, err
-		}
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// Load attached files for each submission
@@ -215,6 +203,28 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 	}
 
 	return submissions, nil
+}
+
+// submissionsForMentor returns the submissions of the mentor's own team.
+// A mentor without a team, or with an empty team, gets an empty list.
+func (s *SubmissionService) submissionsForMentor(ctx context.Context, mentorID, contentItemID int64) ([]store.Submission, error) {
+	team, err := s.store.GetMentorTeamDetail(ctx, mentorID)
+	if err != nil {
+		if errors.Is(err, store.ErrTeamNotFound) {
+			return []store.Submission{}, nil
+		}
+		return nil, err
+	}
+
+	studentIDs := make([]int64, 0, len(team.Members))
+	for _, m := range team.Members {
+		studentIDs = append(studentIDs, m.ID)
+	}
+	if len(studentIDs) == 0 {
+		return []store.Submission{}, nil
+	}
+
+	return s.store.GetSubmissionsForAssignmentByStudents(ctx, contentItemID, studentIDs)
 }
 
 // UpdateSubmissionFeedback updates a submission's feedback.

@@ -1,0 +1,18 @@
+info:
+  name: Delete free slot 26 (mentor or admin)
+  type: http
+  seq: 5
+
+http:
+  method: DELETE
+  url: http://localhost:8080/mentor-slots/26
+  headers:
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -32,6 +32,10 @@ services:
       DATABASE_URL: host=db port=5432 user=lms password=lms dbname=lms sslmode=disable
       PORT: ":8080"
       CORS_ORIGIN: http://localhost:5173
+      # The notification stack's broker is published on the host, not in this compose file.
+      RABBITMQ_URL: amqp://lms:lms@host.docker.internal:5672/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     healthcheck:

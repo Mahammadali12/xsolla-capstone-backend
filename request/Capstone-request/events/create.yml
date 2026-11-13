@@ -17,11 +17,11 @@ http:
       {
         "title": "Weekly Lecture",
         "kind": "lecture",
-        "starts_at": "2026-11-09T10:00:00Z",
-        "ends_at": "2026-11-09T11:00:00Z",
+        "starts_at": "2026-12-01T10:00:00Z",
+        "ends_at": "2026-12-01T11:00:00Z",
         "location": "Main hall",
         "description": "Weekly lecture for the current module",
-        "module_id": null
+        "module_id": 1
       }
   auth: inherit
 

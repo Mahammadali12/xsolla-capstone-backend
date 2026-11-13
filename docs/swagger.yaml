@@ -27,8 +27,6 @@ definitions:
         type: integer
       is_visible:
         type: boolean
-      max_points:
-        type: integer
       parent_id:
         type: integer
       position:
@@ -56,8 +54,6 @@ definitions:
         type: integer
       is_visible:
         type: boolean
-      max_points:
-        type: integer
       position:
         type: integer
       title:
@@ -77,8 +73,6 @@ definitions:
         type: integer
       is_visible:
         type: boolean
-      max_points:
-        type: integer
       parent_id:
         type: integer
       position:
@@ -92,7 +86,11 @@ definitions:
     type: object
   dto.CreateModuleRequest:
     properties:
+      closes_at:
+        type: string
       description:
+        type: string
+      opens_at:
         type: string
       title:
         type: string
@@ -105,6 +103,8 @@ definitions:
   dto.EnrollmentResponse:
     properties:
       created_at:
+        type: string
+      grade:
         type: string
       id:
         type: integer
@@ -128,6 +128,36 @@ definitions:
       storage_key:
         type: string
     type: object
+  dto.GoogleCalendarEventResponse:
+    properties:
+      all_day:
+        type: boolean
+      description:
+        type: string
+      ends_at:
+        description: EndsAt is RFC 3339, or the last covered day (inclusive) for all-day
+          events.
+        type: string
+      html_link:
+        type: string
+      id:
+        type: string
+      location:
+        type: string
+      meeting_url:
+        type: string
+      starts_at:
+        description: StartsAt is RFC 3339 for timed events, YYYY-MM-DD for all-day
+          ones.
+        type: string
+      title:
+        type: string
+    type: object
+  dto.GradeEnrollmentRequest:
+    properties:
+      grade:
+        type: string
+    type: object
   dto.LoginRequest:
     properties:
       login:
@@ -144,14 +174,20 @@ definitions:
     type: object
   dto.ModuleResponse:
     properties:
+      closes_at:
+        type: string
       created_at:
         type: string
       created_by:
         type: integer
       description:
         type: string
+      grade:
+        type: string
       id:
         type: integer
+      opens_at:
+        type: string
       title:
         type: string
     type: object
@@ -200,7 +236,11 @@ definitions:
     type: object
   dto.UpdateModuleRequest:
     properties:
+      closes_at:
+        type: string
       description:
+        type: string
+      opens_at:
         type: string
       title:
         type: string
@@ -246,6 +286,27 @@ definitions:
       status:
         type: integer
     type: object
+  handlers.googleUserInfo:
+    properties:
+      email:
+        type: string
+      family_name:
+        type: string
+      given_name:
+        type: string
+      hd:
+        type: string
+      id:
+        type: string
+      locale:
+        type: string
+      name:
+        type: string
+      picture:
+        type: string
+      verified_email:
+        type: boolean
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -260,6 +321,61 @@ info:
   title: Xsolla School LMS API
   version: "1.0"
 paths:
+  /auth/google/callback:
+    get:
+      description: Handle Google OAuth redirect, exchange code for tokens, store encrypted
+        refresh token
+      produces:
+      - text/html
+      responses:
+        "302":
+          description: Redirect to frontend
+          schema:
+            type: string
+      summary: Google OAuth callback
+      tags:
+      - auth
+  /auth/google/login:
+    get:
+      description: Redirect user to Google consent screen to connect their Google
+        account
+      produces:
+      - text/html
+      responses:
+        "302":
+          description: Redirect to Google
+          schema:
+            type: string
+      summary: Google OAuth login
+      tags:
+      - auth
+  /auth/google/me:
+    get:
+      description: Return the connected Google account profile for the signed-in user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.googleUserInfo'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Google user profile
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:
@@ -380,7 +496,7 @@ paths:
       - auth
   /content-items/{id}:
     delete:
-      description: Soft-delete a content item (teacher or admin only)
+      description: Soft-delete a content item (lecturer or admin only)
       parameters:
       - description: Content item ID
         in: path
@@ -444,7 +560,7 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Update content item fields (teacher or admin only)
+      description: Update content item fields (lecturer or admin only)
       parameters:
       - description: Content item ID
         in: path
@@ -524,6 +640,49 @@ paths:
       summary: Upload file
       tags:
       - files
+  /google/calendar/events:
+    get:
+      description: All events of the signed-in user's primary Google Calendar in the
+        given range (read-only). Requires the user to have connected Google.
+      parameters:
+      - description: 'Start of the range (RFC 3339). Default: one month ago.'
+        in: query
+        name: from
+        type: string
+      - description: 'End of the range (RFC 3339). Default: two months ahead.'
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.GoogleCalendarEventResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my Google Calendar events
+      tags:
+      - google
   /modules:
     get:
       description: Get modules the user is enrolled in (student), teaching (teacher),
@@ -588,7 +747,7 @@ paths:
       - modules
   /modules/{id}:
     delete:
-      description: Soft-delete a module (teacher or admin only)
+      description: Soft-delete a module (lecturer or admin only)
       parameters:
       - description: Module ID
         in: path
@@ -652,7 +811,7 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Update module title/description (teacher or admin only)
+      description: Update module title/description (lecturer or admin only)
       parameters:
       - description: Module ID
         in: path
@@ -727,7 +886,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a file or assignment (teacher or admin only)
+      description: Create a file, assignment or link (lecturer or admin only)
       parameters:
       - description: Module ID
         in: path
@@ -878,6 +1037,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Unenroll from module
+      tags:
+      - enrollments
+  /modules/{moduleId}/enrollments/{userId}/grade:
+    patch:
+      consumes:
+      - application/json
+      description: Set a student's module grade red/yellow/green (mentor/admin only)
+      parameters:
+      - description: Module ID
+        in: path
+        name: moduleId
+        required: true
+        type: integer
+      - description: Student ID
+        in: path
+        name: userId
+        required: true
+        type: integer
+      - description: Grade
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GradeEnrollmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.EnrollmentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Grade enrollment
       tags:
       - enrollments
   /users/me:

@@ -26,6 +26,10 @@ var (
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
 	// ErrLastAdmin is returned when the last admin would be removed.
 	ErrLastAdmin = errors.New("cannot remove the last admin")
+	// ErrCannotDeleteSelf is returned when an admin tries to delete their own account.
+	ErrCannotDeleteSelf = errors.New("cannot delete your own account")
+	// ErrInvalidName is returned when a user's name would be empty.
+	ErrInvalidName = errors.New("name cannot be empty")
 	// ErrInvalidRoleSet is returned for an invalid role assignment.
 	ErrInvalidRoleSet = errors.New("invalid role set")
 )
@@ -180,17 +184,17 @@ func (s *UserService) UpdatePassword(ctx context.Context, id int64, password str
 
 // validRoles is the full set of assignable roles.
 var validRoles = map[string]bool{
-	"student":   true,
-	"mentor":    true,
-	"lecturer":  true,
-	"admin":     true,
+	"student":  true,
+	"mentor":   true,
+	"lecturer": true,
+	"admin":    true,
 }
 
 // staffRoles are roles that are not student.
 var staffRoles = map[string]bool{
-	"mentor":    true,
-	"lecturer":  true,
-	"admin":     true,
+	"mentor":   true,
+	"lecturer": true,
+	"admin":    true,
 }
 
 // ListUsers returns all users filtered by search/role/status, with effective roles.
@@ -200,6 +204,13 @@ func (s *UserService) ListUsers(ctx context.Context, search, role, status string
 
 // CreateUser creates an account with an admin-chosen password.
 func (s *UserService) CreateUser(ctx context.Context, email, name, password string, roles []string) (int64, []string, error) {
+	email = normalizeEmail(email)
+	if err := ValidateEmail(email); err != nil {
+		return 0, nil, err
+	}
+	if strings.TrimSpace(name) == "" {
+		return 0, nil, ErrInvalidName
+	}
 	if len(password) < 8 {
 		return 0, nil, ErrPasswordTooShort
 	}
@@ -258,20 +269,43 @@ func (s *UserService) enrollInAllModules(ctx context.Context, userID int64) erro
 }
 
 // UpdateUser updates name, email, and/or active status of a user.
-func (s *UserService) UpdateUser(ctx context.Context, id int64, name, email string, active *bool) (*store.User, error) {
+// UpdateUser updates name and/or email and/or active status. Omitted fields are
+// nil and stay unchanged; an explicit empty name/email is rejected.
+func (s *UserService) UpdateUser(ctx context.Context, id int64, name, email *string, active *bool) (*store.User, error) {
+	if name != nil {
+		trimmed := strings.TrimSpace(*name)
+		if trimmed == "" {
+			return nil, ErrInvalidName
+		}
+		name = &trimmed
+	}
+	if email != nil {
+		normalized := normalizeEmail(*email)
+		if err := ValidateEmail(normalized); err != nil {
+			return nil, err
+		}
+		email = &normalized
+	}
+
 	if active != nil {
 		if _, err := s.store.SetUserLeftAt(ctx, id, !*active); err != nil {
 			return nil, err
 		}
 	}
-	if name != "" || email != "" {
+	if name != nil || email != nil {
 		return s.store.UpdateUser(ctx, id, name, email)
 	}
 	return s.store.GetUserByID(ctx, id)
 }
 
-// DeleteUser soft-deletes a user (deleted_at). Refuses the last admin.
-func (s *UserService) DeleteUser(ctx context.Context, id int64) error {
+// DeleteUser permanently deletes a user: the row is erased, not marked deleted.
+// The last admin and the acting admin's own account are refused. Course content
+// (modules and files) is transferred to the acting admin; personal data is erased.
+func (s *UserService) DeleteUser(ctx context.Context, id, actorID int64) error {
+	if id == actorID {
+		return ErrCannotDeleteSelf
+	}
+
 	// Refuse deleting the last admin.
 	admins, err := s.store.CountAdmins(ctx)
 	if err != nil {
@@ -288,11 +322,12 @@ func (s *UserService) DeleteUser(ctx context.Context, id int64) error {
 			break
 		}
 	}
-	if isAdmin && admins <= 1 {
+	// Refuse deleting the last active admin. A row that was already soft-deleted
+	// is not an active admin anymore, so cleaning it up stays allowed.
+	if isAdmin && admins <= 1 && user.DeletedAt == nil {
 		return ErrLastAdmin
 	}
-	_, err = s.store.SoftDeleteUser(ctx, id)
-	return err
+	return s.store.HardDeleteUser(ctx, id, actorID)
 }
 
 // ReplaceUserRoles replaces a user's whole role set with optional end dates.

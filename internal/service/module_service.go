@@ -66,6 +66,26 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles [
 }
 
 func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
+	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") {
+		return s.store.GetModulesForUser(ctx, userID, roles)
+	}
+	if auth.HasRole(roles, "mentor") {
+		team, err := s.store.GetMentorTeamDetail(ctx, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrTeamNotFound) {
+				return []store.Module{}, nil
+			}
+			return nil, err
+		}
+		studentIDs := make([]int64, 0, len(team.Members))
+		for _, m := range team.Members {
+			studentIDs = append(studentIDs, m.ID)
+		}
+		if len(studentIDs) == 0 {
+			return []store.Module{}, nil
+		}
+		return s.store.GetModulesWithEnrolledStudents(ctx, studentIDs)
+	}
 	return s.store.GetModulesForUser(ctx, userID, roles)
 }
 
@@ -76,7 +96,7 @@ func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []s
 		return nil, err
 	}
 
-	if auth.HasRole(roles, "admin") {
+	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") {
 		return s.store.PatchModule(ctx, moduleID, title, description, userID, true, opensAt, closesAt)
 	}
 
@@ -112,7 +132,7 @@ func (s *ModuleService) resolvePatchDates(ctx context.Context, moduleID int64, o
 
 // DeleteModule soft-deletes a module if the user is authorized.
 func (s *ModuleService) DeleteModule(ctx context.Context, userID int64, roles []string, moduleID int64) error {
-	if auth.HasRole(roles, "admin") {
+	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") {
 		return s.store.DeleteModule(ctx, moduleID, userID, true)
 	}
 
