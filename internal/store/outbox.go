@@ -10,6 +10,9 @@ import (
 // MentorSlotBookedEventType is the domain event emitted when a student books a slot.
 const MentorSlotBookedEventType = "mentor_slot.booked"
 
+// MentorSlotCanceledEventType is the domain event emitted when a booking is cancelled.
+const MentorSlotCanceledEventType = "mentor_slot.canceled"
+
 // bookingRecipient is the minimal contact snapshot the notification service
 // needs. Do not add more personal data than delivery requires.
 type bookingRecipient struct {
@@ -47,6 +50,29 @@ func mentorSlotBookedData(slot MentorSlot, mentorName, mentorEmail, studentName,
 		Recipients: []bookingRecipient{
 			{ID: slot.MentorID, Role: "mentor", Name: mentorName, Email: mentorEmail},
 			{ID: *slot.BookedBy, Role: "student", Name: studentName, Email: studentEmail},
+		},
+	})
+}
+
+// mentorSlotCanceledPayload is the event's data object for a cancellation.
+type mentorSlotCanceledPayload struct {
+	SlotID     int64              `json:"slot_id"`
+	StartsAt   time.Time          `json:"starts_at"`
+	EndsAt     time.Time          `json:"ends_at"`
+	Recipients []bookingRecipient `json:"recipients"`
+}
+
+// mentorSlotCanceledData builds the event payload for a cancelled booking.
+// The student ID is captured before the booking is cleared, since the slot
+// row no longer references them after cancellation.
+func mentorSlotCanceledData(slotID int64, startsAt, endsAt time.Time, mentorID, studentID int64, mentorName, mentorEmail, studentName, studentEmail string) ([]byte, error) {
+	return json.Marshal(mentorSlotCanceledPayload{
+		SlotID:   slotID,
+		StartsAt: startsAt.UTC(),
+		EndsAt:   endsAt.UTC(),
+		Recipients: []bookingRecipient{
+			{ID: mentorID, Role: "mentor", Name: mentorName, Email: mentorEmail},
+			{ID: studentID, Role: "student", Name: studentName, Email: studentEmail},
 		},
 	})
 }

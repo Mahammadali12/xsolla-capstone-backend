@@ -483,18 +483,65 @@ func (s *StoreImpl) BookMentorSlot(ctx context.Context, studentID int64, slotID 
 }
 
 // CancelMentorSlotBooking clears a booking if the caller is authorized and the slot hasn't started.
+// The cancellation and the outbox event are written in the same transaction so
+// a cancellation always produces a mentor_slot.canceled event.
 func (s *StoreImpl) CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error) {
-	row, err := s.DB().CancelMentorSlotBooking(ctx, userID, roles, slotID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
+	// Capture who the booking belongs to before it's cleared, so both parties
+	// can be notified. booked_by becomes NULL after the UPDATE.
+	var mentorID int64
+	var studentID *int64
+	if err := q.QueryRowContext(ctx,
+		`SELECT mentor_id, booked_by FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
+		slotID,
+	).Scan(&mentorID, &studentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrMentorSlotNotFound
+		}
+		return nil, err
+	}
+	if studentID == nil {
+		return nil, ErrMentorSlotNotFound // not booked
+	}
+
+	row, err := q.CancelMentorSlotBooking(ctx, userID, roles, slotID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMentorSlotNotFound
 		}
 		return nil, err
 	}
+
 	var id, mentorIDCol int64
 	var starts, ends, created time.Time
 	var bookedBy *int64
 	if err := row.Scan(&id, &mentorIDCol, &starts, &ends, &bookedBy, &created); err != nil {
+		return nil, err
+	}
+
+	mentorName, mentorEmail, err := q.userNameEmail(ctx, mentorIDCol)
+	if err != nil {
+		return nil, err
+	}
+	studentName, studentEmail, err := q.userNameEmail(ctx, *studentID)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := mentorSlotCanceledData(id, starts, ends, mentorIDCol, *studentID, mentorName, mentorEmail, studentName, studentEmail)
+	if err != nil {
+		return nil, err
+	}
+	if err := q.InsertOutboxEvent(ctx, MentorSlotCanceledEventType, payload); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &MentorSlot{
