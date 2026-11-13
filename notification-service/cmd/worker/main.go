@@ -21,7 +21,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("notification worker: config: %v", err)
+	}
 
 	openCtx, cancelOpen := context.WithTimeout(context.Background(), 10*time.Second)
 	db, err := store.Open(openCtx, cfg.DatabaseURL)
@@ -61,7 +64,8 @@ func main() {
 			Username: cfg.SMTPUsername,
 			Password: cfg.SMTPPassword,
 			From:     cfg.SMTPFrom,
-			TLS:      cfg.SMTPTLS,
+			TLSMode:  cfg.SMTPTLSMode,
+			Timeout:  cfg.SMTPTimeout,
 		})
 		if err != nil {
 			log.Fatalf("notification worker: email sender: %v", err)
