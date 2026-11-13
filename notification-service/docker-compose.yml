@@ -1,4 +1,24 @@
 services:
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    container_name: notification-rabbitmq
+    restart: unless-stopped
+    environment:
+      # Dev-only credentials. RabbitMQ rejects the default guest user from other containers.
+      RABBITMQ_DEFAULT_USER: lms
+      RABBITMQ_DEFAULT_PASS: lms
+    ports:
+      - "5672:5672"
+      - "15672:15672" # management UI: http://localhost:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   worker:
     build: .
     container_name: notification-worker
@@ -7,11 +27,19 @@ services:
     env_file: .env
     environment:
       HEALTH_ADDR: ":8081"
+      RABBITMQ_URL: amqp://lms:lms@rabbitmq:5672/
     ports:
       - "8081:8081"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # Liveness only: a broker outage must not make Docker restart the worker.
     healthcheck:
       test: ["CMD-SHELL", "wget -qS -O /dev/null http://localhost:8081/healthz 2>&1 | grep -q 'HTTP/'"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
+
+volumes:
+  rabbitmq_data:

@@ -103,7 +103,7 @@ Example:
 
 ``` json
 {
-  "id": "uuid",
+  "id": 18422,
   "type": "mentor_slot.booked",
   "version": 1,
   "occurred_at": "2026-11-13T12:00:00Z",
@@ -131,15 +131,16 @@ Field responsibilities:
 
 Use UTC timestamps and stable identifiers. Validate required envelope
 fields before dispatching an event.
+The notification service should enforce a unique constraint on (producer, event_id) when recording processed events. 
+This prevents the same event from being processed twice.
 
-### Recipient data decision
+Don't use slot_id as the event ID.
+A mentor slot might be booked, cancelled, and booked again. Those are three 
+different events, even though they concern the same slot. Each needs its own event ID.
 
-Before production integration, choose one approach:
 
-1.  Include recipient IDs and a minimal recipient snapshot (such as
-    email and display name) in the event.
-2.  Include recipient IDs only and resolve contact details through an
-    internal LMS API.
+Include recipient IDs and a minimal recipient snapshot (such as
+email and display name) in the event.
 
 For the first version, recipient snapshots keep the notification service
 more independent, but they expose personal data in broker messages.

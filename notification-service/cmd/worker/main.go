@@ -7,17 +7,38 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"xsolla-notification-service/internal/broker"
 	"xsolla-notification-service/internal/config"
+	"xsolla-notification-service/internal/consumer"
+	"xsolla-notification-service/internal/notification"
 )
 
 func main() {
 	cfg := config.Load()
+	// No policies are approved yet; Step 6 loads them.
+	registry := notification.NewRegistry(nil)
+	dispatch := notification.NewDispatcher(registry, func(_ context.Context, delivery notification.Delivery) error {
+		log.Printf("delivery: event id=%d type=%s channels=%v recipients=%d template=%s",
+			delivery.Event.ID, delivery.Event.Type, delivery.Channels, len(delivery.Recipients), delivery.Template)
+		return nil
+	})
+	cons := consumer.New(dispatch.Handle)
+	mgr := broker.NewManager(cfg.RabbitMQURL, cons.Session)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if !mgr.Connected() {
+			http.Error(w, "broker not connected", http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
@@ -30,6 +51,13 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mgr.Run(ctx)
+	}()
 
 	go func() {
 		log.Printf("notification worker listening on %s", cfg.HealthAddr)
@@ -46,4 +74,5 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("notification worker: shutdown: %v", err)
 	}
+	wg.Wait()
 }
