@@ -127,8 +127,7 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 		return s.store.GetContentItemsForModule(ctx, moduleID, false)
 	}
 
-	if auth.HasRole(roles, "mentor") {
-		// Mentors can view content items in any module without being enrolled
+	if auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer") {
 		return s.store.GetContentItemsForModule(ctx, moduleID, true)
 	}
 

@@ -93,6 +93,7 @@ type fakeQuizStore struct {
 	quizzes      map[int64]*store.Quiz
 	attempts     map[string]*store.QuizAttempt
 	contentItems map[int64]*store.ContentItem
+	modules      map[int64]*store.Module
 	nextID       int64
 	isTeacher    bool
 	isEnrolled   bool
@@ -103,8 +104,21 @@ func newFakeQuizStore() *fakeQuizStore {
 		quizzes:      make(map[int64]*store.Quiz),
 		attempts:     make(map[string]*store.QuizAttempt),
 		contentItems: make(map[int64]*store.ContentItem),
+		modules:      make(map[int64]*store.Module),
 		nextID:       100,
 	}
+}
+
+func (f *fakeQuizStore) GetModuleByID(_ context.Context, id int64) (*store.Module, error) {
+	if m, ok := f.modules[id]; ok {
+		return m, nil
+	}
+	return &store.Module{
+		ID:       id,
+		Title:    "Week 1",
+		OpensAt:  time.Now().Add(-24 * time.Hour),
+		ClosesAt: time.Now().Add(24 * time.Hour),
+	}, nil
 }
 
 func (f *fakeQuizStore) IsUserTeacherOfModule(_ context.Context, _ int64, _ int64) (bool, error) {
@@ -206,6 +220,9 @@ func (f *fakeQuizStore) FailAIQuiz(_ context.Context, quizID int64, errMsg strin
 
 func (f *fakeQuizStore) UpsertQuizAttempt(_ context.Context, quizID, studentID int64, answers []int, score, total int) (*store.QuizAttempt, error) {
 	key := fmt.Sprintf("%d:%d", quizID, studentID)
+	if _, exists := f.attempts[key]; exists {
+		return nil, store.ErrQuizAttemptExists
+	}
 	a := &store.QuizAttempt{
 		ID:          1,
 		QuizID:      quizID,
@@ -329,5 +346,46 @@ func TestQuizServiceRoleAccessAIAndGrading(t *testing.T) {
 	}
 	if studentViewAfter[0].Questions[0].Correct == nil {
 		t.Fatal("expected correct answers to remain visible after quiz completion")
+	}
+
+	_, err = svc.SubmitAttempt(context.Background(), 99, []string{"student"}, created.ID, dto.SubmitQuizAttemptRequest{Answers: answers})
+	if !errors.Is(err, store.ErrQuizAttemptExists) {
+		t.Fatalf("expected ErrQuizAttemptExists on second attempt, got %v", err)
+	}
+
+	_, err = svc.SubmitAttempt(context.Background(), 7, []string{"lecturer"}, created.ID, dto.SubmitQuizAttemptRequest{Answers: answers})
+	if !errors.Is(err, ErrQuizStudentOnly) {
+		t.Fatalf("expected ErrQuizStudentOnly for lecturer attempt, got %v", err)
+	}
+
+	st.isTeacher = false
+	st.isEnrolled = false
+	mentorQuizzes, err := svc.ListQuizzesForModule(context.Background(), 50, []string{"mentor"}, 5)
+	if err != nil || len(mentorQuizzes) != 1 {
+		t.Fatalf("expected mentor to read ready quizzes without enrollment, got %v, err=%v", mentorQuizzes, err)
+	}
+	otherLecturerQuizzes, err := svc.ListQuizzesForModule(context.Background(), 51, []string{"lecturer"}, 5)
+	if err != nil || len(otherLecturerQuizzes) != 1 {
+		t.Fatalf("expected non-assigned lecturer to read ready quizzes without 403, got %v, err=%v", otherLecturerQuizzes, err)
+	}
+
+	st.isEnrolled = true
+	pastDue := time.Now().Add(-1 * time.Hour)
+	st.quizzes[created.ID].DueAt = &pastDue
+	_, err = svc.SubmitAttempt(context.Background(), 105, []string{"student"}, created.ID, dto.SubmitQuizAttemptRequest{Answers: answers})
+	if !errors.Is(err, ErrQuizClosed) {
+		t.Fatalf("expected ErrQuizClosed after due_at, got %v", err)
+	}
+
+	st.quizzes[created.ID].DueAt = nil
+	st.modules[5] = &store.Module{
+		ID:       5,
+		Title:    "Closed Week",
+		OpensAt:  time.Now().Add(-48 * time.Hour),
+		ClosesAt: time.Now().Add(-1 * time.Hour),
+	}
+	_, err = svc.SubmitAttempt(context.Background(), 105, []string{"student"}, created.ID, dto.SubmitQuizAttemptRequest{Answers: answers})
+	if !errors.Is(err, ErrQuizClosed) {
+		t.Fatalf("expected ErrQuizClosed after module closes_at, got %v", err)
 	}
 }

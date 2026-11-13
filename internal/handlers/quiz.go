@@ -188,10 +188,14 @@ func handleQuizError(w http.ResponseWriter, err error) {
 		errors.Is(err, store.ErrFileNotFound):
 		writeError(w, 404, "not_found", err.Error(), nil)
 	case errors.Is(err, service.ErrQuizForbidden),
+		errors.Is(err, service.ErrQuizStudentOnly),
 		errors.Is(err, store.ErrNotModuleTeacher),
 		errors.Is(err, store.ErrNotEnrolled):
 		writeError(w, 403, "forbidden", err.Error(), nil)
+	case errors.Is(err, store.ErrQuizAttemptExists):
+		writeError(w, 409, "conflict", err.Error(), nil)
 	case errors.Is(err, service.ErrInvalidQuizInput),
+		errors.Is(err, service.ErrQuizClosed),
 		errors.Is(err, store.ErrQuizNotReady):
 		writeError(w, 400, "bad_request", err.Error(), nil)
 	default:

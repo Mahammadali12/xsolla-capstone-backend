@@ -44,19 +44,13 @@ func (s *ModuleService) CreateModule(ctx context.Context, userID int64, title st
 	return m, nil
 }
 
-// GetModuleByID returns a module if the user is authorized to view it.
 func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles []string, moduleID int64) (*store.Module, error) {
 	m, err := s.store.GetModuleByID(ctx, moduleID)
 	if err != nil {
 		return nil, err
 	}
 
-	if auth.HasRole(roles, "admin") {
-		return m, nil
-	}
-
-	if auth.HasRole(roles, "mentor") {
-		// Mentors can view any module without being enrolled
+	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer") {
 		return m, nil
 	}
 
@@ -68,30 +62,10 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles [
 		return nil, ErrNotEnrolled
 	}
 
-	// Enrolled users (including teachers who are auto-enrolled) can view the module
 	return m, nil
 }
 
-// GetModulesForUser returns modules accessible to the user.
 func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
-	if auth.HasRole(roles, "mentor") {
-		// Mentors see modules where any of their team's students are enrolled.
-		team, err := s.store.GetMentorTeamDetail(ctx, userID)
-		if err != nil {
-			if errors.Is(err, store.ErrTeamNotFound) {
-				return []store.Module{}, nil
-			}
-			return nil, err
-		}
-		studentIDs := make([]int64, 0, len(team.Members))
-		for _, m := range team.Members {
-			studentIDs = append(studentIDs, m.ID)
-		}
-		if len(studentIDs) == 0 {
-			return []store.Module{}, nil
-		}
-		return s.store.GetModulesWithEnrolledStudents(ctx, studentIDs)
-	}
 	return s.store.GetModulesForUser(ctx, userID, roles)
 }
 
@@ -199,20 +173,16 @@ func (s *ModuleService) DeleteEnrollment(ctx context.Context, actorID int64, act
 	return s.store.DeleteEnrollment(ctx, moduleID, userID)
 }
 
-// GetEnrollmentsForModule returns all enrollments for a module if authorized.
 func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.Enrollment, error) {
+	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer") {
+		return s.store.GetEnrollmentsForModule(ctx, moduleID)
+	}
 	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
 	if err != nil {
 		return nil, err
 	}
 	if !enrolled {
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if !teacher && !auth.HasRole(roles, "admin") && !auth.HasRole(roles, "mentor") {
-			return nil, ErrNotEnrolled
-		}
+		return nil, ErrNotEnrolled
 	}
 
 	return s.store.GetEnrollmentsForModule(ctx, moduleID)

@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrQuizNotFound = errors.New("quiz not found")
-	ErrQuizNotReady = errors.New("quiz is not ready yet")
+	ErrQuizNotFound      = errors.New("quiz not found")
+	ErrQuizNotReady      = errors.New("quiz is not ready yet")
+	ErrQuizAttemptExists = errors.New("quiz already submitted")
 )
 
 type QuizQuestionInput struct {
@@ -366,10 +367,13 @@ func (s *StoreImpl) UpsertQuizAttempt(ctx context.Context, quizID, studentID int
 		`INSERT INTO quiz_attempts (quiz_id, student_id, answers, score, total, submitted_at)
 		 VALUES ($1, $2, $3, $4, $5, NOW())
 		 ON CONFLICT (quiz_id, student_id)
-		 DO UPDATE SET answers = EXCLUDED.answers, score = EXCLUDED.score, total = EXCLUDED.total, submitted_at = NOW()
+		 DO NOTHING
 		 RETURNING id, quiz_id, student_id, answers, score, total, submitted_at`,
 		quizID, studentID, ansJSON, score, total,
 	).Scan(&a.ID, &a.QuizID, &a.StudentID, &rawAns, &a.Score, &a.Total, &a.SubmittedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrQuizAttemptExists
+	}
 	if err != nil {
 		return nil, err
 	}
