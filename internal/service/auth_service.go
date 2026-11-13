@@ -24,6 +24,7 @@ type UserStore interface {
 	// Google OAuth token storage
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
+	DeleteGoogleRefreshToken(ctx context.Context, userID int64) error
 }
 
 // ErrEmailTaken is re-exported from the store package for handler use.
@@ -185,6 +186,11 @@ func (s *AuthService) SaveGoogleRefreshToken(ctx context.Context, userID int64, 
 // GetGoogleRefreshToken retrieves the encrypted Google refresh token for a user.
 func (s *AuthService) GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error) {
 	return s.userStore.GetGoogleRefreshToken(ctx, userID)
+}
+
+// DeleteGoogleRefreshToken removes the stored Google OAuth refresh token for a user.
+func (s *AuthService) DeleteGoogleRefreshToken(ctx context.Context, userID int64) error {
+	return s.userStore.DeleteGoogleRefreshToken(ctx, userID)
 }
 
 // GetValidAccessToken returns a usable Google access token for the user,

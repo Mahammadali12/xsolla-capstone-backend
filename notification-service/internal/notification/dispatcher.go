@@ -4,10 +4,30 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"xsolla-notification-service/internal/channel"
 	"xsolla-notification-service/internal/events"
 )
+
+// sanitizeError strips credentials and internal details from an error before
+// it is persisted to delivery history.
+func sanitizeError(err error) string {
+	msg := err.Error()
+	// Strip SMTP credentials that may appear in auth errors.
+	if idx := strings.Index(msg, "smtp auth:"); idx >= 0 {
+		msg = msg[:idx] + "smtp auth: <redacted>"
+	}
+	// Strip any embedded passwords from connection strings.
+	if idx := strings.Index(msg, "password="); idx >= 0 {
+		msg = msg[:idx] + "password=<redacted>"
+	}
+	// Keep messages short; long stack traces leak internals.
+	if len(msg) > 200 {
+		msg = msg[:200] + "..."
+	}
+	return msg
+}
 
 // Renderer renders a policy's template into a message for one recipient.
 type Renderer interface {
@@ -90,7 +110,7 @@ func (d *Dispatcher) Handle(ctx context.Context, event events.Envelope) error {
 				continue
 			}
 			if err := d.channels[name].Send(ctx, recipient, messages[i]); err != nil {
-				if markErr := d.deliveries.MarkDeliveryFailed(ctx, id, err.Error()); markErr != nil {
+				if markErr := d.deliveries.MarkDeliveryFailed(ctx, id, sanitizeError(err)); markErr != nil {
 					log.Printf("dispatcher: record failed delivery %d: %v", id, markErr)
 				}
 				return fmt.Errorf("channel %s recipient %d: %w", name, recipient.ID, err)

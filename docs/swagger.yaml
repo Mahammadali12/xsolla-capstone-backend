@@ -349,6 +349,29 @@ paths:
       summary: Google OAuth login
       tags:
       - auth
+  /auth/google/logout:
+    post:
+      description: Remove the signed-in user's Google OAuth credentials from the application
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Disconnect Google account
+      tags:
+      - auth
   /auth/google/me:
     get:
       description: Return the connected Google account profile for the signed-in user

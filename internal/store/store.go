@@ -112,6 +112,7 @@ type Store interface {
 	// Google OAuth token storage
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
+	DeleteGoogleRefreshToken(ctx context.Context, userID int64) error
 
 	// Mentor slot methods
 	CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (*MentorSlot, error)
