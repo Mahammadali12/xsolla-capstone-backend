@@ -5,13 +5,15 @@ import "os"
 
 // Config holds all runtime configuration for the notification worker.
 type Config struct {
-	HealthAddr string
+	HealthAddr  string
+	RabbitMQURL string
 }
 
 // Load reads the worker configuration, applying defaults for unset values.
 func Load() Config {
 	return Config{
-		HealthAddr: getenv("HEALTH_ADDR", ":8081"),
+		HealthAddr:  getenv("HEALTH_ADDR", ":8081"),
+		RabbitMQURL: getenv("RABBITMQ_URL", "amqp://lms:lms@localhost:5672/"),
 	}
 }
 

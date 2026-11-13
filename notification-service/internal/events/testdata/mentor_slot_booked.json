@@ -1,0 +1,26 @@
+{
+  "id": 18422,
+  "type": "mentor_slot.booked",
+  "version": 1,
+  "occurred_at": "2026-11-13T12:00:00Z",
+  "producer": "lms-api",
+  "data": {
+    "slot_id": 123,
+    "starts_at": "2026-11-19T10:00:00Z",
+    "ends_at": "2026-11-19T10:30:00Z",
+    "recipients": [
+      {
+        "id": 7,
+        "role": "mentor",
+        "name": "Mentor One",
+        "email": "mentor@example.com"
+      },
+      {
+        "id": 42,
+        "role": "student",
+        "name": "Student One",
+        "email": "student@example.com"
+      }
+    ]
+  }
+}
