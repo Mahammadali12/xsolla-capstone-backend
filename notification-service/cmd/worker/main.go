@@ -50,10 +50,26 @@ func main() {
 		}
 	}
 	log.Printf("notification worker: %d templates loaded", templates.Len())
-	// The email channel is a logging mock until a provider is chosen.
-	channels := map[string]channel.Channel{
-		"email": channel.NewLogSender("email"),
+	var email channel.Channel
+	if cfg.SMTPHost == "" {
+		log.Print("notification worker: SMTP_HOST not set, email channel logs instead of sending")
+		email = channel.NewLogSender("email")
+	} else {
+		sender, err := channel.NewSMTPSender(channel.SMTPConfig{
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.SMTPFrom,
+			TLS:      cfg.SMTPTLS,
+		})
+		if err != nil {
+			log.Fatalf("notification worker: email sender: %v", err)
+		}
+		log.Printf("notification worker: email channel sends via %s:%s", cfg.SMTPHost, cfg.SMTPPort)
+		email = sender
 	}
+	channels := map[string]channel.Channel{"email": email}
 	dispatch := notification.NewDispatcher(registry, templates, db, channels)
 	cons := consumer.New(dispatch.Handle)
 	mgr := broker.NewManager(cfg.RabbitMQURL, cons.Session)
