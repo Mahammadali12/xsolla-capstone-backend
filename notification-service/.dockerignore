@@ -1,0 +1,7 @@
+# Keep real credentials out of build context and image layers.
+.env
+
+# Go build artifacts and binaries don't belong in the image.
+*.test
+*.out
+bin

@@ -19,6 +19,7 @@ type Config struct {
 	JWTRefreshSecret []byte
 	CORSOrigin      string
 	MigrationsDir   string
+	RabbitMQURL     string
 
 	// S3 object storage
 	S3Endpoint     string
@@ -36,6 +37,7 @@ var defaults = map[string]string{
 	"PORT":             ":8080",
 	"CORS_ORIGIN":      "*",
 	"MIGRATIONS_DIR":   "internal/db/migrations",
+	"RABBITMQ_URL":     "amqp://lms:lms@localhost:5672/",
 	"JWT_ACCESS_SECRET": "dev-access-secret-change-me-in-production",
 	"JWT_REFRESH_SECRET": "dev-refresh-secret-change-me-in-production",
 	"S3_ENDPOINT":      "",
@@ -59,6 +61,7 @@ func Load() (*Config, error) {
 		JWTRefreshSecret: []byte(getenv("JWT_REFRESH_SECRET", defaults["JWT_REFRESH_SECRET"])),
 		CORSOrigin:      getenv("CORS_ORIGIN", defaults["CORS_ORIGIN"]),
 		MigrationsDir:   getenv("MIGRATIONS_DIR", defaults["MIGRATIONS_DIR"]),
+		RabbitMQURL:     getenv("RABBITMQ_URL", defaults["RABBITMQ_URL"]),
 
 		// S3 object storage
 		S3Endpoint:     getenv("S3_ENDPOINT", defaults["S3_ENDPOINT"]),

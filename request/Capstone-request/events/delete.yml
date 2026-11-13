@@ -1,11 +1,11 @@
 info:
-  name: Delete event
+  name: Delete event (disposable id, not 1 or 3)
   type: http
-  seq: 4
+  seq: 5
 
 http:
   method: DELETE
-  url: http://localhost:8080/events/1
+  url: http://localhost:8080/events/2
   headers:
     - name: Authorization
       value: Bearer {{accessToken}}

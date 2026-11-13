@@ -54,7 +54,6 @@ func (q *Query) GetUserCount(ctx context.Context) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`)
 }
 
-
 func (q *Query) InsertRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (sql.Result, error) {
 	return q.DBTX.ExecContext(ctx,
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
@@ -133,8 +132,9 @@ func (q *Query) GetUserRoleExpiriesAll(ctx context.Context) (*sql.Rows, error) {
 	)
 }
 
-// UpdateUser updates name and/or email, returning the updated row.
-func (q *Query) UpdateUser(ctx context.Context, id int64, name, email string) *sql.Row {
+// UpdateUser updates name and/or email, returning the updated row. A nil
+// pointer leaves that column unchanged.
+func (q *Query) UpdateUser(ctx context.Context, id int64, name, email *string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email)
 		 WHERE id = $1
@@ -156,14 +156,6 @@ func (q *Query) SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (s
 	return q.DBTX.ExecContext(ctx,
 		`UPDATE users SET left_at = CASE WHEN $2 THEN NOW() ELSE NULL END WHERE id = $1`,
 		id, deactivate,
-	)
-}
-
-// SoftDeleteUser sets deleted_at = NOW() if not already deleted.
-func (q *Query) SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error) {
-	return q.DBTX.ExecContext(ctx,
-		`UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
-		id,
 	)
 }
 
@@ -201,14 +193,15 @@ func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 }
 
 func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []string) (*sql.Rows, error) {
-	isAdmin := false
+	// Admins and lecturers see every module; students and mentors are filtered below.
+	seesAll := false
 	for _, r := range roles {
-		if r == "admin" {
-			isAdmin = true
+		if r == "admin" || r == "lecturer" {
+			seesAll = true
 			break
 		}
 	}
-	if isAdmin {
+	if seesAll {
 		return q.DBTX.QueryContext(ctx,
 			`SELECT m.id, m.title, m.description, m.created_by, m.grade, m.created_at, m.opens_at, m.closes_at
 			 FROM modules m WHERE m.deleted_at IS NULL`,
@@ -590,7 +583,7 @@ func (q *Query) GetSubmissionByStudentAndAssignment(ctx context.Context, student
 // for an assignment, most recent first.
 func (q *Query) GetSubmissionsByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT id, content_item_id, student_id, text_body, submitted_at, grade, feedback, graded_by, graded_at, created_at
+		`SELECT id, content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at, created_at
 		 FROM submissions
 		 WHERE student_id = $1 AND content_item_id = $2 AND deleted_at IS NULL
 		 ORDER BY submitted_at DESC`,
@@ -681,82 +674,43 @@ func (q *Query) GetSubmissionFiles(ctx context.Context, submissionID int64) (*sq
 
 // Event queries
 
-func (q *Query) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64) *sql.Row {
+func (q *Query) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO events (title, kind, starts_at, ends_at, all_day, location, description, module_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, google_event_id, created_at`,
-		title, kind, startsAt, endsAt, allDay, location, description, moduleID,
+		`INSERT INTO events (title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
+		title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID,
 	)
 }
 
 func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, title, kind, starts_at, ends_at, all_day, location, description, module_id, google_event_id, created_at
+		`SELECT id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at
 		 FROM events WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
 }
 
-func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time, userID int64, roles []string) (*sql.Rows, error) {
-	isAdmin := false
-	isLecturer := false
-	for _, r := range roles {
-		if r == "admin" {
-			isAdmin = true
-		}
-		if r == "lecturer" {
-			isLecturer = true
-		}
-	}
-	if isAdmin {
-		return q.DBTX.QueryContext(ctx,
-			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.google_event_id, e.created_at
-			 FROM events e
-			 WHERE e.deleted_at IS NULL
-			   AND e.starts_at <= $2
-			   AND e.ends_at >= $1
-			 ORDER BY e.starts_at`,
-			from, to,
-		)
-	}
-	// Lecturer: events for modules they teach
-	if isLecturer {
-		return q.DBTX.QueryContext(ctx,
-			`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.google_event_id, e.created_at
-			 FROM events e
-			 LEFT JOIN modules m ON m.id = e.module_id
-			 WHERE e.deleted_at IS NULL
-			   AND e.starts_at <= $3
-			   AND e.ends_at >= $2
-			   AND (m.id IS NULL OR m.deleted_at IS NULL)
-			   AND (m.id IS NULL OR m.id IN (
-			     SELECT m.id FROM modules m WHERE m.created_by = $1 AND m.deleted_at IS NULL
-			   ))
-			 ORDER BY e.starts_at`,
-			userID, from, to,
-		)
-	}
-	// Student: only events from modules in modules they're enrolled in
+// ListEventsByRange returns every non-deleted event overlapping [from, to].
+// The route authenticates the caller; event visibility is intentionally not
+// filtered by role. Soft-deleted events and events of soft-deleted modules
+// stay hidden (data integrity, not authorization).
+func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.module_id, e.google_event_id, e.created_at
+		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at
 		 FROM events e
-		 LEFT JOIN modules m ON m.id = e.module_id
 		 WHERE e.deleted_at IS NULL
-		   AND e.starts_at <= $3
-		   AND e.ends_at >= $2
-		   AND (m.id IS NULL OR m.deleted_at IS NULL)
-		   AND (m.id IS NULL OR m.id IN (
-		     SELECT m.id FROM modules m
-		     JOIN enrollments en ON en.module_id = m.id
-		     WHERE m.deleted_at IS NULL AND en.user_id = $1
+		   AND e.starts_at <= $2
+		   AND e.ends_at >= $1
+		   AND (e.module_id IS NULL OR EXISTS (
+		     SELECT 1 FROM modules m WHERE m.id = e.module_id AND m.deleted_at IS NULL
 		   ))
 		 ORDER BY e.starts_at`,
-		userID, from, to,
+		from, to,
 	)
 }
 
-func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, moduleID *int64, userID int64, isAdmin bool) *sql.Row {
+func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, userID int64, isAdmin bool) *sql.Row {
 	if isAdmin {
 		return q.DBTX.QueryRowContext(ctx,
 			`UPDATE events
@@ -767,10 +721,11 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 			     all_day = COALESCE($6, all_day),
 			     location = COALESCE($7, location),
 			     description = COALESCE($8, description),
-			     module_id = COALESCE($9, module_id)
+			     meeting_url = $9,
+			     module_id = COALESCE($10, module_id)
 			 WHERE id = $1 AND deleted_at IS NULL
-			 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, google_event_id, created_at`,
-			id, title, kind, startsAt, endsAt, allDay, location, description, moduleID,
+			 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
+			id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID,
 		)
 	}
 	return q.DBTX.QueryRowContext(ctx,
@@ -782,13 +737,14 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 		     all_day = COALESCE($6, all_day),
 		     location = COALESCE($7, location),
 		     description = COALESCE($8, description),
-		     module_id = COALESCE($9, module_id)
+		     meeting_url = $9,
+		     module_id = COALESCE($10, module_id)
 		 WHERE id = $1 AND deleted_at IS NULL
 		   AND module_id IN (
-		     SELECT m.id FROM modules m WHERE m.created_by = $10 AND m.deleted_at IS NULL
+		     SELECT m.id FROM modules m WHERE m.created_by = $11 AND m.deleted_at IS NULL
 		   )
-		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, module_id, google_event_id, created_at`,
-		id, title, kind, startsAt, endsAt, allDay, location, description, moduleID, userID,
+		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
+		id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, userID,
 	)
 }
 
@@ -940,7 +896,7 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 	}
 	if isAdmin {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.meeting_url, s.created_at
 			 FROM mentor_slots s
 			 LEFT JOIN users m ON m.id = s.mentor_id
 			 LEFT JOIN users bu ON bu.id = s.booked_by
@@ -950,7 +906,7 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 	}
 	if isMentor {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.meeting_url, s.created_at
 			 FROM mentor_slots s
 			 LEFT JOIN users m ON m.id = s.mentor_id
 			 LEFT JOIN users bu ON bu.id = s.booked_by
@@ -962,7 +918,7 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 	}
 	if isStudent {
 		return q.DBTX.QueryContext(ctx,
-			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+			`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.meeting_url, s.created_at
 			 FROM mentor_slots s
 			 JOIN teams t ON t.id = (
 			     SELECT tm.team_id FROM team_members tm WHERE tm.student_id = $1 LIMIT 1
@@ -976,7 +932,7 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 		)
 	}
 	return q.DBTX.QueryContext(ctx,
-		`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.created_at
+		`SELECT s.id, s.mentor_id, m.name, s.starts_at, s.ends_at, s.booked_by, bu.name, s.meeting_url, s.created_at
 		 FROM mentor_slots s
 		 LEFT JOIN users m ON m.id = s.mentor_id
 		 LEFT JOIN users bu ON bu.id = s.booked_by
@@ -984,9 +940,19 @@ func (q *Query) ListMentorSlots(ctx context.Context, userID int64, roles []strin
 	)
 }
 
+// DeleteMentorSlotsByMentor soft-deletes every slot a mentor offers and returns the deleted rows.
+func (q *Query) DeleteMentorSlotsByMentor(ctx context.Context, mentorID int64) (*sql.Rows, error) {
+	return q.DBTX.QueryContext(ctx,
+		`UPDATE mentor_slots SET deleted_at = NOW()
+		 WHERE mentor_id = $1 AND deleted_at IS NULL
+		 RETURNING id, google_event_id`,
+		mentorID,
+	)
+}
+
 func (q *Query) GetMentorSlotByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, mentor_id, starts_at, ends_at, booked_by, created_at
+		`SELECT id, mentor_id, starts_at, ends_at, booked_by, google_event_id, meeting_url, created_at
 		 FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
@@ -1091,7 +1057,7 @@ func (q *Query) CancelMentorSlotBooking(ctx context.Context, userID int64, roles
 	}
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE mentor_slots
-		 SET booked_by = NULL
+		 SET booked_by = NULL, google_event_id = NULL, meeting_url = NULL
 		 WHERE id = $1 AND deleted_at IS NULL AND starts_at > NOW()
 		 RETURNING id, mentor_id, starts_at, ends_at, booked_by, created_at`,
 		slotID,
@@ -1112,4 +1078,3 @@ func (q *Query) QueryContext(ctx context.Context, query string, args ...any) (*s
 func (q *Query) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx, query, args...)
 }
-

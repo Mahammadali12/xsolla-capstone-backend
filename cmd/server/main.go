@@ -17,6 +17,7 @@ package main
 // @description Enter your JWT token as: Bearer <token>
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -25,12 +26,13 @@ import (
 	"xsolla-capstone-api/internal/db"
 	"xsolla-capstone-api/internal/handlers"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/outbox"
 	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/storage"
 	"xsolla-capstone-api/internal/store"
 
-	"github.com/swaggo/http-swagger"
 	_ "github.com/swaggo/files"
+	"github.com/swaggo/http-swagger"
 	_ "xsolla-capstone-api/docs"
 )
 
@@ -49,14 +51,20 @@ func main() {
 	}
 
 	store := store.NewStore(database)
+
+	// Background publisher drains the transactional outbox written by bookings.
+	// Runs until process exit; graceful shutdown is deferred to a later step.
+	go outbox.NewPublisher(store, outbox.NewAMQPBroker(cfg.RabbitMQURL)).Run(context.Background())
+
 	authSvc := service.NewAuthService(store, store)
 	moduleSvc := service.NewModuleService(store)
 	contentSvc := service.NewContentService(store)
 	submissionSvc := service.NewSubmissionService(store)
 	eventSvc := service.NewEventServiceWithGoogle(store, authSvc)
 	userSvc := service.NewUserService(store)
-	teamSvc := service.NewTeamService(store)
-	mentorSlotSvc := service.NewMentorSlotService(store)
+	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
+	teamSvc := service.NewTeamService(store, mentorSlotSvc)
+	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage
 	s3Storage, err := storage.NewS3Storage(cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region, cfg.S3AccessKey, cfg.S3SecretKey)
@@ -83,6 +91,7 @@ func main() {
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
+	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -91,9 +100,19 @@ func main() {
 	mux.HandleFunc("POST /auth/login", authH.Login)
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if err := database.PingContext(r.Context()); err != nil {
+			log.Printf("readyz: database: %v", err)
+			http.Error(w, "database not ready", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
 	mux.Handle("GET /auth/google/login", authenticator.OptionalAuth(http.HandlerFunc(authH.GoogleLogin)))
 	mux.HandleFunc("GET /auth/google/callback", authH.GoogleCallback)
 	mux.Handle("GET /auth/google/me", authenticator.Middleware(http.HandlerFunc(authH.GoogleMe)))
+	mux.Handle("GET /google/calendar/events", authenticator.Middleware(http.HandlerFunc(googleCalendarH.ListEvents)))
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
 
 	// Admin-only user management (4.1)

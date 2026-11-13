@@ -164,8 +164,9 @@ func (s *StoreImpl) GetUsers(ctx context.Context, search, role, status string) (
 	return result, nil
 }
 
-// UpdateUser updates name and/or email, returning the updated user.
-func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email string) (*User, error) {
+// UpdateUser updates name and/or email, returning the updated user. Nil
+// pointers leave the corresponding field unchanged.
+func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email *string) (*User, error) {
 	var u User
 	var leftAt, deletedAt *time.Time
 	err := s.DB().UpdateUser(ctx, id, name, email).Scan(
@@ -174,6 +175,10 @@ func (s *StoreImpl) UpdateUser(ctx context.Context, id int64, name, email string
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrUserNotFound
+		}
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrEmailTaken
 		}
 		return nil, err
 	}
@@ -198,9 +203,50 @@ func (s *StoreImpl) SetUserLeftAt(ctx context.Context, id int64, deactivate bool
 	return s.DB().SetUserLeftAt(ctx, id, deactivate)
 }
 
-// SoftDeleteUser marks a user deleted (deleted_at=NOW) if not already.
-func (s *StoreImpl) SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error) {
-	return s.DB().SoftDeleteUser(ctx, id)
+// HardDeleteUser permanently deletes a user and everything that references them.
+// Course content (modules, files) is transferred to transferTo; personal data
+// (roles, refresh tokens, Google tokens, enrollments, team membership and
+// submissions) is removed by the schema's cascades; mentor slots are deleted
+// and bookings the user made are cleared. Everything runs in one transaction.
+func (s *StoreImpl) HardDeleteUser(ctx context.Context, id int64, transferTo int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	rollback := func(err error) error {
+		_ = tx.Rollback()
+		return err
+	}
+
+	steps := []struct {
+		query string
+		args  []any
+	}{
+		{`UPDATE modules SET created_by = $2 WHERE created_by = $1`, []any{id, transferTo}},
+		{`UPDATE files SET uploaded_by = $2 WHERE uploaded_by = $1`, []any{id, transferTo}},
+		{`UPDATE content_items SET created_by = NULL WHERE created_by = $1`, []any{id}},
+		{`UPDATE submissions SET graded_by = NULL WHERE graded_by = $1`, []any{id}},
+		{`DELETE FROM mentor_slots WHERE mentor_id = $1`, []any{id}},
+		{`UPDATE mentor_slots SET booked_by = NULL, meeting_url = NULL, google_event_id = NULL WHERE booked_by = $1`, []any{id}},
+	}
+	for _, step := range steps {
+		if _, err := tx.ExecContext(ctx, step.query, step.args...); err != nil {
+			return rollback(err)
+		}
+	}
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return rollback(err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return rollback(err)
+	}
+	if rows == 0 {
+		return rollback(ErrUserNotFound)
+	}
+	return tx.Commit()
 }
 
 // CountAdmins counts non-deleted users holding the admin role.

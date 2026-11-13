@@ -1,0 +1,28 @@
+info:
+  name: Create availability (mentor or admin)
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/mentor-slots
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "date": "2026-12-15",
+        "start": "09:00",
+        "end": "10:00"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
