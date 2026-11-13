@@ -26,6 +26,9 @@ type Config struct {
 	S3Region       string
 	S3AccessKey    string
 	S3SecretKey    string
+
+	GeminiAPIKey   string
+	GeminiModel    string
 }
 
 // defaults for optional values when not set in .env or environment.
@@ -40,6 +43,8 @@ var defaults = map[string]string{
 	"S3_REGION":        "us-east-1",
 	"S3_ACCESS_KEY":    "",
 	"S3_SECRET_KEY":    "",
+	"GEMINI_API_KEY":   "AQ.Ab8RN6JRSvGjqV2cycIVbQLJSqa1P2NdCdMgk0GB1emWGoZEsw",
+	"GEMINI_MODEL":     "gemini-3.6-flash",
 }
 
 // Load reads .env (if present), applies environment variables, and returns a Config.
@@ -61,6 +66,9 @@ func Load() (*Config, error) {
 		S3Region:       getenv("S3_REGION", defaults["S3_REGION"]),
 		S3AccessKey:    getenv("S3_ACCESS_KEY", defaults["S3_ACCESS_KEY"]),
 		S3SecretKey:    getenv("S3_SECRET_KEY", defaults["S3_SECRET_KEY"]),
+
+		GeminiAPIKey:   getenv("GEMINI_API_KEY", defaults["GEMINI_API_KEY"]),
+		GeminiModel:    getenv("GEMINI_MODEL", defaults["GEMINI_MODEL"]),
 	}
 
 	if cfg.DatabaseURL == "" {
