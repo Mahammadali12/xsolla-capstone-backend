@@ -17,6 +17,7 @@ package main
 // @description Enter your JWT token as: Bearer <token>
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"xsolla-capstone-api/internal/db"
 	"xsolla-capstone-api/internal/handlers"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/outbox"
 	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/storage"
 	"xsolla-capstone-api/internal/store"
@@ -49,6 +51,11 @@ func main() {
 	}
 
 	store := store.NewStore(database)
+
+	// Background publisher drains the transactional outbox written by bookings.
+	// Runs until process exit; graceful shutdown is deferred to a later step.
+	go outbox.NewPublisher(store, outbox.NewAMQPBroker(cfg.RabbitMQURL)).Run(context.Background())
+
 	authSvc := service.NewAuthService(store, store)
 	moduleSvc := service.NewModuleService(store)
 	contentSvc := service.NewContentService(store)

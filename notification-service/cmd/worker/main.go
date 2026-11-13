@@ -12,13 +12,26 @@ import (
 	"time"
 
 	"xsolla-notification-service/internal/broker"
+	"xsolla-notification-service/internal/channel"
 	"xsolla-notification-service/internal/config"
 	"xsolla-notification-service/internal/consumer"
 	"xsolla-notification-service/internal/notification"
+	"xsolla-notification-service/internal/store"
+	"xsolla-notification-service/internal/template"
 )
 
 func main() {
 	cfg := config.Load()
+
+	openCtx, cancelOpen := context.WithTimeout(context.Background(), 10*time.Second)
+	db, err := store.Open(openCtx, cfg.DatabaseURL)
+	cancelOpen()
+	if err != nil {
+		log.Fatalf("notification worker: database: %v", err)
+	}
+	defer db.Close()
+	log.Print("notification worker: database ready")
+
 	registry := notification.NewRegistry(nil)
 	if cfg.PoliciesPath != "" {
 		var err error
@@ -28,11 +41,20 @@ func main() {
 		}
 	}
 	log.Printf("notification worker: %d policies loaded", registry.Len())
-	dispatch := notification.NewDispatcher(registry, func(_ context.Context, delivery notification.Delivery) error {
-		log.Printf("delivery: event id=%d type=%s channels=%v recipients=%d template=%s",
-			delivery.Event.ID, delivery.Event.Type, delivery.Channels, len(delivery.Recipients), delivery.Template)
-		return nil
-	})
+	templates := template.NewSet()
+	if cfg.TemplatesPath != "" {
+		var err error
+		templates, err = template.LoadDir(cfg.TemplatesPath)
+		if err != nil {
+			log.Fatalf("notification worker: templates: %v", err)
+		}
+	}
+	log.Printf("notification worker: %d templates loaded", templates.Len())
+	// The email channel is a logging mock until a provider is chosen.
+	channels := map[string]channel.Channel{
+		"email": channel.NewLogSender("email"),
+	}
+	dispatch := notification.NewDispatcher(registry, templates, db, channels)
 	cons := consumer.New(dispatch.Handle)
 	mgr := broker.NewManager(cfg.RabbitMQURL, cons.Session)
 
@@ -41,9 +63,14 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if !mgr.Connected() {
 			http.Error(w, "broker not connected", http.StatusServiceUnavailable)
+			return
+		}
+		if err := db.Ping(r.Context()); err != nil {
+			log.Printf("readyz: database: %v", err)
+			http.Error(w, "database not connected", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

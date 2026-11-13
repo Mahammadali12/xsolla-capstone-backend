@@ -36,8 +36,9 @@ The worker refuses to start if the file is invalid:
   and a template;
 - a disabled policy may be incomplete, so it can be staged before approval.
 
-Channel names are not restricted yet; unknown channels fail when a channel
-adapter handles the delivery.
+Channel names are not restricted when loading. An enabled policy naming a
+channel with no registered adapter fails at dispatch time, is retried, then
+dead-lettered. The `email` channel currently uses a logging mock adapter.
 
 ## Behavior
 
