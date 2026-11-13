@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"xsolla-capstone-api/internal/dto"
+	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/store"
 )
@@ -21,7 +22,7 @@ type UserService interface {
 	CreateUser(ctx context.Context, email, name, password string, roles []string) (int64, []string, error)
 	UpdateUser(ctx context.Context, id int64, name, email string, active *bool) (*store.User, error)
 	UpdatePassword(ctx context.Context, id int64, password string) error
-	DeleteUser(ctx context.Context, id int64) error
+	DeleteUser(ctx context.Context, id, actorID int64) error
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
 }
 
@@ -192,6 +193,8 @@ func (h *UserHandlers) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /users/:id
+// Permanently deletes the account. Course content (modules, files) is moved to
+// the acting admin; personal data is erased.
 func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -199,12 +202,15 @@ func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeleteUser(r.Context(), id); err != nil {
+	actorID := middleware.CtxUserID(r.Context())
+	if err := h.svc.DeleteUser(r.Context(), id, actorID); err != nil {
 		switch {
 		case errors.Is(err, store.ErrUserNotFound):
 			writeError(w, 404, "not_found", "user not found", nil)
 		case errors.Is(err, service.ErrLastAdmin):
 			writeError(w, 422, "validation_failed", "cannot remove the last admin", nil)
+		case errors.Is(err, service.ErrCannotDeleteSelf):
+			writeError(w, 422, "validation_failed", "cannot delete your own account", nil)
 		default:
 			log.Printf("user handler: DeleteUser error: %v", err)
 			writeError(w, 500, "server_error", "could not delete user", nil)
@@ -223,8 +229,8 @@ func (h *UserHandlers) ReplaceUserRoles(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Roles      []string            `json:"roles"`
-		ExpiresAt  map[string]string   `json:"expires_at,omitempty"`
+		Roles     []string          `json:"roles"`
+		ExpiresAt map[string]string `json:"expires_at,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)

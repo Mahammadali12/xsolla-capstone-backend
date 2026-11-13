@@ -26,6 +26,8 @@ var (
 	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
 	// ErrLastAdmin is returned when the last admin would be removed.
 	ErrLastAdmin = errors.New("cannot remove the last admin")
+	// ErrCannotDeleteSelf is returned when an admin tries to delete their own account.
+	ErrCannotDeleteSelf = errors.New("cannot delete your own account")
 	// ErrInvalidRoleSet is returned for an invalid role assignment.
 	ErrInvalidRoleSet = errors.New("invalid role set")
 )
@@ -180,17 +182,17 @@ func (s *UserService) UpdatePassword(ctx context.Context, id int64, password str
 
 // validRoles is the full set of assignable roles.
 var validRoles = map[string]bool{
-	"student":   true,
-	"mentor":    true,
-	"lecturer":  true,
-	"admin":     true,
+	"student":  true,
+	"mentor":   true,
+	"lecturer": true,
+	"admin":    true,
 }
 
 // staffRoles are roles that are not student.
 var staffRoles = map[string]bool{
-	"mentor":    true,
-	"lecturer":  true,
-	"admin":     true,
+	"mentor":   true,
+	"lecturer": true,
+	"admin":    true,
 }
 
 // ListUsers returns all users filtered by search/role/status, with effective roles.
@@ -270,8 +272,14 @@ func (s *UserService) UpdateUser(ctx context.Context, id int64, name, email stri
 	return s.store.GetUserByID(ctx, id)
 }
 
-// DeleteUser soft-deletes a user (deleted_at). Refuses the last admin.
-func (s *UserService) DeleteUser(ctx context.Context, id int64) error {
+// DeleteUser permanently deletes a user: the row is erased, not marked deleted.
+// The last admin and the acting admin's own account are refused. Course content
+// (modules and files) is transferred to the acting admin; personal data is erased.
+func (s *UserService) DeleteUser(ctx context.Context, id, actorID int64) error {
+	if id == actorID {
+		return ErrCannotDeleteSelf
+	}
+
 	// Refuse deleting the last admin.
 	admins, err := s.store.CountAdmins(ctx)
 	if err != nil {
@@ -288,11 +296,12 @@ func (s *UserService) DeleteUser(ctx context.Context, id int64) error {
 			break
 		}
 	}
-	if isAdmin && admins <= 1 {
+	// Refuse deleting the last active admin. A row that was already soft-deleted
+	// is not an active admin anymore, so cleaning it up stays allowed.
+	if isAdmin && admins <= 1 && user.DeletedAt == nil {
 		return ErrLastAdmin
 	}
-	_, err = s.store.SoftDeleteUser(ctx, id)
-	return err
+	return s.store.HardDeleteUser(ctx, id, actorID)
 }
 
 // ReplaceUserRoles replaces a user's whole role set with optional end dates.

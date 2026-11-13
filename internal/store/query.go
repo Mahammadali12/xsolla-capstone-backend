@@ -158,14 +158,6 @@ func (q *Query) SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (s
 	)
 }
 
-// SoftDeleteUser sets deleted_at = NOW() if not already deleted.
-func (q *Query) SoftDeleteUser(ctx context.Context, id int64) (sql.Result, error) {
-	return q.DBTX.ExecContext(ctx,
-		`UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
-		id,
-	)
-}
-
 // CountAdmins counts non-deleted users that hold the admin role.
 func (q *Query) CountAdmins(ctx context.Context) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
