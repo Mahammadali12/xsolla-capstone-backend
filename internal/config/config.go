@@ -45,7 +45,7 @@ var defaults = map[string]string{
 	"S3_REGION":        "us-east-1",
 	"S3_ACCESS_KEY":    "",
 	"S3_SECRET_KEY":    "",
-	"GEMINI_API_KEY":   "AQ.Ab8RN6JRSvGjqV2cycIVbQLJSqa1P2NdCdMgk0GB1emWGoZEsw",
+	"GEMINI_API_KEY":   "",
 	"GEMINI_MODEL":     "gemini-3.6-flash",
 }
 

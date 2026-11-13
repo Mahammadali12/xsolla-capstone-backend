@@ -202,7 +202,6 @@ func (q *Query) GetModuleByID(ctx context.Context, id int64) *sql.Row {
 }
 
 func (q *Query) GetModulesForUser(ctx context.Context, userID int64, roles []string) (*sql.Rows, error) {
-	// Admins and lecturers see every module; students and mentors are filtered below.
 	seesAll := false
 	for _, r := range roles {
 		if r == "admin" || r == "lecturer" {
@@ -257,14 +256,26 @@ func (q *Query) PatchModule(ctx context.Context, id int64, title *string, descri
 		)
 	}
 	return q.DBTX.QueryRowContext(ctx,
-		`UPDATE modules SET title = COALESCE($2, title), description = COALESCE($3, description), opens_at = $4, closes_at = $5
-		 WHERE id = $1 AND created_by = $6 AND deleted_at IS NULL
-		 RETURNING id, title, description, created_by, grade, created_at, opens_at, closes_at`,
+		`UPDATE modules m SET title = COALESCE($2, title), description = COALESCE($3, description), opens_at = $4, closes_at = $5
+		 WHERE m.id = $1
+		   AND m.deleted_at IS NULL
+		   AND (
+		     m.created_by = $6
+		     OR (
+		       EXISTS (SELECT 1 FROM enrollments e WHERE e.module_id = m.id AND e.user_id = $6)
+		       AND EXISTS (
+		         SELECT 1 FROM user_roles ur
+		         WHERE ur.user_id = $6
+		           AND ur.role = 'lecturer'
+		           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+		       )
+		     )
+		   )
+		 RETURNING m.id, m.title, m.description, m.created_by, m.grade, m.created_at, m.opens_at, m.closes_at`,
 		id, title, description, opensAt, closesAt, createdBy,
 	)
 }
 
-// UpdateModuleGrade updates a module's grade (red/yellow/green).
 func (q *Query) UpdateModuleGrade(ctx context.Context, id int64, grade *string, gradedBy int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE modules SET grade = COALESCE($2, grade)
@@ -282,7 +293,21 @@ func (q *Query) DeleteModule(ctx context.Context, id int64, createdBy int64, isA
 		)
 	}
 	return q.DBTX.ExecContext(ctx,
-		`UPDATE modules SET deleted_at = NOW() WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+		`UPDATE modules m SET deleted_at = NOW()
+		 WHERE m.id = $1
+		   AND m.deleted_at IS NULL
+		   AND (
+		     m.created_by = $2
+		     OR (
+		       EXISTS (SELECT 1 FROM enrollments e WHERE e.module_id = m.id AND e.user_id = $2)
+		       AND EXISTS (
+		         SELECT 1 FROM user_roles ur
+		         WHERE ur.user_id = $2
+		           AND ur.role = 'lecturer'
+		           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+		       )
+		     )
+		   )`,
 		id, createdBy,
 	)
 }
@@ -332,7 +357,21 @@ func (q *Query) IsUserEnrolled(ctx context.Context, moduleID int64, userID int64
 
 func (q *Query) IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT 1 FROM modules WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+		`SELECT 1 FROM modules m
+		 WHERE m.id = $1
+		   AND m.deleted_at IS NULL
+		   AND (
+		     m.created_by = $2
+		     OR (
+		       EXISTS (SELECT 1 FROM enrollments e WHERE e.module_id = m.id AND e.user_id = $2)
+		       AND EXISTS (
+		         SELECT 1 FROM user_roles ur
+		         WHERE ur.user_id = $2
+		           AND ur.role = 'lecturer'
+		           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+		       )
+		     )
+		   )`,
 		moduleID, userID,
 	)
 }
@@ -700,10 +739,6 @@ func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
-// ListEventsByRange returns every non-deleted event overlapping [from, to].
-// The route authenticates the caller; event visibility is intentionally not
-// filtered by role. Soft-deleted events and events of soft-deleted modules
-// stay hidden (data integrity, not authorization).
 func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
 		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at
@@ -750,7 +785,20 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 		     module_id = COALESCE($10, module_id)
 		 WHERE id = $1 AND deleted_at IS NULL
 		   AND module_id IN (
-		     SELECT m.id FROM modules m WHERE m.created_by = $11 AND m.deleted_at IS NULL
+		     SELECT m.id FROM modules m
+		     WHERE m.deleted_at IS NULL
+		       AND (
+		         m.created_by = $11
+		         OR (
+		           EXISTS (SELECT 1 FROM enrollments e WHERE e.module_id = m.id AND e.user_id = $11)
+		           AND EXISTS (
+		             SELECT 1 FROM user_roles ur
+		             WHERE ur.user_id = $11
+		               AND ur.role = 'lecturer'
+		               AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+		           )
+		         )
+		       )
 		   )
 		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
 		id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, userID,
@@ -767,7 +815,20 @@ func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin
 	return q.DBTX.ExecContext(ctx,
 		`UPDATE events SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
 		 AND module_id IN (
-		   SELECT m.id FROM modules m WHERE m.created_by = $2 AND m.deleted_at IS NULL
+		   SELECT m.id FROM modules m
+		   WHERE m.deleted_at IS NULL
+		     AND (
+		       m.created_by = $2
+		       OR (
+		         EXISTS (SELECT 1 FROM enrollments e WHERE e.module_id = m.id AND e.user_id = $2)
+		         AND EXISTS (
+		           SELECT 1 FROM user_roles ur
+		           WHERE ur.user_id = $2
+		             AND ur.role = 'lecturer'
+		             AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+		         )
+		       )
+		     )
 		 )`,
 		id, userID,
 	)

@@ -17,6 +17,8 @@ import (
 var (
 	ErrInvalidQuizInput = errors.New("invalid quiz input")
 	ErrQuizForbidden    = errors.New("only lecturers can create or manage quizzes")
+	ErrQuizStudentOnly  = errors.New("only students can submit quiz attempts")
+	ErrQuizClosed       = errors.New("quiz is closed for submissions")
 )
 
 type QuizService struct {
@@ -196,12 +198,12 @@ func (s *QuizService) runAIQuizBackground(quizID int64, src QuizSource, storageK
 }
 
 func (s *QuizService) ListQuizzesForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]dto.QuizResponse, error) {
-	isAdmin, isTeacher, err := s.authorizeModuleRead(ctx, userID, roles, moduleID)
+	canSeeAllStatuses, isStaff, err := s.authorizeModuleRead(ctx, userID, roles, moduleID)
 	if err != nil {
 		return nil, err
 	}
 
-	readyOnly := !(isAdmin || isTeacher)
+	readyOnly := !canSeeAllStatuses
 	quizzes, err := s.store.ListQuizzesForModule(ctx, moduleID, readyOnly)
 	if err != nil {
 		return nil, err
@@ -223,7 +225,7 @@ func (s *QuizService) ListQuizzesForModule(ctx context.Context, userID int64, ro
 			copyA := a
 			attemptPtr = &copyA
 		}
-		includeCorrect := isAdmin || isTeacher || attemptPtr != nil
+		includeCorrect := isStaff || attemptPtr != nil
 		out = append(out, *mapQuizResponse(q, attemptPtr, includeCorrect))
 	}
 	return out, nil
@@ -234,11 +236,11 @@ func (s *QuizService) GetQuiz(ctx context.Context, userID int64, roles []string,
 	if err != nil {
 		return nil, err
 	}
-	isAdmin, isTeacher, err := s.authorizeModuleRead(ctx, userID, roles, q.ModuleID)
+	canSeeAllStatuses, isStaff, err := s.authorizeModuleRead(ctx, userID, roles, q.ModuleID)
 	if err != nil {
 		return nil, err
 	}
-	if !(isAdmin || isTeacher) && q.Status != "ready" {
+	if !canSeeAllStatuses && q.Status != "ready" {
 		return nil, store.ErrQuizNotFound
 	}
 
@@ -246,7 +248,7 @@ func (s *QuizService) GetQuiz(ctx context.Context, userID int64, roles []string,
 	if err != nil {
 		return nil, err
 	}
-	includeCorrect := isAdmin || isTeacher || attempt != nil
+	includeCorrect := isStaff || attempt != nil
 	return mapQuizResponse(*q, attempt, includeCorrect), nil
 }
 
@@ -315,17 +317,47 @@ func (s *QuizService) DeleteQuiz(ctx context.Context, userID int64, roles []stri
 }
 
 func (s *QuizService) SubmitAttempt(ctx context.Context, userID int64, roles []string, quizID int64, req dto.SubmitQuizAttemptRequest) (*dto.QuizResponse, error) {
+	if !auth.HasRole(roles, "student") {
+		return nil, ErrQuizStudentOnly
+	}
 	q, err := s.store.GetQuizByID(ctx, quizID)
 	if err != nil {
 		return nil, err
 	}
-	_, _, err = s.authorizeModuleRead(ctx, userID, roles, q.ModuleID)
+	enrolled, err := s.store.IsUserEnrolled(ctx, q.ModuleID, userID)
 	if err != nil {
 		return nil, err
+	}
+	if !enrolled {
+		return nil, store.ErrNotEnrolled
 	}
 	if q.Status != "ready" || len(q.Questions) == 0 {
 		return nil, store.ErrQuizNotReady
 	}
+
+	m, err := s.store.GetModuleByID(ctx, q.ModuleID)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	if !m.OpensAt.IsZero() && now.Before(m.OpensAt) {
+		return nil, fmt.Errorf("%w: module is not open yet", ErrQuizClosed)
+	}
+	if !m.ClosesAt.IsZero() && now.After(m.ClosesAt) {
+		return nil, fmt.Errorf("%w: module is closed", ErrQuizClosed)
+	}
+	if q.DueAt != nil && now.After(*q.DueAt) {
+		return nil, fmt.Errorf("%w: quiz deadline has passed", ErrQuizClosed)
+	}
+
+	existing, err := s.store.GetQuizAttempt(ctx, quizID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, store.ErrQuizAttemptExists
+	}
+
 	if len(req.Answers) != len(q.Questions) {
 		return nil, fmt.Errorf("%w: must answer all %d questions", ErrInvalidQuizInput, len(q.Questions))
 	}
@@ -349,18 +381,18 @@ func (s *QuizService) SubmitAttempt(ctx context.Context, userID int64, roles []s
 }
 
 func (s *QuizService) authorizeModuleRead(ctx context.Context, userID int64, roles []string, moduleID int64) (bool, bool, error) {
-	isAdmin := auth.HasRole(roles, "admin")
-	if isAdmin {
-		return true, false, nil
+	if auth.HasRole(roles, "admin") {
+		return true, true, nil
 	}
 	if auth.HasRole(roles, "lecturer") {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, moduleID, userID)
 		if err != nil {
 			return false, false, err
 		}
-		if teacher {
-			return false, true, nil
-		}
+		return teacher, true, nil
+	}
+	if auth.HasRole(roles, "mentor") {
+		return false, true, nil
 	}
 	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
 	if err != nil {
