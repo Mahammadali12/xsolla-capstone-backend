@@ -123,6 +123,17 @@ type Store interface {
 	BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error)
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
 	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)
+
+	CreateQuiz(ctx context.Context, moduleID int64, sourceContentItemID *int64, title, description string, dueAt *time.Time, status string, isAI bool, createdBy int64, questions []QuizQuestionInput) (*Quiz, error)
+	GetQuizByID(ctx context.Context, id int64) (*Quiz, error)
+	ListQuizzesForModule(ctx context.Context, moduleID int64, readyOnly bool) ([]Quiz, error)
+	UpdateQuiz(ctx context.Context, id int64, title *string, description *string, dueAt *time.Time, clearDueAt bool, questions []QuizQuestionInput, replaceQuestions bool) (*Quiz, error)
+	CompleteAIQuiz(ctx context.Context, quizID int64, title, description string, questions []QuizQuestionInput) error
+	FailAIQuiz(ctx context.Context, quizID int64, errMsg string) error
+	SoftDeleteQuiz(ctx context.Context, id int64) error
+	UpsertQuizAttempt(ctx context.Context, quizID, studentID int64, answers []int, score, total int) (*QuizAttempt, error)
+	GetQuizAttempt(ctx context.Context, quizID, studentID int64) (*QuizAttempt, error)
+	ListQuizAttemptsForStudent(ctx context.Context, studentID int64, quizIDs []int64) (map[int64]QuizAttempt, error)
 }
 
 // Store wraps the database connection and provides access to queries.
