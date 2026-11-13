@@ -409,6 +409,13 @@ func (s *StoreImpl) SaveGoogleRefreshToken(ctx context.Context, userID int64, en
 	return err
 }
 
+// DeleteGoogleRefreshToken removes the stored Google OAuth refresh token for a user.
+func (s *StoreImpl) DeleteGoogleRefreshToken(ctx context.Context, userID int64) error {
+	q := s.DB()
+	_, err := q.DeleteGoogleRefreshToken(ctx, userID)
+	return err
+}
+
 // GetGoogleRefreshToken retrieves the encrypted Google refresh token for a user.
 func (s *StoreImpl) GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error) {
 	q := s.DB()
