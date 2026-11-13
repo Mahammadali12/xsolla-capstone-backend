@@ -64,6 +64,8 @@ func main() {
 		log.Fatalf("s3 storage: %v", err)
 	}
 	fileSvc := service.NewFileService(store, s3Storage)
+	aiQuizGen := service.NewGeminiQuizGenerator(cfg.GeminiAPIKey, cfg.GeminiModel)
+	quizSvc := service.NewQuizService(store, fileSvc, aiQuizGen)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -80,6 +82,7 @@ func main() {
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
+	quizH := handlers.NewQuizHandlers(quizSvc)
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -156,6 +159,13 @@ func main() {
 	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))
 	mux.Handle("GET /files/{id}/download", authenticator.Middleware(http.HandlerFunc(fileH.DownloadFile)))
 	mux.Handle("DELETE /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.DeleteFile)))
+	mux.Handle("GET /modules/{moduleId}/quizzes", authenticator.Middleware(http.HandlerFunc(quizH.ListQuizzes)))
+	mux.Handle("POST /modules/{moduleId}/quizzes", authenticator.Middleware(http.HandlerFunc(quizH.CreateQuiz)))
+	mux.Handle("POST /modules/{moduleId}/quizzes/ai", authenticator.Middleware(http.HandlerFunc(quizH.GenerateAIQuiz)))
+	mux.Handle("GET /quizzes/{id}", authenticator.Middleware(http.HandlerFunc(quizH.GetQuiz)))
+	mux.Handle("PATCH /quizzes/{id}", authenticator.Middleware(http.HandlerFunc(quizH.UpdateQuiz)))
+	mux.Handle("DELETE /quizzes/{id}", authenticator.Middleware(http.HandlerFunc(quizH.DeleteQuiz)))
+	mux.Handle("POST /quizzes/{id}/attempts", authenticator.Middleware(http.HandlerFunc(quizH.SubmitAttempt)))
 	mux.Handle("/swagger/", httpSwagger.Handler(
 		httpSwagger.URL("doc.json"),
 	))
