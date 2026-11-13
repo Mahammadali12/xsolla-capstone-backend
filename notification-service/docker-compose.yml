@@ -28,6 +28,10 @@ services:
     environment:
       HEALTH_ADDR: ":8081"
       RABBITMQ_URL: amqp://lms:lms@rabbitmq:5672/
+      POLICIES_PATH: /app/config/policies.json
+    # Policies are configuration, not code: edit the file and restart the worker.
+    volumes:
+      - ./config:/app/config:ro
     ports:
       - "8081:8081"
     depends_on:

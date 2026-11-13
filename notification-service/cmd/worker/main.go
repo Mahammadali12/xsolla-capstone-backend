@@ -19,8 +19,15 @@ import (
 
 func main() {
 	cfg := config.Load()
-	// No policies are approved yet; Step 6 loads them.
 	registry := notification.NewRegistry(nil)
+	if cfg.PoliciesPath != "" {
+		var err error
+		registry, err = notification.LoadPolicies(cfg.PoliciesPath)
+		if err != nil {
+			log.Fatalf("notification worker: policies: %v", err)
+		}
+	}
+	log.Printf("notification worker: %d policies loaded", registry.Len())
 	dispatch := notification.NewDispatcher(registry, func(_ context.Context, delivery notification.Delivery) error {
 		log.Printf("delivery: event id=%d type=%s channels=%v recipients=%d template=%s",
 			delivery.Event.ID, delivery.Event.Type, delivery.Channels, len(delivery.Recipients), delivery.Template)
