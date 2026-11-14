@@ -2988,6 +2988,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "title": {
+                    "description": "nil = not sent: the stored value stays",
                     "type": "string"
                 },
                 "url": {
