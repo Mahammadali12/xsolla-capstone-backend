@@ -617,3 +617,80 @@ Google scopes: `calendar.events`, `gmail.send`, `openid email`.
 - Personal Google events in `/admin/calendar`.
 - Expanding multi-day events across grid days.
 - Google event attendees/RSVP (the Google calendar endpoint does not return attendees).
+
+---
+
+## 11. Profile page: about me, picture, look and accessibility (backend branch `feat/user-profile`)
+
+Answers the front-end's "Backend request: the profile page". Sections 1 and 2 of that request are built; section 3
+(last sign-in, sessions) is not. Every route needs a signed-in user except `GET /avatars/{name}`.
+
+### 11.1 Which picture URL we picked
+
+`avatar_url` is an address on this API: `GET /avatars/{32 hex}.{jpg|png|webp}`. It needs **no token**, so it works
+in an `<img>` tag. The long random name is what keeps it from being guessed, and only a current picture is served
+(never another stored file). A new upload gets a new name and the old file is deleted, so the URL can be cached
+forever (`Cache-Control: public, max-age=31536000, immutable`). When the owner switches to `staff_only`, the
+picture also gets a new name, so a URL a student saw before stops working.
+
+The address is built from `PUBLIC_API_URL` when that is set (set it in production, e.g. the API's public https
+address). Otherwise it comes from the request's scheme and host, or `X-Forwarded-Proto` / `X-Forwarded-Host` behind
+a proxy.
+
+### 11.2 About me
+
+`GET /users/me/profile`, `PATCH /users/me/profile`, `GET /users/{id}/profile` all answer:
+
+```json
+{ "avatar_url": "https://api.example.com/avatars/3f1c...e9.webp", "bio": "Go and cats.", "slack_handle": "rashad.a", "gitlab_handle": "", "visibility": "everyone" }
+```
+
+- Before the first save everybody gets the defaults: `avatar_url: null`, empty texts, `"everyone"` (never 404).
+- `PATCH`: any of `bio`, `slack_handle`, `gitlab_handle`, `visibility`; only the sent fields change; `""` clears a
+  text. Text is trimmed; a leading `@` on a handle is dropped.
+- `400 bad_request` (the rule is in `message`): bio over 300 characters, handle over 40 characters or with spaces,
+  visibility other than `"everyone"` / `"staff_only"`, a value that is not a string (also `null`), an unknown field,
+  `avatar_url` (that is changed with the avatar routes), or a body that is not one JSON object. Over 16 KB: `413`.
+- `GET /users/{id}/profile`: when the owner chose `"staff_only"` and the caller is a student, the answer has
+  `avatar_url: null`, `bio: ""` and empty handles (and `visibility: "staff_only"`), never `403`. Mentors, lecturers,
+  admins and the owner always see everything. Unknown or deleted user: `404`; an id that is not a number: `400`.
+
+### 11.3 The picture
+
+- `PUT /users/me/avatar`: `multipart/form-data`, one field named `file`. JPG, PNG or WebP up to 2 MB, checked by
+  content (a renamed file is refused; JPG and PNG must also decode). Answer `200 { "avatar_url": "..." }`.
+  Anything else: `400` with `"Use a JPG, PNG or WebP picture up to 2 MB."`. A missing `file` field or a body that is
+  not multipart: `400` saying so. The server stores what it gets; it does not crop.
+- `DELETE /users/me/avatar`: `204`, also when there is none.
+
+### 11.4 avatar_url on the people the app already reads
+
+`avatar_url` (string or `null`, always present) is now on: `GET /users/me`, `GET /users`, the `user` of
+`POST /auth/login`, `PATCH /users/{id}`, the `mentor` and `members` of `GET /teams/me` and `GET /mentors/me/team`,
+and the `attendees` of `GET /events` (also `POST`/`PATCH /events`) and of the 1:1 slot routes. Each one follows the
+owner's visibility as seen by the caller. If the picture lookup fails, these routes still answer, with `null`.
+
+### 11.5 Look and accessibility
+
+`GET /users/me/preferences` and `PATCH /users/me/preferences` answer the whole object:
+
+| Key | Values | Default |
+|---|---|---|
+| `text_size` | `normal`, `large`, `xlarge` | `normal` |
+| `theme` | `system`, `light`, `dark` | `system` |
+| `font` | `default`, `dyslexia` | `default` |
+| `spacing` | `normal`, `relaxed` | `normal` |
+| `density` | `comfortable`, `compact` | `comfortable` |
+| `high_contrast`, `colorblind_safe`, `reduce_motion`, `strong_focus` | `true` / `false` | `false` |
+
+- A person who never saved anything gets every default (`200`, not `404`).
+- `PATCH`: only the sent keys change. An unknown key, or a value that is not allowed (also `null`): `400` naming the
+  key; nothing is saved then. `{}` changes nothing and answers the current settings.
+- Stored as one JSON object per person (`user_preferences.prefs`). Reading ignores unknown keys and values that are
+  no longer allowed, so options can be added or removed without a migration.
+
+### 11.6 Not built yet
+
+- `last_login_at` and the sessions routes (section 3 of the request).
+- When an admin deletes a user, the profile and settings rows go with them and the picture stops being served, but
+  the picture file stays in object storage.

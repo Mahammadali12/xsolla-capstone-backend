@@ -24,6 +24,7 @@ type MentorSlotService interface {
 
 type MentorSlotHandlers struct {
 	svc MentorSlotService
+	avatarSupport
 }
 
 func NewMentorSlotHandlers(svc MentorSlotService) *MentorSlotHandlers {
@@ -54,9 +55,15 @@ func toResponse(slots []service.MentorSlot) []dto.MentorSlotResponse {
 	return resp
 }
 
-// writeSlots writes the slot list as JSON.
-func writeSlots(w http.ResponseWriter, slots []service.MentorSlot) {
-	writeJSON(w, 200, toResponse(slots))
+// writeSlots writes the slot list as JSON, with the attendees' pictures.
+func (h *MentorSlotHandlers) writeSlots(w http.ResponseWriter, r *http.Request, slots []service.MentorSlot) {
+	resp := toResponse(slots)
+	lists := make([][]dto.Attendee, len(resp))
+	for i := range resp {
+		lists[i] = resp[i].Attendees
+	}
+	h.fillAttendees(r, lists...)
+	writeJSON(w, 200, resp)
 }
 
 // GET /mentor-slots
@@ -70,7 +77,7 @@ func (h *MentorSlotHandlers) ListSlots(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "server_error", "could not list slots", nil)
 		return
 	}
-	writeSlots(w, slots)
+	h.writeSlots(w, r, slots)
 }
 
 // POST /mentor-slots  body: {date, start, end}
@@ -103,7 +110,7 @@ func (h *MentorSlotHandlers) CreateAvailability(w http.ResponseWriter, r *http.R
 		writeError(w, 500, "server_error", "could not list slots", nil)
 		return
 	}
-	writeSlots(w, slots)
+	h.writeSlots(w, r, slots)
 }
 
 // DELETE /mentor-slots/:id
@@ -136,7 +143,7 @@ func (h *MentorSlotHandlers) RemoveSlot(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 500, "server_error", "could not list slots", nil)
 		return
 	}
-	writeSlots(w, slots)
+	h.writeSlots(w, r, slots)
 }
 
 // POST /mentor-slots/:id/book
@@ -173,7 +180,7 @@ func (h *MentorSlotHandlers) BookSlot(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "server_error", "could not list slots", nil)
 		return
 	}
-	writeSlots(w, slots)
+	h.writeSlots(w, r, slots)
 }
 
 // DELETE /mentor-slots/:id/book
@@ -204,5 +211,5 @@ func (h *MentorSlotHandlers) CancelBooking(w http.ResponseWriter, r *http.Reques
 		writeError(w, 500, "server_error", "could not list slots", nil)
 		return
 	}
-	writeSlots(w, slots)
+	h.writeSlots(w, r, slots)
 }

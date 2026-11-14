@@ -75,6 +75,8 @@ func main() {
 	fileSvc := service.NewFileService(store, s3Storage)
 	aiQuizGen := service.NewGeminiQuizGenerator(cfg.GeminiAPIKey, cfg.GeminiModel)
 	quizSvc := service.NewQuizService(store, fileSvc, aiQuizGen)
+	profileSvc := service.NewProfileService(store, s3Storage)
+	preferencesSvc := service.NewPreferencesService(store)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -94,6 +96,13 @@ func main() {
 	mentorReviewH := handlers.NewMentorReviewHandlers(mentorReviewSvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
 	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
+	profileH := handlers.NewProfileHandlers(profileSvc, preferencesSvc, cfg.PublicAPIURL)
+	// avatar_url on the people in user, team, event and 1:1 slot responses
+	for _, h := range []interface {
+		SetAvatars(handlers.AvatarSource, string)
+	}{authH, userH, teamH, eventH, mentorSlotH} {
+		h.SetAvatars(profileSvc, cfg.PublicAPIURL)
+	}
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -128,6 +137,17 @@ func main() {
 	mux.Handle("PUT /users/{id}/password", authenticator.RequireRole(http.HandlerFunc(userH.UpdatePassword), "admin"))
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
 	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
+
+	// Profile page: about me, picture, look and accessibility settings (every signed-in user)
+	mux.Handle("GET /users/me/profile", authenticator.Middleware(http.HandlerFunc(profileH.GetMyProfile)))
+	mux.Handle("PATCH /users/me/profile", authenticator.Middleware(http.HandlerFunc(profileH.UpdateMyProfile)))
+	mux.Handle("GET /users/{id}/profile", authenticator.Middleware(http.HandlerFunc(profileH.GetProfile)))
+	mux.Handle("PUT /users/me/avatar", authenticator.Middleware(http.HandlerFunc(profileH.PutMyAvatar)))
+	mux.Handle("DELETE /users/me/avatar", authenticator.Middleware(http.HandlerFunc(profileH.DeleteMyAvatar)))
+	mux.Handle("GET /users/me/preferences", authenticator.Middleware(http.HandlerFunc(profileH.GetMyPreferences)))
+	mux.Handle("PATCH /users/me/preferences", authenticator.Middleware(http.HandlerFunc(profileH.UpdateMyPreferences)))
+	// <img> tags cannot send a token, so pictures are public behind long random names
+	mux.HandleFunc("GET /avatars/{name}", profileH.ServeAvatar)
 
 	// Admin-only teams (4.2)
 	mux.Handle("GET /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ListTeams), "admin"))

@@ -1,0 +1,28 @@
+info:
+  name: Change my look and accessibility settings
+  type: http
+  seq: 6
+
+http:
+  method: PATCH
+  url: http://localhost:8080/users/me/preferences
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "text_size": "large",
+        "font": "dyslexia",
+        "colorblind_safe": true
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -9,6 +9,11 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResponse'
     type: object
+  dto.AvatarResponse:
+    properties:
+      avatar_url:
+        type: string
+    type: object
   dto.ContentItemResponse:
     properties:
       children:
@@ -200,6 +205,19 @@ definitions:
         example: secret123
         type: string
     type: object
+  dto.ProfileResponse:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      gitlab_handle:
+        type: string
+      slack_handle:
+        type: string
+      visibility:
+        type: string
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
@@ -256,6 +274,10 @@ definitions:
     type: object
   dto.UserResponse:
     properties:
+      avatar_url:
+        description: AvatarURL is the profile picture as the caller may see it; null
+          when none or hidden.
+        type: string
       created_at:
         type: string
       email:
@@ -582,6 +604,32 @@ paths:
       summary: Sign up
       tags:
       - auth
+  /avatars/{name}:
+    get:
+      description: 'No sign-in: this is the avatar_url an <img> tag loads. Only current
+        pictures are served.'
+      parameters:
+      - description: File name from avatar_url
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - image/jpeg
+      - image/png
+      - image/webp
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: A profile picture
+      tags:
+      - profile
   /content-items/{id}:
     delete:
       description: Soft-delete a content item (lecturer or admin only)
@@ -1173,6 +1221,36 @@ paths:
       summary: Grade enrollment
       tags:
       - enrollments
+  /users/{id}/profile:
+    get:
+      description: 'As the caller may see it: a "staff_only" profile comes back empty
+        (avatar_url null) to students'
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Someone's profile
+      tags:
+      - profile
   /users/me:
     get:
       description: Get the currently authenticated user profile
@@ -1196,6 +1274,139 @@ paths:
       summary: Get current user
       tags:
       - users
+  /users/me/avatar:
+    delete:
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Remove my picture
+      tags:
+      - profile
+    put:
+      consumes:
+      - multipart/form-data
+      description: JPG, PNG or WebP up to 2 MB (content is checked). Replaces and
+        deletes the old picture.
+      parameters:
+      - description: The picture
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AvatarResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload my picture
+      tags:
+      - profile
+  /users/me/preferences:
+    get:
+      description: Every setting; defaults for a person who never saved any
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: My look and accessibility settings
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      description: text_size (normal, large, xlarge), theme (system, light, dark),
+        font (default, dyslexia), spacing (normal, relaxed), density (comfortable,
+        compact), high_contrast, colorblind_safe, reduce_motion, strong_focus (true/false)
+      parameters:
+      - description: Settings to change
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change my look and accessibility settings
+      tags:
+      - profile
+  /users/me/profile:
+    get:
+      description: 'The signed-in person''s "about me": picture, bio, contact handles
+        and who may see them'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My profile
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      description: Any of bio (max 300), slack_handle, gitlab_handle (max 40, no spaces),
+        visibility (everyone, staff_only). Only sent fields change.
+      parameters:
+      - description: Fields to change
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change my profile
+      tags:
+      - profile
 securityDefinitions:
   ApiKeyAuth:
     description: 'Enter your JWT token as: Bearer <token>'

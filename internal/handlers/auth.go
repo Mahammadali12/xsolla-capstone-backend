@@ -43,6 +43,7 @@ type AuthHandlers struct {
 	refreshSecret []byte
 	accessTTL     time.Duration
 	refreshTTL    time.Duration
+	avatarSupport
 }
 
 // NewAuthHandlers creates auth handlers backed by the given service.
@@ -179,6 +180,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			Roles:         user.Roles,
 			RoleExpiresAt: user.RoleExpiresAt,
 			CreatedAt:     user.CreatedAt,
+			AvatarURL:     h.avatarURLsFor(r, user.ID, user.Roles, user.ID)[user.ID],
 		},
 		AccessToken:  access,
 		RefreshToken: refresh,
@@ -462,6 +464,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		Roles:         user.Roles,
 		RoleExpiresAt: user.RoleExpiresAt,
 		CreatedAt:     user.CreatedAt,
+		AvatarURL:     h.avatarURLs(r, user.ID)[user.ID],
 	})
 }
 

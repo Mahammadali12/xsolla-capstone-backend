@@ -31,6 +31,7 @@ type TeamService interface {
 
 type TeamHandlers struct {
 	svc TeamService
+	avatarSupport
 }
 
 // NewTeamHandlers creates team handlers backed by the given service.
@@ -300,14 +301,16 @@ func (h *TeamHandlers) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 200, dto.TeamDetailResponse{
+	resp := dto.TeamDetailResponse{
 		ID:         detail.ID,
 		Name:       detail.Name,
 		Mentor:     toUserBrief(detail.Mentor),
 		Members:    toUserBriefs(detail.Members),
 		CohortSize: detail.CohortSize,
 		TeamCount:  detail.TeamCount,
-	})
+	}
+	h.fillBriefs(r, resp.Mentor, resp.Members)
+	writeJSON(w, 200, resp)
 }
 
 // GET /mentors/me/team — mentor. Get the mentor's team detail.
@@ -329,14 +332,16 @@ func (h *TeamHandlers) GetMentorTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 200, dto.TeamDetailResponse{
+	resp := dto.TeamDetailResponse{
 		ID:         detail.ID,
 		Name:       detail.Name,
 		Mentor:     toUserBrief(detail.Mentor),
 		Members:    toUserBriefs(detail.Members),
 		CohortSize: detail.CohortSize,
 		TeamCount:  detail.TeamCount,
-	})
+	}
+	h.fillBriefs(r, resp.Mentor, resp.Members)
+	writeJSON(w, 200, resp)
 }
 
 func toUserBrief(m *store.TeamMember) *dto.UserBrief {
