@@ -82,13 +82,71 @@ before. The 422 message says when it opens, in Baku time (`service.SchoolLocatio
 
 ## Decisions taken (BACKEND_REQUIREMENTS.md section 8)
 
-- D1: mentors do not see reviews; there is no route that shows them.
+- D1: mentors do not see reviews about themselves; only admins can read them (routes below).
 - D2: "Saturday" is counted in the school's time zone, Asia/Baku (UTC+4).
 - D3: the mentor is the team's mentor when the review is sent; with no team or no mentor the review is refused (422).
 - D5: there is no end to the window, so the front-end's lock can always be cleared.
-- Not built yet: the server-side lock (D4, optional), the Saturday reminder notification, and the admin read routes
-  for the analytics page (section 7). The table already keeps everything they need (separate rating columns,
-  `mentor_id`, `team_id`, index on `(mentor_id, module_id)`).
+- Built: the admin read routes for the analytics page (section 7), below.
+- Not built yet: the server-side lock (D4, optional) and the Saturday reminder notification.
+
+## Reading the reviews (admin only)
+
+Registered with `RequireRole "admin"`: everyone else gets `403` (D1: mentors never see the reviews about them,
+also not as averages). Ids in the query must be positive whole numbers (`400` naming the parameter); an empty value
+counts as not sent.
+
+### GET /mentor-reviews?module_id=&mentor_id=&team_id=
+
+Every filter is optional. The reviews with every answer, by week, then mentor, then student; `[]` when none.
+
+```json
+[ { "id": 12, "module_id": 4, "module_title": "Week 4: Go",
+    "student": { "id": 31, "name": "Anna", "email": "anna@example.com" },
+    "mentor":  { "id": 7,  "name": "Mira", "email": "mira@example.com" },
+    "team": { "id": 3, "name": "Team A" },
+    "had_session": true, "no_session_reason": null, "topics": ["goals", "other"], "other_topic": "CV review",
+    "ratings": { "clarity": 5, "engagement": 4, "comfort": 5, "time": 3 },
+    "overall": 4, "comment": "More code reviews please", "submitted_at": "2026-11-15T10:12:00Z" } ]
+```
+
+`mentor` is the mentor the review is about (kept on the row when the team's mentor changes). `team` is `null` when
+that team was deleted; `ratings` is `null` and `topics` is `[]` for a week without a session.
+
+### GET /mentor-reviews/summary?from_module=&to_module=
+
+One entry per week and mentor, for the weeks from `from_module` to `to_module` by opening date (both optional, both
+included; unknown week `404`; `from_module` opening after `to_module` `400`).
+
+```json
+[ { "module_id": 4, "module_title": "Week 4: Go", "mentor": { "id": 7, "name": "Mira", "email": "mira@example.com" },
+    "reviews": 5, "expected": 6, "sessions_held": 4, "no_session": 1,
+    "averages": { "clarity": 4.5, "engagement": 4.25, "comfort": 4.75, "time": 3.5, "overall": 4.2 },
+    "topics": { "goals": 3, "homework": 2, "lecture": 0, "project": 1, "career": 0, "other": 1 },
+    "no_session_reasons": { "mentor-unavailable": 0, "student-unavailable": 0, "not-scheduled": 1, "other": 0 } } ]
+```
+
+- `reviews`, `sessions_held`, `no_session`, `topics`, `no_session_reasons`: from the reviews about that mentor.
+- `averages`: the four ratings over the reviews with a session, `overall` over all reviews; two decimals; `null`
+  when there is nothing to average. Every topic and reason key is always present.
+- `expected`: how many students the mentor's team has **today** that are asked for the week (see "Who is expected"
+  below). Teams are not kept per week, so after a mentor change the old mentor keeps their reviews with
+  `expected: 0` and the new mentor shows the students as expected.
+
+### GET /mentor-reviews/missing?module_id=
+
+`module_id` is required (`400`; unknown week `404`). The students who are expected for the week and have not sent
+its review, by team then name; `[]` when everyone has.
+
+```json
+[ { "student": { "id": 32, "name": "Bek", "email": "bek@example.com" },
+    "team": { "id": 3, "name": "Team A" }, "mentor": { "id": 7, "name": "Mira", "email": "mira@example.com" } } ]
+```
+
+### Who is expected
+
+A student who, today, is in a team with a mentor, is enrolled in the week, has not left (`left_at`) or been deleted,
+has an active `student` role and no active mentor, lecturer or admin role. This is the same group the front-end asks.
+It does not check whether the week's review is open yet: for a running week the list shows who still has to review.
 
 ## Database
 
@@ -98,6 +156,7 @@ its text, scores outside 1 to 5, empty comments).
 
 ## Tests
 
-- `go test ./internal/service/ ./internal/handlers/`: form rules, roles, review window, every status code.
+- `go test ./internal/service/ ./internal/handlers/`: form rules, roles, review window, every status code, the
+  summary math and the admin routes.
 - `TEST_DATABASE_URL=... go test ./internal/store/ -run MentorReview`: insert, duplicate, no team, no mentor,
-  mentor change, table checks. Use a scratch database; the outbox test renames a table while it runs.
+  mentor change, table checks, the admin queries and who is expected. Use a scratch database; the outbox test renames a table while it runs.

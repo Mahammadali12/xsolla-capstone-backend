@@ -23,6 +23,8 @@ type reviewStore struct {
 	reviewed  map[int64]time.Time // module id -> submitted at, for the one student
 	createErr error
 	listErr   error
+	rows      []store.MentorReviewRow
+	expected  []store.ExpectedReviewer
 }
 
 func (s *reviewStore) GetModuleByID(_ context.Context, id int64) (*store.Module, error) {
@@ -45,6 +47,12 @@ func (s *reviewStore) CreateMentorReview(_ context.Context, in store.MentorRevie
 	at := time.Date(2026, 11, 14, 10, 12, 0, 0, time.UTC)
 	s.reviewed[in.ModuleID] = at
 	return &store.MentorReview{ID: 1, ModuleID: in.ModuleID, StudentID: in.StudentID, MentorID: 3, SubmittedAt: at}, nil
+}
+func (s *reviewStore) ListMentorReviews(context.Context, store.MentorReviewFilter) ([]store.MentorReviewRow, error) {
+	return s.rows, nil
+}
+func (s *reviewStore) ListExpectedReviewers(_ context.Context, moduleID *int64, _, _ *time.Time) ([]store.ExpectedReviewer, error) {
+	return s.expected, nil
 }
 func (s *reviewStore) ListReviewedModules(context.Context, int64) ([]store.ReviewedModule, error) {
 	if s.listErr != nil {

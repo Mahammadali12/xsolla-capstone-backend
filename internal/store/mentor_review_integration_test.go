@@ -168,3 +168,96 @@ func TestMentorReviewTableChecks(t *testing.T) {
 		}
 	}
 }
+
+// ---- admin read queries ----
+
+func TestMentorReviewAdminQueries(t *testing.T) {
+	f := newReviewFixture(t) // student S1 in team A with mentor M1, enrolled in week W1
+	ctx := context.Background()
+	tag := time.Now().UnixNano()
+	user := func(name string, roles ...string) int64 {
+		id := insertTestUser(t, f.db, fmt.Sprintf("admin-q-%s-%d@example.com", name, tag), name)
+		for _, r := range roles {
+			mustExec(t, f.db, `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, id, r)
+		}
+		return id
+	}
+	team := func(name string, mentor *int64) int64 {
+		var id int64
+		mustQuery(t, f.db, &id, `INSERT INTO teams (name, mentor_id) VALUES ($1, $2) RETURNING id`, name, mentor)
+		t.Cleanup(func() { _, _ = f.db.Exec(`DELETE FROM teams WHERE id = $1`, id) })
+		return id
+	}
+	join := func(teamID, studentID int64, enrol bool) {
+		mustExec(t, f.db, `INSERT INTO team_members (team_id, student_id) VALUES ($1, $2)`, teamID, studentID)
+		if enrol {
+			mustExec(t, f.db, `INSERT INTO enrollments (module_id, user_id) VALUES ($1, $2)`, f.moduleID, studentID)
+		}
+	}
+	mustExec(t, f.db, `INSERT INTO user_roles (user_id, role) VALUES ($1, 'student')`, f.studentID)
+	mustExec(t, f.db, `INSERT INTO enrollments (module_id, user_id) VALUES ($1, $2)`, f.moduleID, f.studentID)
+
+	s2 := user("S2", "student")
+	join(f.teamID, s2, true) // expected, no review
+	m2 := user("M2", "mentor")
+	teamB := team("Team B", &m2)
+	s3 := user("S3", "student")
+	join(teamB, s3, true) // expected, reviews M2
+	left := user("Left", "student")
+	join(f.teamID, left, true)
+	mustExec(t, f.db, `UPDATE users SET left_at = NOW() WHERE id = $1`, left) // left the school: not expected
+	staff := user("Staff", "student", "mentor")
+	join(f.teamID, staff, true) // also staff: never asked
+	expired := user("Expired", "student")
+	mustExec(t, f.db, `UPDATE user_roles SET expires_at = NOW() - interval '1 day' WHERE user_id = $1`, expired)
+	join(f.teamID, expired, true) // student role ended: not expected
+	noMentor := user("NoMentor", "student")
+	join(team("Team C", nil), noMentor, true) // team without mentor: not expected
+	notEnrolled := user("NotEnrolled", "student")
+	join(f.teamID, notEnrolled, false) // not in this week: not expected
+
+	if _, err := f.store.CreateMentorReview(ctx, sessionReview(f.moduleID, f.studentID)); err != nil {
+		t.Fatal(err)
+	}
+	reason := "mentor-unavailable"
+	if _, err := f.store.CreateMentorReview(ctx, MentorReviewInput{ModuleID: f.moduleID, StudentID: s3, NoSessionReason: &reason, Overall: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	expected, err := f.store.ListExpectedReviewers(ctx, &f.moduleID, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[int64]bool{}
+	for _, e := range expected {
+		got[e.StudentID] = e.Reviewed
+	}
+	want := map[int64]bool{f.studentID: true, s2: false, s3: true}
+	if len(got) != len(want) {
+		t.Errorf("expected reviewers %v, want exactly %v", got, want)
+	}
+	for id, reviewed := range want {
+		if r, ok := got[id]; !ok || r != reviewed {
+			t.Errorf("student %d: in list %v, reviewed %v; want reviewed %v", id, ok, r, reviewed)
+		}
+	}
+
+	all, err := f.store.ListMentorReviews(ctx, MentorReviewFilter{ModuleID: &f.moduleID})
+	if err != nil || len(all) != 2 {
+		t.Fatalf("all reviews of the week: %d, %v", len(all), err)
+	}
+	byMentor, _ := f.store.ListMentorReviews(ctx, MentorReviewFilter{MentorID: &f.mentorID})
+	if len(byMentor) != 1 || byMentor[0].StudentID != f.studentID || byMentor[0].MentorName != "Mentor" ||
+		byMentor[0].TeamName == nil || *byMentor[0].TeamName != "Team A" || byMentor[0].Ratings == nil || byMentor[0].Ratings.Time != 3 ||
+		len(byMentor[0].Topics) != 2 || byMentor[0].ModuleTitle != "Week 1" {
+		t.Errorf("by mentor: %+v", byMentor)
+	}
+	byTeam, _ := f.store.ListMentorReviews(ctx, MentorReviewFilter{TeamID: &teamB})
+	if len(byTeam) != 1 || byTeam[0].StudentID != s3 || byTeam[0].Ratings != nil || byTeam[0].Topics == nil || *byTeam[0].NoSessionReason != reason {
+		t.Errorf("by team: %+v", byTeam)
+	}
+	later := time.Now().Add(time.Hour)
+	if none, _ := f.store.ListMentorReviews(ctx, MentorReviewFilter{ModuleID: &f.moduleID, OpensFrom: &later}); len(none) != 0 {
+		t.Errorf("weeks opening after now: %d reviews, want 0", len(none))
+	}
+}
