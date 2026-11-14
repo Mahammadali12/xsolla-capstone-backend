@@ -20,7 +20,7 @@ type ContentService interface {
 	CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
 	GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error)
 	GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error)
-	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
+	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title *string, description *string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
 	DeleteContentItem(ctx context.Context, userID int64, roles []string, itemID int64) error
 }
 
@@ -128,7 +128,7 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, service.ErrUnsupportedContentType) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
-		} else if errors.Is(err, service.ErrAssignmentMissingDueAt) {
+		} else if errors.Is(err, service.ErrAssignmentMissingDueAt) || errors.Is(err, service.ErrInvalidContentItem) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongModule) {
 			writeError(w, 404, "not_found", "parent item not found", nil)
@@ -244,6 +244,8 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) {
 			writeError(w, 404, "not_found", "content item not found", nil)
+		} else if errors.Is(err, service.ErrInvalidContentItem) {
+			writeError(w, 400, "bad_request", err.Error(), nil)
 		} else {
 			writeError(w, 500, "server_error", "could not update content item", nil)
 		}

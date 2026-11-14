@@ -96,7 +96,8 @@ func (s *ModuleService) PatchModule(ctx context.Context, userID int64, roles []s
 		return nil, err
 	}
 
-	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") {
+	// admins edit every week; a lecturer only the weeks they created or are assigned to (checked below)
+	if auth.HasRole(roles, "admin") {
 		return s.store.PatchModule(ctx, moduleID, title, description, userID, true, opensAt, closesAt)
 	}
 
@@ -132,7 +133,8 @@ func (s *ModuleService) resolvePatchDates(ctx context.Context, moduleID int64, o
 
 // DeleteModule soft-deletes a module if the user is authorized.
 func (s *ModuleService) DeleteModule(ctx context.Context, userID int64, roles []string, moduleID int64) error {
-	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") {
+	// admins delete every week; a lecturer only the weeks they created or are assigned to (checked below)
+	if auth.HasRole(roles, "admin") {
 		return s.store.DeleteModule(ctx, moduleID, userID, true)
 	}
 
@@ -149,6 +151,10 @@ func (s *ModuleService) DeleteModule(ctx context.Context, userID int64, roles []
 
 // CreateEnrollment enrolls a user in a module.
 func (s *ModuleService) CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error) {
+	if _, err := s.store.GetModuleByID(ctx, moduleID); err != nil {
+		return nil, err // store.ErrModuleNotFound for an unknown or deleted week
+	}
+
 	// Students can only enroll themselves
 	if auth.HasRole(actorRoles, "student") && actorID != userID {
 		return nil, ErrNotEnrolled

@@ -63,9 +63,26 @@ func (s *FileService) GetFilesForUser(ctx context.Context, uploadedBy int64) ([]
 	return s.store.GetFilesForUser(ctx, uploadedBy)
 }
 
-// CanReadFile returns the file if it exists. Any authenticated user can download any file.
+// ErrFileForbidden is returned when the caller may not read the file.
+var ErrFileForbidden = errors.New("forbidden")
+
+// CanReadFile returns the file if the caller may read it: staff (admin, lecturer, mentor: they teach, review and
+// grade) read every file; a student reads the files they uploaded and the files of content items in weeks they
+// are enrolled in. Other students' hand-ins stay private.
 func (s *FileService) CanReadFile(ctx context.Context, userID int64, roles []string, fileID int64) (*store.File, error) {
-	return s.store.GetFileByID(ctx, fileID)
+	f, err := s.store.GetFileByID(ctx, fileID)
+	if err != nil {
+		return nil, err
+	}
+	if f.UploadedBy == userID || auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") || auth.HasRole(roles, "mentor") {
+		return f, nil
+	}
+	if ci, err := s.store.GetContentItemForFile(ctx, fileID); err == nil && ci != nil {
+		if enrolled, err := s.store.IsUserEnrolled(ctx, ci.ModuleID, userID); err == nil && enrolled {
+			return f, nil
+		}
+	}
+	return nil, ErrFileForbidden
 }
 
 // DeleteFile soft-deletes a file if authorized and not referenced.

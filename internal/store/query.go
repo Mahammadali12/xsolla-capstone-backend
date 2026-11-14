@@ -487,7 +487,7 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 	)
 }
 
-func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) *sql.Row {
+func (q *Query) UpdateContentItem(ctx context.Context, id int64, title *string, description *string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE content_items AS ci
 		 SET title = COALESCE($2, title),
