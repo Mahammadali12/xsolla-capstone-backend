@@ -127,6 +127,11 @@ type Store interface {
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
 	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)
 
+	// Mentor review methods
+	HasMentorReview(ctx context.Context, moduleID, studentID int64) (bool, error)
+	CreateMentorReview(ctx context.Context, in MentorReviewInput) (*MentorReview, error)
+	ListReviewedModules(ctx context.Context, studentID int64) ([]ReviewedModule, error)
+
 	CreateQuiz(ctx context.Context, moduleID int64, sourceContentItemID *int64, title, description string, dueAt *time.Time, status string, isAI bool, createdBy int64, questions []QuizQuestionInput) (*Quiz, error)
 	GetQuizByID(ctx context.Context, id int64) (*Quiz, error)
 	ListQuizzesForModule(ctx context.Context, moduleID int64, readyOnly bool) ([]Quiz, error)

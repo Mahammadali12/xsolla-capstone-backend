@@ -64,6 +64,7 @@ func main() {
 	userSvc := service.NewUserService(store)
 	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
 	teamSvc := service.NewTeamService(store, mentorSlotSvc)
+	mentorReviewSvc := service.NewMentorReviewService(store)
 	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage
@@ -90,6 +91,7 @@ func main() {
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
+	mentorReviewH := handlers.NewMentorReviewHandlers(mentorReviewSvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
 	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
 
@@ -177,6 +179,10 @@ func main() {
 	mux.Handle("DELETE /mentor-slots/{id}", authenticator.Middleware(http.HandlerFunc(mentorSlotH.RemoveSlot)))
 	mux.Handle("POST /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.BookSlot)))
 	mux.Handle("DELETE /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.CancelBooking)))
+
+	// Weekly mentor reviews (students only; the service answers 403 to everyone else)
+	mux.Handle("GET /mentor-reviews/me", authenticator.Middleware(http.HandlerFunc(mentorReviewH.ListMine)))
+	mux.Handle("POST /mentor-reviews", authenticator.Middleware(http.HandlerFunc(mentorReviewH.Submit)))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
 	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))
