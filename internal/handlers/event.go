@@ -26,6 +26,7 @@ type EventService interface {
 
 type EventHandlers struct {
 	svc EventService
+	avatarSupport
 }
 
 // NewEventHandlers creates event handlers backed by the given service.
@@ -90,9 +91,12 @@ func (h *EventHandlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := make([]dto.EventResponse, len(events))
+	lists := make([][]dto.Attendee, len(events))
 	for i, e := range events {
 		resp[i] = eventResponse(e)
+		lists[i] = resp[i].Attendees
 	}
+	h.fillAttendees(r, lists...)
 	writeJSON(w, 200, resp)
 }
 
@@ -169,7 +173,9 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 201, eventResponse(*e))
+	resp := eventResponse(*e)
+	h.fillAttendees(r, resp.Attendees)
+	writeJSON(w, 201, resp)
 }
 
 // PATCH /events/:id
@@ -287,7 +293,9 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, 200, eventResponse(*e))
+	resp := eventResponse(*e)
+	h.fillAttendees(r, resp.Attendees)
+	writeJSON(w, 200, resp)
 }
 
 // DELETE /events/:id

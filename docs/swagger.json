@@ -403,6 +403,43 @@
                 }
             }
         },
+        "/avatars/{name}": {
+            "get": {
+                "description": "No sign-in: this is the avatar_url an \u003cimg\u003e tag loads. Only current pictures are served.",
+                "produces": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "A profile picture",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File name from avatar_url",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/content-items/{id}": {
             "get": {
                 "security": [
@@ -1356,6 +1393,258 @@
                     }
                 }
             }
+        },
+        "/users/me/avatar": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "JPG, PNG or WebP up to 2 MB (content is checked). Replaces and deletes the old picture.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Upload my picture",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "The picture",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AvatarResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Remove my picture",
+                "responses": {
+                    "204": {
+                        "description": "No content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/preferences": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every setting; defaults for a person who never saved any",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "My look and accessibility settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "text_size (normal, large, xlarge), theme (system, light, dark), font (default, dyslexia), spacing (normal, relaxed), density (comfortable, compact), high_contrast, colorblind_safe, reduce_motion, strong_focus (true/false)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Change my look and accessibility settings",
+                "parameters": [
+                    {
+                        "description": "Settings to change",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The signed-in person's \"about me\": picture, bio, contact handles and who may see them",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "My profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ProfileResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Any of bio (max 300), slack_handle, gitlab_handle (max 40, no spaces), visibility (everyone, staff_only). Only sent fields change.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Change my profile",
+                "parameters": [
+                    {
+                        "description": "Fields to change",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "As the caller may see it: a \"staff_only\" profile comes back empty (avatar_url null) to students",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Someone's profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1370,6 +1659,14 @@
                 },
                 "user": {
                     "$ref": "#/definitions/dto.UserResponse"
+                }
+            }
+        },
+        "dto.AvatarResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
                 }
             }
         },
@@ -1660,6 +1957,26 @@
                 }
             }
         },
+        "dto.ProfileResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "bio": {
+                    "type": "string"
+                },
+                "gitlab_handle": {
+                    "type": "string"
+                },
+                "slack_handle": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.RefreshRequest": {
             "type": "object",
             "properties": {
@@ -1745,6 +2062,10 @@
         "dto.UserResponse": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "description": "AvatarURL is the profile picture as the caller may see it; null when none or hidden.",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },

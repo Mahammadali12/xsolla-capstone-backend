@@ -30,6 +30,10 @@ type Config struct {
 
 	GeminiAPIKey   string
 	GeminiModel    string
+
+	// PublicAPIURL is the API's address as browsers reach it, used to build picture URLs
+	// (optional: when empty, each request's own scheme and host are used).
+	PublicAPIURL string
 }
 
 // defaults for optional values when not set in .env or environment.
@@ -47,6 +51,7 @@ var defaults = map[string]string{
 	"S3_SECRET_KEY":    "",
 	"GEMINI_API_KEY":   "",
 	"GEMINI_MODEL":     "gemini-3.6-flash",
+	"PUBLIC_API_URL":   "",
 }
 
 // Load reads .env (if present), applies environment variables, and returns a Config.
@@ -72,6 +77,7 @@ func Load() (*Config, error) {
 
 		GeminiAPIKey:   getenv("GEMINI_API_KEY", defaults["GEMINI_API_KEY"]),
 		GeminiModel:    getenv("GEMINI_MODEL", defaults["GEMINI_MODEL"]),
+		PublicAPIURL:   getenv("PUBLIC_API_URL", defaults["PUBLIC_API_URL"]),
 	}
 
 	if cfg.DatabaseURL == "" {
