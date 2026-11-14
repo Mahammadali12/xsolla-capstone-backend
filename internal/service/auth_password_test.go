@@ -74,6 +74,9 @@ func (f *fakeRefreshTokenStore) FindRefreshTokenByHash(ctx context.Context, toke
 func (f *fakeRefreshTokenStore) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	return nil
 }
+func (f *fakeRefreshTokenStore) RetireRefreshToken(context.Context, string, time.Duration) error {
+	return nil
+}
 
 const oldPassword = "Old-Passw0rd!"
 
