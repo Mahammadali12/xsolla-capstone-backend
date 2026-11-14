@@ -90,6 +90,7 @@ func main() {
 	fileH := handlers.NewFileHandlers(fileSvc)
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
 	eventH := handlers.NewEventHandlers(eventSvc)
+	lectureFeedbackH := handlers.NewLectureFeedbackHandlers(service.NewLectureFeedbackService(store))
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
@@ -189,6 +190,13 @@ func main() {
 	mux.Handle("PATCH /modules/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeModule)))
 
 	mux.Handle("GET /events", authenticator.Middleware(http.HandlerFunc(eventH.ListEvents)))
+	// Lecture feedback: students fill the form after a lecture; only admins read the answers
+	mux.Handle("GET /lecture-feedback/form", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Form)))
+	mux.Handle("GET /lecture-feedback/pending", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Pending)))
+	mux.Handle("GET /lecture-feedback/me", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Mine)))
+	mux.Handle("POST /lecture-feedback", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Submit)))
+	mux.Handle("GET /lecture-feedback", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.List), "admin"))
+	mux.Handle("GET /lecture-feedback/summary", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.Summary), "admin"))
 	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))
 	mux.Handle("PATCH /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.UpdateEvent)))
 	mux.Handle("DELETE /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.DeleteEvent)))

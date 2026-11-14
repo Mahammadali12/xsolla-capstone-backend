@@ -1,0 +1,33 @@
+info:
+  name: Rate lecture (event) 1 (student)
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: http://localhost:8080/lecture-feedback
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "event_id": 1,
+        "overall": 4,
+        "clarity": 5,
+        "practice": 3,
+        "pace": "too_fast",
+        "confidence": 2,
+        "liked": "The live coding",
+        "improve": "A bit slower please"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
