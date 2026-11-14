@@ -34,6 +34,7 @@ type AuthService interface {
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
 	DeleteGoogleRefreshToken(ctx context.Context, userID int64) error
+	ChangePassword(ctx context.Context, userID int64, oldPassword string, newPassword string) error
 }
 
 type AuthHandlers struct {
@@ -182,6 +183,49 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		AccessToken:  access,
 		RefreshToken: refresh,
 	})
+}
+
+// @Summary     Change my password
+// @Description Replace the signed-in user's password
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       request body dto.PasswordResetRequest true "New password"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Router      /auth/password-reset [post]
+func (h *AuthHandlers) PasswordReset(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	if userID == 0 {
+		writeError(w, 401, "unauthorized", "missing user context", nil)
+		return
+	}
+
+	var req dto.PasswordResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		writeError(w, 400, "bad_request", "old_password and new_password are required", nil)
+		return
+	}
+
+	if err := h.svc.ChangePassword(r.Context(), userID, req.OldPassword, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidCredentials):
+			writeError(w, 401, "invalid_credentials", "current password is incorrect", nil)
+		case errors.Is(err, store.ErrUserNotFound):
+			writeError(w, 401, "unauthorized", "user not found", nil)
+		default:
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // @Summary     Google OAuth login
@@ -333,6 +377,54 @@ func (h *AuthHandlers) GoogleLogout(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.DeleteGoogleRefreshToken(r.Context(), userID); err != nil {
 		log.Printf("google logout: delete google refresh token failed for user %d: %v", userID, err)
 		writeError(w, 500, "server_error", "could not disconnect Google account", nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// @Summary     Revoke Google access
+// @Description Revoke the signed-in user's Google OAuth grant at Google, then remove the stored credentials
+// @Tags        auth
+// @Produce     json
+// @Security    BearerAuth
+// @Success     204 {string} string "No content"
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /auth/google/revoke [post]
+func (h *AuthHandlers) GoogleRevoke(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	if userID == 0 {
+		writeError(w, 401, "unauthorized", "missing user context", nil)
+		return
+	}
+
+	encrypted, _, err := h.svc.GetGoogleRefreshToken(r.Context(), userID)
+	switch {
+	case errors.Is(err, store.ErrRefreshTokenNotFound):
+		// Never connected: nothing to revoke; deleting below keeps it idempotent.
+	case err != nil:
+		log.Printf("google revoke: get refresh token failed for user %d: %v", userID, err)
+		writeError(w, 500, "server_error", "could not revoke Google access", nil)
+		return
+	default:
+		refreshToken, err := google.DecryptToken(encrypted)
+		if err != nil {
+			// Drop the unusable row instead of leaving the user stuck connected.
+			log.Printf("google revoke: decrypt failed for user %d: %v", userID, err)
+		} else {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+			if err := google.RevokeToken(ctx, refreshToken); err != nil {
+				// Google down: still forget the token, the user must not stay connected.
+				log.Printf("google revoke: revoke failed for user %d: %v", userID, err)
+			}
+		}
+	}
+
+	if err := h.svc.DeleteGoogleRefreshToken(r.Context(), userID); err != nil {
+		log.Printf("google revoke: delete google refresh token failed for user %d: %v", userID, err)
+		writeError(w, 500, "server_error", "could not revoke Google access", nil)
 		return
 	}
 

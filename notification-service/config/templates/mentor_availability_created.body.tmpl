@@ -1,0 +1,5 @@
+Hi {{.Recipient.Name}},
+
+{{.Payload.mentor_name}} opened new 1:1 slots:
+{{range .Payload.slots}}- {{.starts_at}} to {{.ends_at}}
+{{end}}

@@ -387,6 +387,19 @@ func (s *StoreImpl) GetUserByID(ctx context.Context, id int64) (*User, error) {
 	return &u, nil
 }
 
+// GetUserPasswordHash returns the stored bcrypt hash for a user.
+func (s *StoreImpl) GetUserPasswordHash(ctx context.Context, id int64) (string, error) {
+	var hash string
+	err := s.DB().GetUserPasswordHash(ctx, id).Scan(&hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrUserNotFound
+		}
+		return "", err
+	}
+	return hash, nil
+}
+
 // FindRefreshTokenByHash looks up an active refresh token by hash.
 func (s *StoreImpl) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error) {
 	var userID int64

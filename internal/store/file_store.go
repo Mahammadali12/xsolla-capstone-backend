@@ -174,13 +174,39 @@ type MentorSlot struct {
 	CreatedAt     time.Time
 }
 
-// CreateEvent inserts a new event record.
+// CreateEvent inserts a new event and its outbox event in one transaction.
 func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*Event, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
 	var e Event
-	err := s.DB().CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID).Scan(
+	err = q.CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID).Scan(
 		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.MeetingURL, &e.ModuleID, &e.GoogleEventID, &e.CreatedAt,
 	)
 	if err != nil {
+		return nil, err
+	}
+
+	recipients := []recipientSnapshot{}
+	if moduleID != nil {
+		recipients, err = q.moduleAttendeeRecipients(ctx, *moduleID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	payload, err := eventCreatedData(e, recipients)
+	if err != nil {
+		return nil, err
+	}
+	if err := q.InsertOutboxEvent(ctx, EventCreatedEventType, payload); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -307,6 +333,71 @@ func (s *StoreImpl) CreateMentorSlot(ctx context.Context, mentorID int64, starts
 		BookedBy:  bookedBy,
 		CreatedAt: created,
 	}, nil
+}
+
+// CreateMentorAvailability creates the 30-minute slots in a window and one
+// outbox event for the whole window, all in one transaction.
+func (s *StoreImpl) CreateMentorAvailability(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) ([]MentorSlot, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
+	var slots []MentorSlot
+	t := startsAt
+	for !t.Add(30 * time.Minute).After(endsAt) {
+		slotEnd := t.Add(30 * time.Minute)
+		// Skip slots that clash with an existing one.
+		var overlap int
+		if err := q.MentorSlotsOverlap(ctx, mentorID, t, slotEnd).Scan(&overlap); err != nil {
+			return nil, err
+		}
+		if overlap > 0 {
+			t = slotEnd
+			continue
+		}
+		row := q.CreateMentorSlot(ctx, mentorID, t, slotEnd)
+		var id, mentorIDCol int64
+		var slotStarts, slotEnds, created time.Time
+		var bookedBy *int64
+		if err := row.Scan(&id, &mentorIDCol, &slotStarts, &slotEnds, &bookedBy, &created); err != nil {
+			return nil, err
+		}
+		slots = append(slots, MentorSlot{
+			ID:        id,
+			MentorID:  mentorIDCol,
+			StartsAt:  slotStarts,
+			EndsAt:    slotEnds,
+			BookedBy:  bookedBy,
+			CreatedAt: created,
+		})
+		t = slotEnd
+	}
+
+	if len(slots) > 0 {
+		mentorName, _, err := q.userNameEmail(ctx, mentorID)
+		if err != nil {
+			return nil, err
+		}
+		recipients, err := q.mentorTeamStudentRecipients(ctx, mentorID)
+		if err != nil {
+			return nil, err
+		}
+		payload, err := mentorAvailabilityCreatedData(mentorID, mentorName, startsAt, endsAt, slots, recipients)
+		if err != nil {
+			return nil, err
+		}
+		if err := q.InsertOutboxEvent(ctx, MentorAvailabilityCreatedEventType, payload); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return slots, nil
 }
 
 // MentorSlotsOverlap returns the count of non-deleted slots for a mentor that overlap a given range.

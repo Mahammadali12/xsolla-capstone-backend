@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -18,6 +21,14 @@ type mockGoogleTokenService struct {
 	deleteGoogleUserID int64
 	deleteGoogleCalled bool
 	deleteGoogleErr    error
+	getGoogleToken     string
+	getGoogleErr       error
+
+	changePasswordCalled bool
+	changePasswordUserID int64
+	changePasswordOld    string
+	changePasswordNew    string
+	changePasswordErr    error
 }
 
 func (m *mockGoogleTokenService) Signup(ctx context.Context, email, name, password string) (int64, []string, error) {
@@ -42,12 +53,19 @@ func (m *mockGoogleTokenService) SaveGoogleRefreshToken(ctx context.Context, use
 	return nil
 }
 func (m *mockGoogleTokenService) GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error) {
-	return "", time.Time{}, nil
+	return m.getGoogleToken, time.Time{}, m.getGoogleErr
 }
 func (m *mockGoogleTokenService) DeleteGoogleRefreshToken(ctx context.Context, userID int64) error {
 	m.deleteGoogleCalled = true
 	m.deleteGoogleUserID = userID
 	return m.deleteGoogleErr
+}
+func (m *mockGoogleTokenService) ChangePassword(ctx context.Context, userID int64, oldPassword string, newPassword string) error {
+	m.changePasswordCalled = true
+	m.changePasswordUserID = userID
+	m.changePasswordOld = oldPassword
+	m.changePasswordNew = newPassword
+	return m.changePasswordErr
 }
 
 func TestGoogleLogoutSuccess(t *testing.T) {
@@ -124,6 +142,179 @@ var errBoom = &boomError{}
 type boomError struct{}
 
 func (e *boomError) Error() string { return "boom" }
+
+func TestGoogleRevokeNotConnected(t *testing.T) {
+	svc := &mockGoogleTokenService{getGoogleErr: store.ErrRefreshTokenNotFound}
+	rec := callGoogleRevoke(t, svc)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !svc.deleteGoogleCalled || svc.deleteGoogleUserID != 42 {
+		t.Fatalf("expected DeleteGoogleRefreshToken called with 42, got called=%v userID=%d", svc.deleteGoogleCalled, svc.deleteGoogleUserID)
+	}
+}
+
+func TestGoogleRevokeUndecryptableToken(t *testing.T) {
+	svc := &mockGoogleTokenService{getGoogleToken: "not-base64"}
+	rec := callGoogleRevoke(t, svc)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !svc.deleteGoogleCalled {
+		t.Fatal("expected DeleteGoogleRefreshToken to be called")
+	}
+}
+
+func TestGoogleRevokeReadError(t *testing.T) {
+	svc := &mockGoogleTokenService{getGoogleErr: errBoom}
+	rec := callGoogleRevoke(t, svc)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.deleteGoogleCalled {
+		t.Fatal("expected DeleteGoogleRefreshToken not to be called after a read error")
+	}
+}
+
+func TestGoogleRevokeStoreError(t *testing.T) {
+	svc := &mockGoogleTokenService{getGoogleErr: store.ErrRefreshTokenNotFound, deleteGoogleErr: errBoom}
+	rec := callGoogleRevoke(t, svc)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGoogleRevokeUnauthenticated(t *testing.T) {
+	secret := []byte("test-secret")
+	svc := &mockGoogleTokenService{}
+	authH := NewAuthHandlers(svc, secret, secret, 15*time.Minute, 7*24*time.Hour)
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /auth/google/revoke", (&middleware.Authenticator{Secret: secret}).Middleware(http.HandlerFunc(authH.GoogleRevoke)))
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/google/revoke", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.deleteGoogleCalled {
+		t.Fatal("expected DeleteGoogleRefreshToken not to be called for unauthenticated request")
+	}
+}
+
+// callGoogleRevoke sends an authenticated request to GoogleRevoke.
+func callGoogleRevoke(t *testing.T, svc *mockGoogleTokenService) *httptest.ResponseRecorder {
+	t.Helper()
+	secret := []byte("test-secret")
+	authH := NewAuthHandlers(svc, secret, secret, 15*time.Minute, 7*24*time.Hour)
+
+	token, err := auth.AccessToken(42, []string{"student"}, secret, 15*time.Minute)
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /auth/google/revoke", (&middleware.Authenticator{Secret: secret}).Middleware(http.HandlerFunc(authH.GoogleRevoke)))
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/google/revoke", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestPasswordResetSuccess(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123","new_password":"Str0ng-Passphrase!"}`, true)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !svc.changePasswordCalled || svc.changePasswordUserID != 42 {
+		t.Fatalf("unexpected ChangePassword call: called=%v userID=%d", svc.changePasswordCalled, svc.changePasswordUserID)
+	}
+	if svc.changePasswordOld != "secret123" || svc.changePasswordNew != "Str0ng-Passphrase!" {
+		t.Fatalf("unexpected passwords: old=%q new=%q", svc.changePasswordOld, svc.changePasswordNew)
+	}
+}
+
+func TestPasswordResetWrongOldPassword(t *testing.T) {
+	svc := &mockGoogleTokenService{changePasswordErr: service.ErrInvalidCredentials}
+	rec := callPasswordReset(t, svc, `{"old_password":"wrong","new_password":"Str0ng-Passphrase!"}`, true)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPasswordResetUnauthenticated(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123","new_password":"Str0ng-Passphrase!"}`, false)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.changePasswordCalled {
+		t.Fatal("expected ChangePassword not to be called")
+	}
+}
+
+func TestPasswordResetMissingField(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123"}`, true)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.changePasswordCalled {
+		t.Fatal("expected ChangePassword not to be called")
+	}
+}
+
+func TestPasswordResetPolicyError(t *testing.T) {
+	svc := &mockGoogleTokenService{changePasswordErr: errors.New("add a number")}
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123","new_password":"short"}`, true)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "add a number") {
+		t.Fatalf("expected policy message, got %s", rec.Body.String())
+	}
+}
+
+// callPasswordReset posts a JSON body to /auth/password-reset, optionally with a valid JWT.
+func callPasswordReset(t *testing.T, svc *mockGoogleTokenService, body string, authenticated bool) *httptest.ResponseRecorder {
+	t.Helper()
+	secret := []byte("test-secret")
+	authH := NewAuthHandlers(svc, secret, secret, 15*time.Minute, 7*24*time.Hour)
+
+	mux := http.NewServeMux()
+	handler := http.HandlerFunc(authH.PasswordReset)
+	if authenticated {
+		mux.Handle("POST /auth/password-reset", (&middleware.Authenticator{Secret: secret}).Middleware(handler))
+	} else {
+		mux.HandleFunc("POST /auth/password-reset", handler)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/password-reset", strings.NewReader(body))
+	if authenticated {
+		token, err := auth.AccessToken(42, []string{"student"}, secret, 15*time.Minute)
+		if err != nil {
+			t.Fatalf("sign token: %v", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
 
 // Ensure store import is referenced so it is not flagged as unused if the mock
 // is ever trimmed.

@@ -143,25 +143,13 @@ func (s *MentorSlotService) CreateAvailability(ctx context.Context, userID int64
 		return nil, err
 	}
 
-	var slots []MentorSlot
-	t := startsAt
-	for !t.Add(30 * time.Minute).After(endsAt) {
-		slotEnd := t.Add(30 * time.Minute)
-		// Skip slots that clash with an existing one.
-		overlap, err := s.store.MentorSlotsOverlap(ctx, userID, t, slotEnd)
-		if err != nil {
-			return nil, err
-		}
-		if overlap > 0 {
-			t = slotEnd
-			continue
-		}
-		slot, err := s.store.CreateMentorSlot(ctx, userID, t, slotEnd)
-		if err != nil {
-			return nil, err
-		}
-		slots = append(slots, *mentorSlotFromStore(*slot))
-		t = slotEnd
+	storeSlots, err := s.store.CreateMentorAvailability(ctx, userID, startsAt, endsAt)
+	if err != nil {
+		return nil, err
+	}
+	slots := make([]MentorSlot, len(storeSlots))
+	for i, slot := range storeSlots {
+		slots[i] = *mentorSlotFromStore(slot)
 	}
 	if err := s.attachAttendees(ctx, slots, userID, roles); err != nil {
 		return nil, err

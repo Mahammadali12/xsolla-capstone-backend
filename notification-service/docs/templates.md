@@ -43,9 +43,10 @@ leaves a half-delivered event; the consumer retries and then dead-letters it.
 
 ## Status
 
-`config/templates/booking_confirmation.*` is a temporary example that proves the
-pipeline. It is not approved notification copy, and no policy references it
-while `config/policies.json` is `{}`.
+`config/templates/` holds one subject/body pair per policy: booking
+confirmation and cancellation, module created, content item uploaded, event
+created, mentor availability created, submission created, and enrollment
+graded.
 
 No HTML, localization, layouts, or hot reload yet. Templates are re-read on
 restart, not per message.

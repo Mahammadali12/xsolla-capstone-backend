@@ -244,7 +244,7 @@ func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64,
 	}
 
 	gradePtr := &grade
-	return s.store.UpdateEnrollmentGrade(ctx, moduleID, studentID, gradePtr)
+	return s.store.UpdateEnrollmentGrade(ctx, moduleID, studentID, gradePtr, userID)
 }
 
 // ErrNotModuleTeacher is re-exported from the store package for handler use.

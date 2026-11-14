@@ -191,6 +191,15 @@ definitions:
       title:
         type: string
     type: object
+  dto.PasswordResetRequest:
+    properties:
+      new_password:
+        example: Back-To-Class-8
+        type: string
+      old_password:
+        example: secret123
+        type: string
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
@@ -399,6 +408,30 @@ paths:
       summary: Google user profile
       tags:
       - auth
+  /auth/google/revoke:
+    post:
+      description: Revoke the signed-in user's Google OAuth grant at Google, then
+        remove the stored credentials
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke Google access
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:
@@ -454,6 +487,38 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Log out
+      tags:
+      - auth
+  /auth/password-reset:
+    post:
+      consumes:
+      - application/json
+      description: Replace the signed-in user's password
+      parameters:
+      - description: New password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change my password
       tags:
       - auth
   /auth/refresh:

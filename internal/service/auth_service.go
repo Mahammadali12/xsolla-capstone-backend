@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"os"
@@ -21,6 +22,8 @@ type UserStore interface {
 	GetUserByEmail(ctx context.Context, email string) (*store.User, error)
 	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
 	GetUserByID(ctx context.Context, id int64) (*store.User, error)
+	GetUserPasswordHash(ctx context.Context, id int64) (string, error)
+	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)
 	// Google OAuth token storage
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
@@ -118,6 +121,31 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 
 	applyEffectiveRoles(user)
 	return user, nil
+}
+
+// ChangePassword replaces the signed-in user's password after the caller
+// proves the current one. Existing sessions are left alone.
+func (s *AuthService) ChangePassword(ctx context.Context, userID int64, oldPassword string, newPassword string) error {
+	user, err := s.userStore.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	hash, err := s.userStore.GetUserPasswordHash(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := auth.Compare(hash, oldPassword); err != nil {
+		return ErrInvalidCredentials
+	}
+	if err := validateNewPassword(newPassword, user.Name, user.Email); err != nil {
+		return err
+	}
+	newHash, err := auth.Hash(newPassword)
+	if err != nil {
+		return err
+	}
+	_, err = s.userStore.UpdateUserPassword(ctx, userID, newHash)
+	return err
 }
 
 // GetUserByID looks up a user by ID with effective roles.

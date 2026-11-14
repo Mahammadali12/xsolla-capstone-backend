@@ -14,16 +14,16 @@ var (
 
 // Submission represents a submission row from the database.
 type Submission struct {
-	ID           int64
+	ID            int64
 	ContentItemID int64
-	StudentID    int64
-	TextBody     string
-	SubmittedAt  time.Time
-	Feedback     *string
-	GradedBy     *int64
-	GradedAt     *time.Time
-	CreatedAt    time.Time
-	Files        []File
+	StudentID     int64
+	TextBody      string
+	SubmittedAt   time.Time
+	Feedback      *string
+	GradedBy      *int64
+	GradedAt      *time.Time
+	CreatedAt     time.Time
+	Files         []File
 }
 
 // SubmissionFile represents a row in submission_files with file metadata.
@@ -37,14 +37,51 @@ type SubmissionFile struct {
 	CreatedAt    time.Time
 }
 
-// CreateSubmission inserts a new submission row.
+// CreateSubmission inserts a new submission row and its outbox event in one transaction.
 func (s *StoreImpl) CreateSubmission(ctx context.Context, contentItemID int64, studentID int64, textBody string) (*Submission, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
 	var sub Submission
-	err := s.DB().CreateSubmission(ctx, contentItemID, studentID, textBody).Scan(
+	err = q.CreateSubmission(ctx, contentItemID, studentID, textBody).Scan(
 		&sub.ID, &sub.ContentItemID, &sub.StudentID, &sub.TextBody, &sub.SubmittedAt,
 		&sub.Feedback, &sub.GradedBy, &sub.GradedAt, &sub.CreatedAt,
 	)
 	if err != nil {
+		return nil, err
+	}
+
+	var assignmentTitle, moduleTitle string
+	var moduleID int64
+	if err := q.QueryRowContext(ctx,
+		`SELECT ci.title, m.id, m.title
+		 FROM content_items ci
+		 JOIN modules m ON m.id = ci.module_id
+		 WHERE ci.id = $1 AND ci.deleted_at IS NULL`, contentItemID,
+	).Scan(&assignmentTitle, &moduleID, &moduleTitle); err != nil {
+		return nil, err
+	}
+	studentName, _, err := q.userNameEmail(ctx, studentID)
+	if err != nil {
+		return nil, err
+	}
+	recipients, err := q.studentMentorRecipients(ctx, studentID)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := submissionCreatedData(sub, assignmentTitle, moduleID, moduleTitle, studentName, recipients)
+	if err != nil {
+		return nil, err
+	}
+	if err := q.InsertOutboxEvent(ctx, SubmissionCreatedEventType, payload); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 

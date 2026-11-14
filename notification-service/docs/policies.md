@@ -49,8 +49,10 @@ dead-lettered. The `email` channel currently uses a logging mock adapter.
 - Policies are read once at startup. Edit the file and restart the worker.
   Compose mounts `./config` read-only, so no rebuild is needed.
 
-The example above is illustrative; the committed file is `{}` because no
-notification scope has been approved yet.
+The committed file enables policies for `mentor_slot.booked`,
+`mentor_slot.canceled`, `module.created`, `content_item.uploaded`,
+`event.created`, `mentor_availability.created`, `submission.created`, and
+`enrollment.graded`.
 
 No dynamic rules engine, conditions, preferences, or policy UI exists. Add
 fields only when a real requirement needs them.

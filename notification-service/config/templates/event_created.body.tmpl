@@ -1,0 +1,7 @@
+Hi {{.Recipient.Name}},
+
+A new event has been scheduled:
+{{.Payload.title}} ({{.Payload.kind}})
+From {{.Payload.starts_at}} to {{.Payload.ends_at}}.
+{{if .Payload.all_day}}This is an all-day event.
+{{end}}

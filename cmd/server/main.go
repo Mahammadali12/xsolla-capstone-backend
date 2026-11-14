@@ -100,6 +100,7 @@ func main() {
 	mux.HandleFunc("POST /auth/login", authH.Login)
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
+	mux.Handle("POST /auth/password-reset", authenticator.Middleware(http.HandlerFunc(authH.PasswordReset)))
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := database.PingContext(r.Context()); err != nil {
 			log.Printf("readyz: database: %v", err)
@@ -109,11 +110,12 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	
+
 	mux.Handle("GET /auth/google/login", authenticator.OptionalAuth(http.HandlerFunc(authH.GoogleLogin)))
 	mux.HandleFunc("GET /auth/google/callback", authH.GoogleCallback)
 	mux.Handle("GET /auth/google/me", authenticator.Middleware(http.HandlerFunc(authH.GoogleMe)))
 	mux.Handle("POST /auth/google/logout", authenticator.Middleware(http.HandlerFunc(authH.GoogleLogout)))
+	mux.Handle("POST /auth/google/revoke", authenticator.Middleware(http.HandlerFunc(authH.GoogleRevoke)))
 	mux.Handle("GET /google/calendar/events", authenticator.Middleware(http.HandlerFunc(googleCalendarH.ListEvents)))
 	mux.Handle("GET /users/me", authenticator.Middleware(http.HandlerFunc(authH.Me)))
 
