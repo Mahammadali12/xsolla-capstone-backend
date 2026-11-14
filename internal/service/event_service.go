@@ -38,7 +38,15 @@ var ErrOnlyStaffCanCreateEvent = errors.New("only lecturers and admins can creat
 var ErrEndsBeforeStarts = errors.New("ends_at must be after starts_at")
 
 // ErrModuleNotFound is returned when module_id references a non-existent content item.
-var ErrModuleNotFound = errors.New("module not found")
+// ErrModuleNotFound is the store's error, so handlers recognise it whichever layer returns it.
+var ErrModuleNotFound = store.ErrModuleNotFound
+
+// ErrInvalidEventKind is returned for a kind other than lecture, meeting or off-campus.
+var ErrInvalidEventKind = errors.New("kind must be lecture, meeting or off-campus")
+
+func validEventKind(kind string) bool {
+	return kind == "lecture" || kind == "meeting" || kind == "off-campus"
+}
 
 // ErrNotTeacherOfModule is returned when the caller is not the lecturer of the module.
 var ErrNotTeacherOfModule = errors.New("not the lecturer of this module")
@@ -157,7 +165,7 @@ func (s *EventService) GetEventByID(ctx context.Context, userID int64, roles []s
 			return nil, err
 		}
 		if !teacher {
-			return nil, errors.New("not the teacher of this module")
+			return nil, ErrNotTeacherOfModule
 		}
 	}
 
@@ -197,6 +205,9 @@ func eventFromStorePtr(e *store.Event) *Event {
 func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []string, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, syncToGoogle bool) (*Event, error) {
 	if !auth.HasRole(roles, "lecturer") && !auth.HasRole(roles, "admin") {
 		return nil, ErrOnlyStaffCanCreateEvent
+	}
+	if !validEventKind(kind) {
+		return nil, ErrInvalidEventKind
 	}
 
 	if endsAt.Before(startsAt) {

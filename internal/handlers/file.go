@@ -10,7 +10,9 @@ import (
 	"io"
 	"log"
 	"mime"
+	"mime/multipart"
 	"net/http"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
 	"xsolla-capstone-api/internal/service"
+	"xsolla-capstone-api/internal/storage"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -57,11 +60,19 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	log.Printf("file handler: UploadFile called by user %d", userID)
 
-	if err := r.ParseMultipartForm(50 << 20); err != nil { // 50 MB max
+	// 50 MB is the real limit: ParseMultipartForm's number only says how much is kept in memory
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		log.Printf("file handler: ParseMultipartForm error: %v", err)
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, 413, "payload_too_large", "the file is larger than 50 MB", nil)
+			return
+		}
 		writeError(w, 400, "bad_request", "file too large or invalid form", nil)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -71,9 +82,15 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Validate file type
+	// Validate file type. The fixed list goes first, so .md, .zip, .pptx... work whatever the server's OS knows.
 	ext := filepath.Ext(header.Filename)
-	mimeType := mime.TypeByExtension(ext)
+	mimeType := storage.GetContentTypeFromExtension(header.Filename)
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		mimeType = mime.TypeByExtension(ext)
+	}
+	if i := strings.IndexByte(mimeType, ';'); i >= 0 { // "text/plain; charset=utf-8" -> "text/plain"
+		mimeType = strings.TrimSpace(mimeType[:i])
+	}
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
@@ -97,6 +114,12 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A program renamed to .pdf (or any allowed name) is still a program
+	if isExecutable(file) {
+		writeError(w, 415, "unsupported_type", "file type not allowed", nil)
+		return
+	}
+
 	// Generate unique storage key
 	randBytes := make([]byte, 16)
 	if _, err := rand.Read(randBytes); err != nil {
@@ -104,7 +127,8 @@ func (h *FileHandlers) UploadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "server_error", "could not generate storage key", nil)
 		return
 	}
-	storageKey := filepath.Join("users", fmt.Sprintf("%d", userID), base64.RawURLEncoding.EncodeToString(randBytes)+ext)
+	// object keys always use "/": filepath.Join would put "\" in the key on Windows, which S3 rejects
+	storageKey := path.Join("users", fmt.Sprintf("%d", userID), base64.RawURLEncoding.EncodeToString(randBytes)+ext)
 
 	f, err := h.svc.CreateFile(r.Context(), userID, header.Filename, storageKey, mimeType, header.Size, file)
 	if err != nil {
@@ -222,4 +246,27 @@ func (h *FileHandlers) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(204)
+}
+
+// maxUploadBytes is the largest file POST /files accepts (the front-end allows 20 MB).
+const maxUploadBytes = 50 << 20
+
+// isExecutable reports Windows (MZ), Linux (ELF) and macOS (Mach-O) programs by their first bytes, then rewinds.
+func isExecutable(f multipart.File) bool {
+	head := make([]byte, 4)
+	n, _ := io.ReadFull(f, head)
+	_, _ = f.Seek(0, io.SeekStart)
+	if n < 2 {
+		return false
+	}
+	switch {
+	case head[0] == 'M' && head[1] == 'Z':
+		return true
+	case n == 4 && string(head) == "ELF":
+		return true
+	case n == 4 && (string(head) == "þíúÎ" || string(head) == "þíúÏ" ||
+		string(head) == "Îúíþ" || string(head) == "Ïúíþ"):
+		return true
+	}
+	return false
 }

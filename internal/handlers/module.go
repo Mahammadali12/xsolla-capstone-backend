@@ -307,6 +307,8 @@ func (h *ModuleHandlers) CreateEnrollment(w http.ResponseWriter, r *http.Request
 			writeError(w, 403, "forbidden", "students can only enroll themselves", nil)
 		} else if errors.Is(err, service.ErrAlreadyEnrolled) {
 			writeError(w, 409, "conflict", "already enrolled in this module", nil)
+		} else if errors.Is(err, service.ErrModuleNotFound) {
+			writeError(w, 404, "not_found", "module not found", nil)
 		} else {
 			writeError(w, 500, "server_error", "could not enroll", nil)
 		}

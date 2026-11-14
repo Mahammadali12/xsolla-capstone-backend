@@ -17,8 +17,9 @@ type CreateContentItemRequest struct {
 
 // UpdateContentItemRequest is the payload for PATCH /content-items/:id.
 type UpdateContentItemRequest struct {
-	Title       string     `json:"title,omitempty"`
-	Description string     `json:"description,omitempty"`
+	// nil = not sent: the stored value stays
+	Title       *string    `json:"title,omitempty"`
+	Description *string    `json:"description,omitempty"`
 	Position    *int       `json:"position,omitempty"`
 	IsVisible   *bool      `json:"is_visible,omitempty"`
 	ParentID    *int64     `json:"parent_id,omitempty"`

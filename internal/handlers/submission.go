@@ -10,6 +10,7 @@ import (
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -55,6 +56,11 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// hand-ins are a student's work: staff never hand in
+	if !middleware.HasAnyRole(r, "student") {
+		writeError(w, 403, "forbidden", "only students hand in work", nil)
+		return
+	}
 	ci, err := h.svc.CreateSubmission(r.Context(), userID, courseID, contentItemID, req.TextBody, req.FileIDs)
 	if err != nil {
 		log.Printf("submission handler: CreateSubmission error: %v", err)
@@ -63,7 +69,7 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
 		case errors.Is(err, store.ErrContentItemNotFound):
 			writeError(w, 404, "not_found", "assignment not found", nil)
-		case errors.Is(err, errors.New("file does not belong to student")):
+		case errors.Is(err, service.ErrInvalidSubmission):
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		default:
 			writeError(w, 500, "server_error", "could not create submission", nil)

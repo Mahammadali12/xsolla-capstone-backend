@@ -7,8 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
-	"strings"
 	"time"
+	"unicode/utf8"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/service/google"
@@ -77,11 +77,14 @@ func (s *AuthService) Signup(ctx context.Context, email string, name string, pas
 		return 0, nil, err
 	}
 
+	if utf8.RuneCountInString(password) < 8 {
+		return 0, nil, ErrPasswordTooShort
+	}
+
+	// staff accounts are made by an admin (POST /users); a sign-up is a student, except the very first account
 	roles := []string{"student"}
 	if count == 0 {
 		roles = []string{"admin"}
-	} else if strings.HasSuffix(email, "@xsolla.com") {
-		roles = []string{"lecturer"}
 	}
 
 	hash, err := auth.Hash(password)

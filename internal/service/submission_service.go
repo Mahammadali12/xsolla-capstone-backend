@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
@@ -20,6 +21,11 @@ func NewSubmissionService(s store.Store) *SubmissionService {
 
 // CreateSubmission creates a new submission for a student on an assignment.
 // Multiple attempts are allowed: each POST inserts a new submission row.
+// ErrInvalidSubmission is returned for a hand-in that breaks a rule; the message says which.
+var ErrInvalidSubmission = errors.New("invalid submission")
+
+func invalidSubmission(msg string) error { return fmt.Errorf("%w: %s", ErrInvalidSubmission, msg) }
+
 func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int64, courseID int64, contentItemID int64, textBody string, fileIDs []int64) (*store.Submission, error) {
 	// Verify the content item exists and is an assignment
 	ci, err := s.store.GetContentItemByID(ctx, contentItemID)
@@ -29,11 +35,14 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 		}
 		return nil, err
 	}
+	if ci.ModuleID != courseID {
+		return nil, store.ErrContentItemNotFound // not an item of this week
+	}
 	if ci.Type != "assignment" {
-		return nil, errors.New("content item is not an assignment")
+		return nil, invalidSubmission("content item is not an assignment")
 	}
 	if !ci.IsVisible {
-		return nil, errors.New("assignment is not visible")
+		return nil, invalidSubmission("assignment is not visible")
 	}
 
 	// Verify the student is enrolled in the module
@@ -50,12 +59,12 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 		f, err := s.store.GetFileByID(ctx, fileID)
 		if err != nil {
 			if errors.Is(err, store.ErrFileNotFound) {
-				return nil, errors.New("file not found")
+				return nil, invalidSubmission("file not found")
 			}
 			return nil, err
 		}
 		if f.UploadedBy != studentID {
-			return nil, errors.New("file does not belong to student")
+			return nil, invalidSubmission("file does not belong to student")
 		}
 	}
 

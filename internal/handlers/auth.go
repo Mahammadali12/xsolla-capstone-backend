@@ -85,6 +85,8 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidEmail):
 			writeError(w, 400, "bad_request", "enter a valid email address", nil)
+		case errors.Is(err, service.ErrPasswordTooShort):
+			writeError(w, 400, "bad_request", "password must be at least 8 characters", nil)
 		case errors.Is(err, service.ErrEmailTaken):
 			writeError(w, 409, "conflict", "email already exists", nil)
 		default:
