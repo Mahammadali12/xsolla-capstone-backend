@@ -740,6 +740,281 @@ const docTemplate = `{
                 }
             }
         },
+        "/mentor-reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Filter by week, mentor and team; every filter is optional. Ordered by week, mentor, student.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Mentor reviews with every answer (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Mentor user id",
+                        "name": "mentor_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Team id",
+                        "name": "team_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.MentorReviewResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "See docs/mentor_reviews.md for the form rules and every answer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Send this week's mentor review (student)",
+                "parameters": [
+                    {
+                        "description": "The review",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MentorReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReviewedWeekResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "The weeks I have reviewed (student)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.ReviewedWeekResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews/missing": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Students in a team with a mentor (today's teams), enrolled in the week, without a review for it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Students who have not sent the week's review (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.MissingReviewResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reviews, expected students (today's teams), sessions held, averages, topic counts and no-session reasons for the weeks from from_module to to_module (by opening date, both optional and included).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Mentor review numbers per week and mentor (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "First week (module) id",
+                        "name": "from_module",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Last week (module) id",
+                        "name": "to_module",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.MentorReviewSummaryResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/modules": {
             "get": {
                 "security": [
@@ -1921,6 +2196,167 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.MentorReviewRatingsResponse": {
+            "type": "object",
+            "properties": {
+                "clarity": {
+                    "type": "integer"
+                },
+                "comfort": {
+                    "type": "integer"
+                },
+                "engagement": {
+                    "type": "integer"
+                },
+                "time": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.MentorReviewRequest": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "had_session": {
+                    "type": "boolean"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "no_session_reason": {
+                    "type": "string"
+                },
+                "other_topic": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "ratings": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.MentorReviewResponse": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "had_session": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mentor": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "no_session_reason": {
+                    "type": "string"
+                },
+                "other_topic": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "ratings": {
+                    "$ref": "#/definitions/dto.MentorReviewRatingsResponse"
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "team": {
+                    "$ref": "#/definitions/dto.ReviewTeam"
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.MentorReviewSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "averages": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "expected": {
+                    "type": "integer"
+                },
+                "mentor": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "no_session": {
+                    "type": "integer"
+                },
+                "no_session_reasons": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "reviews": {
+                    "type": "integer"
+                },
+                "sessions_held": {
+                    "type": "integer"
+                },
+                "topics": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "dto.MissingReviewResponse": {
+            "type": "object",
+            "properties": {
+                "mentor": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "team": {
+                    "$ref": "#/definitions/dto.ReviewTeam"
+                }
+            }
+        },
         "dto.ModuleResponse": {
             "type": "object",
             "properties": {
@@ -1987,6 +2423,42 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReviewPerson": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReviewTeam": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReviewedWeekResponse": {
+            "type": "object",
+            "properties": {
+                "module_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
                     "type": "string"
                 }
             }
