@@ -44,11 +44,34 @@ type Enrollment struct {
 	Role      string
 }
 
-// CreateModule inserts a new module.
+// CreateModule inserts a new module and its outbox event in one transaction.
 func (s *StoreImpl) CreateModule(ctx context.Context, title string, description string, createdBy int64, opensAt, closesAt time.Time) (*Module, error) {
-	var m Module
-	err := s.DB().CreateModule(ctx, title, description, createdBy, opensAt, closesAt).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
+	var m Module
+	err = q.CreateModule(ctx, title, description, createdBy, opensAt, closesAt).Scan(&m.ID, &m.Title, &m.Description, &m.CreatedBy, &m.Grade, &m.CreatedAt, &m.OpensAt, &m.ClosesAt)
+	if err != nil {
+		return nil, err
+	}
+
+	recipients, err := q.activeStudentRecipients(ctx)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := moduleCreatedData(m, recipients)
+	if err != nil {
+		return nil, err
+	}
+	if err := q.InsertOutboxEvent(ctx, ModuleCreatedEventType, payload); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -172,13 +195,51 @@ func (s *StoreImpl) DeleteEnrollment(ctx context.Context, moduleID int64, userID
 }
 
 // UpdateEnrollmentGrade sets a student's module grade (red/yellow/green).
-func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string) (*Enrollment, error) {
+func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, gradedBy int64) (*Enrollment, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
 	var e Enrollment
-	err := s.DB().UpdateEnrollmentGrade(ctx, moduleID, userID, grade).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.CreatedAt)
+	err = q.UpdateEnrollmentGrade(ctx, moduleID, userID, grade).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotEnrolled
 		}
+		return nil, err
+	}
+
+	var moduleTitle string
+	if err := q.QueryRowContext(ctx,
+		`SELECT title FROM modules WHERE id = $1 AND deleted_at IS NULL`, moduleID,
+	).Scan(&moduleTitle); err != nil {
+		return nil, err
+	}
+	studentName, studentEmail, err := q.userNameEmail(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	graderName, _, err := q.userNameEmail(ctx, gradedBy)
+	if err != nil {
+		return nil, err
+	}
+	gradeValue := ""
+	if grade != nil {
+		gradeValue = *grade
+	}
+	payload, err := enrollmentGradedData(moduleID, moduleTitle, userID, studentName, gradeValue, gradedBy, graderName,
+		[]recipientSnapshot{{ID: userID, Role: "student", Name: studentName, Email: studentEmail}})
+	if err != nil {
+		return nil, err
+	}
+	if err := q.InsertOutboxEvent(ctx, EnrollmentGradedEventType, payload); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &e, nil

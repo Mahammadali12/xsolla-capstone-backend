@@ -82,7 +82,7 @@ transaction as the business change. It is **not** a domain entity id.
 
 - Do not use `slot_id`, `submission_id`, `event_id`, etc. as the event id.
 - One business fact gets one id. `mentor_slot.booked`,
-  `mentor_slot.booking_cancelled`, and a later rebooking of the same slot are
+  `mentor_slot.canceled`, and a later rebooking of the same slot are
   three events with three ids.
 - A crashed publisher may re-publish the same row; that is safe because the id
   is unchanged.
@@ -118,17 +118,19 @@ restricted and credentials must not be reused in production.
   failures (dead-letter), not retries.
 - Version 1 is the only supported version until a real event needs otherwise.
 
-## Initial event types
+## Event types
 
-These are examples, not an approved notification scope:
+The events currently produced and consumed:
 
 ```text
 mentor_slot.booked
-mentor_slot.booking_cancelled
+mentor_slot.canceled
+module.created
+content_item.uploaded
 event.created
-event.updated
+mentor_availability.created
 submission.created
-submission.graded
+enrollment.graded
 ```
 
 Adding a type requires no broker change; the queue binds with `#`.

@@ -39,13 +39,45 @@ type Assignment struct {
 	DueAt         *time.Time
 }
 
-// CreateContentItem inserts a new content item.
+// CreateContentItem inserts a new content item and its outbox event in one transaction.
 func (s *StoreImpl) CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, url *string) (*ContentItem, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := WithTx(tx)
+
 	var ci ContentItem
-	err := s.DB().CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID, url).Scan(
+	err = q.CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID, url).Scan(
 		&ci.ID, &ci.ModuleID, &ci.ParentID, &ci.Type, &ci.Title, &ci.Description, &ci.Position, &ci.IsVisible, &ci.FileID, &ci.Url, &ci.CreatedBy, &ci.CreatedAt,
 	)
 	if err != nil {
+		return nil, err
+	}
+
+	// Hidden items are drafts; students cannot see them, so they are not announced.
+	if isVisible {
+		var moduleTitle string
+		if err := q.QueryRowContext(ctx,
+			`SELECT title FROM modules WHERE id = $1 AND deleted_at IS NULL`, moduleID,
+		).Scan(&moduleTitle); err != nil {
+			return nil, err
+		}
+		recipients, err := q.enrolledStudentRecipients(ctx, moduleID)
+		if err != nil {
+			return nil, err
+		}
+		payload, err := contentItemUploadedData(ci, moduleTitle, recipients)
+		if err != nil {
+			return nil, err
+		}
+		if err := q.InsertOutboxEvent(ctx, ContentItemUploadedEventType, payload); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &ci, nil

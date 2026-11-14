@@ -10,5 +10,41 @@
     "recipients": ["mentor", "student"],
     "channels": ["email"],
     "template": "booking_cancellation"
+  },
+  "module.created": {
+    "enabled": true,
+    "recipients": ["student"],
+    "channels": ["email"],
+    "template": "module_created"
+  },
+  "content_item.uploaded": {
+    "enabled": true,
+    "recipients": ["student"],
+    "channels": ["email"],
+    "template": "content_item_uploaded"
+  },
+  "event.created": {
+    "enabled": true,
+    "recipients": ["student", "mentor", "lecturer", "admin"],
+    "channels": ["email"],
+    "template": "event_created"
+  },
+  "mentor_availability.created": {
+    "enabled": true,
+    "recipients": ["student"],
+    "channels": ["email"],
+    "template": "mentor_availability_created"
+  },
+  "submission.created": {
+    "enabled": true,
+    "recipients": ["mentor"],
+    "channels": ["email"],
+    "template": "submission_created"
+  },
+  "enrollment.graded": {
+    "enabled": true,
+    "recipients": ["student"],
+    "channels": ["email"],
+    "template": "enrollment_graded"
   }
 }

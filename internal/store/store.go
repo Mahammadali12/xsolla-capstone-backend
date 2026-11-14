@@ -48,7 +48,7 @@ type Store interface {
 	IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) (bool, error)
 	GetActiveStudentIDs(ctx context.Context) ([]int64, error)
 	EnrollStudentsInModule(ctx context.Context, moduleID int64, studentIDs []int64) error
-	UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string) (*Enrollment, error)
+	UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, gradedBy int64) (*Enrollment, error)
 
 	// Content item methods
 	CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, url *string) (*ContentItem, error)
@@ -116,6 +116,7 @@ type Store interface {
 
 	// Mentor slot methods
 	CreateMentorSlot(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (*MentorSlot, error)
+	CreateMentorAvailability(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) ([]MentorSlot, error)
 	ListMentorSlots(ctx context.Context, userID int64, roles []string) ([]MentorSlot, error)
 	GetMentorSlotByID(ctx context.Context, id int64) (*MentorSlot, error)
 	UpdateMentorSlotGoogle(ctx context.Context, slotID int64, googleEventID *string, meetingURL *string) error
