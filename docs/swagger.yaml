@@ -399,6 +399,30 @@ paths:
       summary: Google user profile
       tags:
       - auth
+  /auth/google/revoke:
+    post:
+      description: Revoke the signed-in user's Google OAuth grant at Google, then
+        remove the stored credentials
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke Google access
+      tags:
+      - auth
   /auth/login:
     post:
       consumes:

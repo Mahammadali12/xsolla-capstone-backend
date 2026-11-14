@@ -76,7 +76,7 @@ Scopes requested by the backend:
 
 Reading the primary calendar's events uses `calendar.events`, so **no new scope or re-consent is needed** for users who already connected. Connecting from Settings is available to every role (the latest frontend already has `/settings` open to all and shows Settings in the account menu).
 
-There is no “disconnect” endpoint. The UI links to `https://myaccount.google.com/permissions`; keep that.
+Use `POST /auth/google/revoke` to disconnect: it revokes the grant at Google (the app disappears from `https://myaccount.google.com/permissions`) and then removes the stored token, answering `204`. If Google is unreachable the LMS still forgets the token and answers `204`, logging the failed revoke. The Settings card needs only one Disconnect action; no “remove access at Google” link is required. `POST /auth/google/logout` remains for forgetting the stored token without revoking at Google.
 
 ---
 
@@ -613,6 +613,5 @@ Google scopes: `calendar.events`, `gmail.send`, `openid email`.
 - Showing attendee emails or profile links.
 - Editing/deleting Google events from the LMS.
 - Personal Google events in `/admin/calendar`.
-- A Google “disconnect” endpoint (only “Remove access” at Google).
 - Expanding multi-day events across grid days.
 - Google event attendees/RSVP (the Google calendar endpoint does not return attendees).

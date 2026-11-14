@@ -339,6 +339,54 @@ func (h *AuthHandlers) GoogleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// @Summary     Revoke Google access
+// @Description Revoke the signed-in user's Google OAuth grant at Google, then remove the stored credentials
+// @Tags        auth
+// @Produce     json
+// @Security    BearerAuth
+// @Success     204 {string} string "No content"
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     500 {object} handlers.ErrorResponse
+// @Router      /auth/google/revoke [post]
+func (h *AuthHandlers) GoogleRevoke(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	if userID == 0 {
+		writeError(w, 401, "unauthorized", "missing user context", nil)
+		return
+	}
+
+	encrypted, _, err := h.svc.GetGoogleRefreshToken(r.Context(), userID)
+	switch {
+	case errors.Is(err, store.ErrRefreshTokenNotFound):
+		// Never connected: nothing to revoke; deleting below keeps it idempotent.
+	case err != nil:
+		log.Printf("google revoke: get refresh token failed for user %d: %v", userID, err)
+		writeError(w, 500, "server_error", "could not revoke Google access", nil)
+		return
+	default:
+		refreshToken, err := google.DecryptToken(encrypted)
+		if err != nil {
+			// Drop the unusable row instead of leaving the user stuck connected.
+			log.Printf("google revoke: decrypt failed for user %d: %v", userID, err)
+		} else {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+			if err := google.RevokeToken(ctx, refreshToken); err != nil {
+				// Google down: still forget the token, the user must not stay connected.
+				log.Printf("google revoke: revoke failed for user %d: %v", userID, err)
+			}
+		}
+	}
+
+	if err := h.svc.DeleteGoogleRefreshToken(r.Context(), userID); err != nil {
+		log.Printf("google revoke: delete google refresh token failed for user %d: %v", userID, err)
+		writeError(w, 500, "server_error", "could not revoke Google access", nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // @Summary     Get current user
 // @Description Get the currently authenticated user profile
 // @Tags        users

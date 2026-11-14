@@ -1,0 +1,22 @@
+info:
+  name: Revoke Google access
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: http://localhost:8080/auth/google/revoke
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  auth: inherit
+  body:
+    type: none
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
