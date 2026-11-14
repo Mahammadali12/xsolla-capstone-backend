@@ -191,9 +191,27 @@ definitions:
       title:
         type: string
     type: object
+  dto.PasswordResetRequest:
+    properties:
+      password:
+        example: Back-To-Class-8
+        type: string
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
+        type: string
+    type: object
+  dto.ResetPasswordRequest:
+    properties:
+      email:
+        example: alice@xsolla.com
+        type: string
+      new_password:
+        example: Back-To-Class-8
+        type: string
+      old_password:
+        example: secret123
         type: string
     type: object
   dto.SignupRequest:
@@ -480,6 +498,38 @@ paths:
       summary: Log out
       tags:
       - auth
+  /auth/password-reset:
+    post:
+      consumes:
+      - application/json
+      description: Replace the signed-in user's password
+      parameters:
+      - description: New password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change my password
+      tags:
+      - auth
   /auth/refresh:
     post:
       consumes:
@@ -508,6 +558,41 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Refresh access token
+      tags:
+      - auth
+  /auth/reset:
+    post:
+      consumes:
+      - application/json
+      description: Replace a password after confirming the current one; no session
+        needed
+      parameters:
+      - description: Email, current password, new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Reset a password
       tags:
       - auth
   /auth/signup:

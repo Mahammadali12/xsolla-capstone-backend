@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/middleware"
+	"xsolla-capstone-api/internal/service"
 	"xsolla-capstone-api/internal/store"
 )
 
@@ -20,6 +23,17 @@ type mockGoogleTokenService struct {
 	deleteGoogleErr    error
 	getGoogleToken     string
 	getGoogleErr       error
+
+	changePasswordCalled bool
+	changePasswordUserID int64
+	changePasswordValue  string
+	changePasswordErr    error
+
+	resetPasswordCalled bool
+	resetPasswordEmail  string
+	resetPasswordOld    string
+	resetPasswordNew    string
+	resetPasswordErr    error
 }
 
 func (m *mockGoogleTokenService) Signup(ctx context.Context, email, name, password string) (int64, []string, error) {
@@ -50,6 +64,19 @@ func (m *mockGoogleTokenService) DeleteGoogleRefreshToken(ctx context.Context, u
 	m.deleteGoogleCalled = true
 	m.deleteGoogleUserID = userID
 	return m.deleteGoogleErr
+}
+func (m *mockGoogleTokenService) ChangePassword(ctx context.Context, userID int64, newPassword string) error {
+	m.changePasswordCalled = true
+	m.changePasswordUserID = userID
+	m.changePasswordValue = newPassword
+	return m.changePasswordErr
+}
+func (m *mockGoogleTokenService) ResetPassword(ctx context.Context, email string, oldPassword string, newPassword string) error {
+	m.resetPasswordCalled = true
+	m.resetPasswordEmail = email
+	m.resetPasswordOld = oldPassword
+	m.resetPasswordNew = newPassword
+	return m.resetPasswordErr
 }
 
 func TestGoogleLogoutSuccess(t *testing.T) {
@@ -208,6 +235,139 @@ func callGoogleRevoke(t *testing.T, svc *mockGoogleTokenService) *httptest.Respo
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/google/revoke", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestPasswordResetSuccess(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callAuth(t, svc, "/auth/password-reset", `{"password":"Str0ng-Passphrase!"}`, true)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !svc.changePasswordCalled || svc.changePasswordUserID != 42 || svc.changePasswordValue != "Str0ng-Passphrase!" {
+		t.Fatalf("unexpected ChangePassword call: called=%v userID=%d password=%q",
+			svc.changePasswordCalled, svc.changePasswordUserID, svc.changePasswordValue)
+	}
+}
+
+func TestPasswordResetUnauthenticated(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callAuth(t, svc, "/auth/password-reset", `{"password":"Str0ng-Passphrase!"}`, false)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.changePasswordCalled {
+		t.Fatal("expected ChangePassword not to be called")
+	}
+}
+
+func TestPasswordResetMissingPassword(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callAuth(t, svc, "/auth/password-reset", `{}`, true)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.changePasswordCalled {
+		t.Fatal("expected ChangePassword not to be called")
+	}
+}
+
+func TestPasswordResetPolicyError(t *testing.T) {
+	svc := &mockGoogleTokenService{changePasswordErr: errors.New("add a number")}
+	rec := callAuth(t, svc, "/auth/password-reset", `{"password":"short"}`, true)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "add a number") {
+		t.Fatalf("expected policy message, got %s", rec.Body.String())
+	}
+}
+
+func TestResetSuccess(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callAuth(t, svc, "/auth/reset",
+		`{"email":" ALICE@Example.com ","old_password":"old","new_password":"Str0ng-Passphrase!"}`, false)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !svc.resetPasswordCalled || svc.resetPasswordEmail != "alice@example.com" {
+		t.Fatalf("unexpected ResetPassword call: called=%v email=%q", svc.resetPasswordCalled, svc.resetPasswordEmail)
+	}
+	if svc.resetPasswordOld != "old" || svc.resetPasswordNew != "Str0ng-Passphrase!" {
+		t.Fatalf("unexpected passwords: old=%q new=%q", svc.resetPasswordOld, svc.resetPasswordNew)
+	}
+}
+
+func TestResetInvalidCredentials(t *testing.T) {
+	svc := &mockGoogleTokenService{resetPasswordErr: service.ErrInvalidCredentials}
+	rec := callAuth(t, svc, "/auth/reset",
+		`{"email":"alice@example.com","old_password":"wrong","new_password":"Str0ng-Passphrase!"}`, false)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResetInactive(t *testing.T) {
+	svc := &mockGoogleTokenService{resetPasswordErr: service.ErrInactive}
+	rec := callAuth(t, svc, "/auth/reset",
+		`{"email":"alice@example.com","old_password":"old","new_password":"Str0ng-Passphrase!"}`, false)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResetMissingFields(t *testing.T) {
+	svc := &mockGoogleTokenService{}
+	rec := callAuth(t, svc, "/auth/reset", `{"email":"alice@example.com"}`, false)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.resetPasswordCalled {
+		t.Fatal("expected ResetPassword not to be called")
+	}
+}
+
+// callAuth posts a JSON body to /auth/password-reset or /auth/reset.
+func callAuth(t *testing.T, svc *mockGoogleTokenService, route, body string, authenticated bool) *httptest.ResponseRecorder {
+	t.Helper()
+	secret := []byte("test-secret")
+	authH := NewAuthHandlers(svc, secret, secret, 15*time.Minute, 7*24*time.Hour)
+
+	var handler http.HandlerFunc
+	switch route {
+	case "/auth/password-reset":
+		handler = authH.PasswordReset
+	case "/auth/reset":
+		handler = authH.Reset
+	default:
+		t.Fatalf("unknown route %q", route)
+	}
+
+	mux := http.NewServeMux()
+	if authenticated {
+		mux.Handle("POST "+route, (&middleware.Authenticator{Secret: secret}).Middleware(handler))
+	} else {
+		mux.HandleFunc("POST "+route, handler)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, route, strings.NewReader(body))
+	if authenticated {
+		token, err := auth.AccessToken(42, []string{"student"}, secret, 15*time.Minute)
+		if err != nil {
+			t.Fatalf("sign token: %v", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	return rec

@@ -27,13 +27,13 @@ type LogoutRequest struct {
 
 // UserResponse is the user object returned in auth responses.
 type UserResponse struct {
-	ID            int64           `json:"id"`
-	Email         string          `json:"email"`
-	Name          string          `json:"name"`
-	Roles         []string        `json:"roles"`
+	ID            int64                `json:"id"`
+	Email         string               `json:"email"`
+	Name          string               `json:"name"`
+	Roles         []string             `json:"roles"`
 	RoleExpiresAt map[string]time.Time `json:"role_expires_at,omitempty"`
-	LeftAt        *time.Time      `json:"left_at,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	LeftAt        *time.Time           `json:"left_at,omitempty"`
+	CreatedAt     time.Time            `json:"created_at"`
 }
 
 // AuthResponse is the payload for successful signup/login.
@@ -52,4 +52,16 @@ type TokenResponse struct {
 // UpdatePasswordRequest is the payload for PATCH /users/:id/password.
 type UpdatePasswordRequest struct {
 	Password string `json:"password" example:"Back-To-Class-8"`
+}
+
+// PasswordResetRequest is the payload for POST /auth/password-reset.
+type PasswordResetRequest struct {
+	Password string `json:"password" example:"Back-To-Class-8"`
+}
+
+// ResetPasswordRequest is the payload for POST /auth/reset.
+type ResetPasswordRequest struct {
+	Email       string `json:"email" example:"alice@xsolla.com"`
+	OldPassword string `json:"old_password" example:"secret123"`
+	NewPassword string `json:"new_password" example:"Back-To-Class-8"`
 }

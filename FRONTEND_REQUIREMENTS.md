@@ -524,9 +524,12 @@ Also check: no token → 401; unlinked user → 404 `google_not_connected`; rang
 | POST | `/auth/signup` | — | LMS signup |
 | POST | `/auth/refresh` | — | rotate access/refresh tokens |
 | POST | `/auth/logout` | — | revoke refresh token |
+| POST | `/auth/password-reset` | Bearer | change the signed-in user's password |
+| POST | `/auth/reset` | — | change a password, given email + current password |
 | GET | `/auth/google/login?access_token=` | optional/query JWT | start Google consent (page navigation) |
 | GET | `/auth/google/callback` | — | Google return; redirects to frontend `/settings?google=...` |
 | GET | `/auth/google/me` | Bearer | Google connection status/profile |
+| POST | `/auth/google/revoke` | Bearer | revoke the Google grant and forget the stored token |
 | GET | `/events?from&to` | Bearer | all events for any signed-in user, with attendees |
 | POST | `/events` | Bearer (lecturer/admin) | create; optional `sync_to_google` |
 | PATCH | `/events/{id}` | Bearer (lecturer/admin) | update; `meeting_url: ""` clears |

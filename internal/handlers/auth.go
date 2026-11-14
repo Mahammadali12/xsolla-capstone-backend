@@ -34,6 +34,8 @@ type AuthService interface {
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
 	GetGoogleRefreshToken(ctx context.Context, userID int64) (string, time.Time, error)
 	DeleteGoogleRefreshToken(ctx context.Context, userID int64) error
+	ChangePassword(ctx context.Context, userID int64, newPassword string) error
+	ResetPassword(ctx context.Context, email string, oldPassword string, newPassword string) error
 }
 
 type AuthHandlers struct {
@@ -182,6 +184,84 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		AccessToken:  access,
 		RefreshToken: refresh,
 	})
+}
+
+// @Summary     Change my password
+// @Description Replace the signed-in user's password
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       request body dto.PasswordResetRequest true "New password"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Router      /auth/password-reset [post]
+func (h *AuthHandlers) PasswordReset(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.CtxUserID(r.Context())
+	if userID == 0 {
+		writeError(w, 401, "unauthorized", "missing user context", nil)
+		return
+	}
+
+	var req dto.PasswordResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+	if req.Password == "" {
+		writeError(w, 400, "bad_request", "password is required", nil)
+		return
+	}
+
+	if err := h.svc.ChangePassword(r.Context(), userID, req.Password); err != nil {
+		if errors.Is(err, store.ErrUserNotFound) {
+			writeError(w, 401, "unauthorized", "user not found", nil)
+			return
+		}
+		writeError(w, 400, "bad_request", err.Error(), nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// @Summary     Reset a password
+// @Description Replace a password after confirming the current one; no session needed
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       request body dto.ResetPasswordRequest true "Email, current password, new password"
+// @Success     204 {string} string "No content"
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     401 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Router      /auth/reset [post]
+func (h *AuthHandlers) Reset(w http.ResponseWriter, r *http.Request) {
+	var req dto.ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "bad_request", "invalid JSON body", nil)
+		return
+	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if req.Email == "" || req.OldPassword == "" || req.NewPassword == "" {
+		writeError(w, 400, "bad_request", "email, old_password, and new_password are required", nil)
+		return
+	}
+
+	if err := h.svc.ResetPassword(r.Context(), req.Email, req.OldPassword, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInactive):
+			writeError(w, 403, "account_inactive", "This account is no longer active.", nil)
+		case errors.Is(err, service.ErrInvalidCredentials):
+			writeError(w, 401, "invalid_credentials", "invalid email or password", nil)
+		default:
+			writeError(w, 400, "bad_request", err.Error(), nil)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // @Summary     Google OAuth login

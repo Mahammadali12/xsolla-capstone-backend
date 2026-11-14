@@ -97,6 +97,8 @@ func main() {
 	mux.HandleFunc("POST /auth/login", authH.Login)
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
+	mux.Handle("POST /auth/password-reset", authenticator.Middleware(http.HandlerFunc(authH.PasswordReset)))
+	mux.HandleFunc("POST /auth/reset", authH.Reset)
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if err := database.PingContext(r.Context()); err != nil {
 			log.Printf("readyz: database: %v", err)
