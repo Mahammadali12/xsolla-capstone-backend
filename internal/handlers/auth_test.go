@@ -26,14 +26,9 @@ type mockGoogleTokenService struct {
 
 	changePasswordCalled bool
 	changePasswordUserID int64
-	changePasswordValue  string
+	changePasswordOld    string
+	changePasswordNew    string
 	changePasswordErr    error
-
-	resetPasswordCalled bool
-	resetPasswordEmail  string
-	resetPasswordOld    string
-	resetPasswordNew    string
-	resetPasswordErr    error
 }
 
 func (m *mockGoogleTokenService) Signup(ctx context.Context, email, name, password string) (int64, []string, error) {
@@ -65,18 +60,12 @@ func (m *mockGoogleTokenService) DeleteGoogleRefreshToken(ctx context.Context, u
 	m.deleteGoogleUserID = userID
 	return m.deleteGoogleErr
 }
-func (m *mockGoogleTokenService) ChangePassword(ctx context.Context, userID int64, newPassword string) error {
+func (m *mockGoogleTokenService) ChangePassword(ctx context.Context, userID int64, oldPassword string, newPassword string) error {
 	m.changePasswordCalled = true
 	m.changePasswordUserID = userID
-	m.changePasswordValue = newPassword
+	m.changePasswordOld = oldPassword
+	m.changePasswordNew = newPassword
 	return m.changePasswordErr
-}
-func (m *mockGoogleTokenService) ResetPassword(ctx context.Context, email string, oldPassword string, newPassword string) error {
-	m.resetPasswordCalled = true
-	m.resetPasswordEmail = email
-	m.resetPasswordOld = oldPassword
-	m.resetPasswordNew = newPassword
-	return m.resetPasswordErr
 }
 
 func TestGoogleLogoutSuccess(t *testing.T) {
@@ -242,20 +231,31 @@ func callGoogleRevoke(t *testing.T, svc *mockGoogleTokenService) *httptest.Respo
 
 func TestPasswordResetSuccess(t *testing.T) {
 	svc := &mockGoogleTokenService{}
-	rec := callAuth(t, svc, "/auth/password-reset", `{"password":"Str0ng-Passphrase!"}`, true)
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123","new_password":"Str0ng-Passphrase!"}`, true)
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !svc.changePasswordCalled || svc.changePasswordUserID != 42 || svc.changePasswordValue != "Str0ng-Passphrase!" {
-		t.Fatalf("unexpected ChangePassword call: called=%v userID=%d password=%q",
-			svc.changePasswordCalled, svc.changePasswordUserID, svc.changePasswordValue)
+	if !svc.changePasswordCalled || svc.changePasswordUserID != 42 {
+		t.Fatalf("unexpected ChangePassword call: called=%v userID=%d", svc.changePasswordCalled, svc.changePasswordUserID)
+	}
+	if svc.changePasswordOld != "secret123" || svc.changePasswordNew != "Str0ng-Passphrase!" {
+		t.Fatalf("unexpected passwords: old=%q new=%q", svc.changePasswordOld, svc.changePasswordNew)
+	}
+}
+
+func TestPasswordResetWrongOldPassword(t *testing.T) {
+	svc := &mockGoogleTokenService{changePasswordErr: service.ErrInvalidCredentials}
+	rec := callPasswordReset(t, svc, `{"old_password":"wrong","new_password":"Str0ng-Passphrase!"}`, true)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestPasswordResetUnauthenticated(t *testing.T) {
 	svc := &mockGoogleTokenService{}
-	rec := callAuth(t, svc, "/auth/password-reset", `{"password":"Str0ng-Passphrase!"}`, false)
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123","new_password":"Str0ng-Passphrase!"}`, false)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
@@ -265,9 +265,9 @@ func TestPasswordResetUnauthenticated(t *testing.T) {
 	}
 }
 
-func TestPasswordResetMissingPassword(t *testing.T) {
+func TestPasswordResetMissingField(t *testing.T) {
 	svc := &mockGoogleTokenService{}
-	rec := callAuth(t, svc, "/auth/password-reset", `{}`, true)
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123"}`, true)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
@@ -279,7 +279,7 @@ func TestPasswordResetMissingPassword(t *testing.T) {
 
 func TestPasswordResetPolicyError(t *testing.T) {
 	svc := &mockGoogleTokenService{changePasswordErr: errors.New("add a number")}
-	rec := callAuth(t, svc, "/auth/password-reset", `{"password":"short"}`, true)
+	rec := callPasswordReset(t, svc, `{"old_password":"secret123","new_password":"short"}`, true)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
@@ -289,78 +289,21 @@ func TestPasswordResetPolicyError(t *testing.T) {
 	}
 }
 
-func TestResetSuccess(t *testing.T) {
-	svc := &mockGoogleTokenService{}
-	rec := callAuth(t, svc, "/auth/reset",
-		`{"email":" ALICE@Example.com ","old_password":"old","new_password":"Str0ng-Passphrase!"}`, false)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !svc.resetPasswordCalled || svc.resetPasswordEmail != "alice@example.com" {
-		t.Fatalf("unexpected ResetPassword call: called=%v email=%q", svc.resetPasswordCalled, svc.resetPasswordEmail)
-	}
-	if svc.resetPasswordOld != "old" || svc.resetPasswordNew != "Str0ng-Passphrase!" {
-		t.Fatalf("unexpected passwords: old=%q new=%q", svc.resetPasswordOld, svc.resetPasswordNew)
-	}
-}
-
-func TestResetInvalidCredentials(t *testing.T) {
-	svc := &mockGoogleTokenService{resetPasswordErr: service.ErrInvalidCredentials}
-	rec := callAuth(t, svc, "/auth/reset",
-		`{"email":"alice@example.com","old_password":"wrong","new_password":"Str0ng-Passphrase!"}`, false)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestResetInactive(t *testing.T) {
-	svc := &mockGoogleTokenService{resetPasswordErr: service.ErrInactive}
-	rec := callAuth(t, svc, "/auth/reset",
-		`{"email":"alice@example.com","old_password":"old","new_password":"Str0ng-Passphrase!"}`, false)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestResetMissingFields(t *testing.T) {
-	svc := &mockGoogleTokenService{}
-	rec := callAuth(t, svc, "/auth/reset", `{"email":"alice@example.com"}`, false)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if svc.resetPasswordCalled {
-		t.Fatal("expected ResetPassword not to be called")
-	}
-}
-
-// callAuth posts a JSON body to /auth/password-reset or /auth/reset.
-func callAuth(t *testing.T, svc *mockGoogleTokenService, route, body string, authenticated bool) *httptest.ResponseRecorder {
+// callPasswordReset posts a JSON body to /auth/password-reset, optionally with a valid JWT.
+func callPasswordReset(t *testing.T, svc *mockGoogleTokenService, body string, authenticated bool) *httptest.ResponseRecorder {
 	t.Helper()
 	secret := []byte("test-secret")
 	authH := NewAuthHandlers(svc, secret, secret, 15*time.Minute, 7*24*time.Hour)
 
-	var handler http.HandlerFunc
-	switch route {
-	case "/auth/password-reset":
-		handler = authH.PasswordReset
-	case "/auth/reset":
-		handler = authH.Reset
-	default:
-		t.Fatalf("unknown route %q", route)
-	}
-
 	mux := http.NewServeMux()
+	handler := http.HandlerFunc(authH.PasswordReset)
 	if authenticated {
-		mux.Handle("POST "+route, (&middleware.Authenticator{Secret: secret}).Middleware(handler))
+		mux.Handle("POST /auth/password-reset", (&middleware.Authenticator{Secret: secret}).Middleware(handler))
 	} else {
-		mux.HandleFunc("POST "+route, handler)
+		mux.HandleFunc("POST /auth/password-reset", handler)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, route, strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/auth/password-reset", strings.NewReader(body))
 	if authenticated {
 		token, err := auth.AccessToken(42, []string{"student"}, secret, 15*time.Minute)
 		if err != nil {

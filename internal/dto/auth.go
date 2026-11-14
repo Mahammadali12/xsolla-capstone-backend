@@ -56,12 +56,6 @@ type UpdatePasswordRequest struct {
 
 // PasswordResetRequest is the payload for POST /auth/password-reset.
 type PasswordResetRequest struct {
-	Password string `json:"password" example:"Back-To-Class-8"`
-}
-
-// ResetPasswordRequest is the payload for POST /auth/reset.
-type ResetPasswordRequest struct {
-	Email       string `json:"email" example:"alice@xsolla.com"`
 	OldPassword string `json:"old_password" example:"secret123"`
 	NewPassword string `json:"new_password" example:"Back-To-Class-8"`
 }

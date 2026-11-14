@@ -15,6 +15,7 @@ type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserRoles(ctx context.Context, userID int64) ([]string, map[string]time.Time, error)
 	GetUserByID(ctx context.Context, id int64) (*User, error)
+	GetUserPasswordHash(ctx context.Context, id int64) (string, error)
 	GetUsers(ctx context.Context, search, role, status string) ([]User, error)
 	UpdateUser(ctx context.Context, id int64, name, email *string) (*User, error)
 	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)

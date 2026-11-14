@@ -524,8 +524,7 @@ Also check: no token → 401; unlinked user → 404 `google_not_connected`; rang
 | POST | `/auth/signup` | — | LMS signup |
 | POST | `/auth/refresh` | — | rotate access/refresh tokens |
 | POST | `/auth/logout` | — | revoke refresh token |
-| POST | `/auth/password-reset` | Bearer | change the signed-in user's password |
-| POST | `/auth/reset` | — | change a password, given email + current password |
+| POST | `/auth/password-reset` | Bearer | change own password (current password required) |
 | GET | `/auth/google/login?access_token=` | optional/query JWT | start Google consent (page navigation) |
 | GET | `/auth/google/callback` | — | Google return; redirects to frontend `/settings?google=...` |
 | GET | `/auth/google/me` | Bearer | Google connection status/profile |

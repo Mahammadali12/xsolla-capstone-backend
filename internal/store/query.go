@@ -121,6 +121,14 @@ func (q *Query) GetUserByID(ctx context.Context, id int64) *sql.Row {
 	)
 }
 
+// GetUserPasswordHash returns the stored bcrypt hash for a user.
+func (q *Query) GetUserPasswordHash(ctx context.Context, id int64) *sql.Row {
+	return q.DBTX.QueryRowContext(ctx,
+		`SELECT password_hash FROM users WHERE id = $1`,
+		id,
+	)
+}
+
 // GetUsers returns all users with their roles (array_agg), ordered by id.
 // Callers apply search/role/status filters in Go.
 func (q *Query) GetUsers(ctx context.Context) (*sql.Rows, error) {
