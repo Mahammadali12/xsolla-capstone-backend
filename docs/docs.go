@@ -740,6 +740,298 @@ const docTemplate = `{
                 }
             }
         },
+        "/lecture-feedback": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Filters are optional: event_id, module_id, and from/to as dates (YYYY-MM-DD, Baku time, both included) on the lecture's start.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lecture feedback with every answer (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Lecture (event) id",
+                        "name": "event_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First day, YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last day, YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.LectureFeedbackResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "See docs/lecture_feedback.md for the questions, the rules and every answer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Send feedback on a lecture (student)",
+                "parameters": [
+                    {
+                        "description": "The form",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LectureFeedbackRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SentLectureFeedbackResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/form": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The questions in order; their ids are the fields of POST /lecture-feedback.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "The lecture feedback form",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lectures I have given feedback on (student)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.SentLectureFeedbackResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lectures whose form is open (10 minutes before the end until 7 days after) and not yet sent.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lectures I can give feedback on now (student)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.PendingLectureResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every lecture in the filter, also those without feedback: responses, students expected, averages, pace counts.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lecture feedback numbers per lecture (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Lecture (event) id",
+                        "name": "event_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First day, YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last day, YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.LectureFeedbackSummaryResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/mentor-reviews": {
             "get": {
                 "security": [
@@ -2175,6 +2467,152 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.LectureFeedbackPersonResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LectureFeedbackRequest": {
+            "type": "object",
+            "properties": {
+                "clarity": {
+                    "type": "integer"
+                },
+                "confidence": {
+                    "type": "integer"
+                },
+                "event_id": {
+                    "type": "integer"
+                },
+                "improve": {
+                    "type": "string"
+                },
+                "liked": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "pace": {
+                    "type": "string"
+                },
+                "practice": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.LectureFeedbackResponse": {
+            "type": "object",
+            "properties": {
+                "clarity": {
+                    "type": "integer"
+                },
+                "confidence": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "improve": {
+                    "type": "string"
+                },
+                "lecture": {
+                    "$ref": "#/definitions/dto.LectureRef"
+                },
+                "lecturers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.LectureFeedbackPersonResponse"
+                    }
+                },
+                "liked": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "pace": {
+                    "type": "string"
+                },
+                "practice": {
+                    "type": "integer"
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.LectureFeedbackPersonResponse"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LectureFeedbackSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "averages": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "expected": {
+                    "type": "integer"
+                },
+                "lecture": {
+                    "$ref": "#/definitions/dto.LectureRef"
+                },
+                "lecturers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.LectureFeedbackPersonResponse"
+                    }
+                },
+                "pace": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "responses": {
+                    "type": "integer"
+                },
+                "with_comments": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.LectureRef": {
+            "type": "object",
+            "properties": {
+                "ends_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "starts_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.LoginRequest": {
             "type": "object",
             "properties": {
@@ -2399,6 +2837,32 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.PendingLectureResponse": {
+            "type": "object",
+            "properties": {
+                "closes_at": {
+                    "type": "string"
+                },
+                "ends_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "starts_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ProfileResponse": {
             "type": "object",
             "properties": {
@@ -2456,6 +2920,17 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "module_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SentLectureFeedbackResponse": {
+            "type": "object",
+            "properties": {
+                "event_id": {
                     "type": "integer"
                 },
                 "submitted_at": {

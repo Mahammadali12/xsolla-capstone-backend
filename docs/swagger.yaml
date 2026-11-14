@@ -163,6 +163,102 @@ definitions:
       grade:
         type: string
     type: object
+  dto.LectureFeedbackPersonResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.LectureFeedbackRequest:
+    properties:
+      clarity:
+        type: integer
+      confidence:
+        type: integer
+      event_id:
+        type: integer
+      improve:
+        type: string
+      liked:
+        type: string
+      overall:
+        type: integer
+      pace:
+        type: string
+      practice:
+        type: integer
+    type: object
+  dto.LectureFeedbackResponse:
+    properties:
+      clarity:
+        type: integer
+      confidence:
+        type: integer
+      id:
+        type: integer
+      improve:
+        type: string
+      lecture:
+        $ref: '#/definitions/dto.LectureRef'
+      lecturers:
+        items:
+          $ref: '#/definitions/dto.LectureFeedbackPersonResponse'
+        type: array
+      liked:
+        type: string
+      overall:
+        type: integer
+      pace:
+        type: string
+      practice:
+        type: integer
+      student:
+        $ref: '#/definitions/dto.LectureFeedbackPersonResponse'
+      submitted_at:
+        type: string
+    type: object
+  dto.LectureFeedbackSummaryResponse:
+    properties:
+      averages:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      expected:
+        type: integer
+      lecture:
+        $ref: '#/definitions/dto.LectureRef'
+      lecturers:
+        items:
+          $ref: '#/definitions/dto.LectureFeedbackPersonResponse'
+        type: array
+      pace:
+        additionalProperties:
+          type: integer
+        type: object
+      responses:
+        type: integer
+      with_comments:
+        type: integer
+    type: object
+  dto.LectureRef:
+    properties:
+      ends_at:
+        type: string
+      event_id:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      starts_at:
+        type: string
+      title:
+        type: string
+    type: object
   dto.LoginRequest:
     properties:
       login:
@@ -311,6 +407,23 @@ definitions:
         example: secret123
         type: string
     type: object
+  dto.PendingLectureResponse:
+    properties:
+      closes_at:
+        type: string
+      ends_at:
+        type: string
+      event_id:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      starts_at:
+        type: string
+      title:
+        type: string
+    type: object
   dto.ProfileResponse:
     properties:
       avatar_url:
@@ -348,6 +461,13 @@ definitions:
   dto.ReviewedWeekResponse:
     properties:
       module_id:
+        type: integer
+      submitted_at:
+        type: string
+    type: object
+  dto.SentLectureFeedbackResponse:
+    properties:
+      event_id:
         type: integer
       submitted_at:
         type: string
@@ -948,6 +1068,194 @@ paths:
       summary: List my Google Calendar events
       tags:
       - google
+  /lecture-feedback:
+    get:
+      description: 'Filters are optional: event_id, module_id, and from/to as dates
+        (YYYY-MM-DD, Baku time, both included) on the lecture''s start.'
+      parameters:
+      - description: Lecture (event) id
+        in: query
+        name: event_id
+        type: integer
+      - description: Week (module) id
+        in: query
+        name: module_id
+        type: integer
+      - description: First day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: Last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.LectureFeedbackResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lecture feedback with every answer (admin)
+      tags:
+      - lecture-feedback
+    post:
+      consumes:
+      - application/json
+      description: See docs/lecture_feedback.md for the questions, the rules and every
+        answer.
+      parameters:
+      - description: The form
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LectureFeedbackRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.SentLectureFeedbackResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send feedback on a lecture (student)
+      tags:
+      - lecture-feedback
+  /lecture-feedback/form:
+    get:
+      description: The questions in order; their ids are the fields of POST /lecture-feedback.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The lecture feedback form
+      tags:
+      - lecture-feedback
+  /lecture-feedback/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.SentLectureFeedbackResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lectures I have given feedback on (student)
+      tags:
+      - lecture-feedback
+  /lecture-feedback/pending:
+    get:
+      description: Lectures whose form is open (10 minutes before the end until 7
+        days after) and not yet sent.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.PendingLectureResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lectures I can give feedback on now (student)
+      tags:
+      - lecture-feedback
+  /lecture-feedback/summary:
+    get:
+      description: 'Every lecture in the filter, also those without feedback: responses,
+        students expected, averages, pace counts.'
+      parameters:
+      - description: Lecture (event) id
+        in: query
+        name: event_id
+        type: integer
+      - description: Week (module) id
+        in: query
+        name: module_id
+        type: integer
+      - description: First day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: Last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.LectureFeedbackSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lecture feedback numbers per lecture (admin)
+      tags:
+      - lecture-feedback
   /mentor-reviews:
     get:
       description: Filter by week, mentor and team; every filter is optional. Ordered
