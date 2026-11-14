@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
@@ -21,6 +23,9 @@ const maxMentorReviewBody = 16 << 10
 type MentorReviewService interface {
 	ListMine(ctx context.Context, userID int64, roles []string) ([]store.ReviewedModule, error)
 	Submit(ctx context.Context, userID int64, roles []string, sub service.MentorReviewSubmission) (*store.MentorReview, error)
+	ListReviews(ctx context.Context, moduleID, mentorID, teamID *int64) ([]store.MentorReviewRow, error)
+	Summary(ctx context.Context, fromModule, toModule *int64) ([]service.MentorReviewSummary, error)
+	Missing(ctx context.Context, moduleID int64) ([]store.ExpectedReviewer, error)
 }
 
 type MentorReviewHandlers struct {
@@ -31,6 +36,14 @@ func NewMentorReviewHandlers(svc MentorReviewService) *MentorReviewHandlers {
 	return &MentorReviewHandlers{svc: svc}
 }
 
+// @Summary     The weeks I have reviewed (student)
+// @Tags        mentor-reviews
+// @Produce     json
+// @Security    BearerAuth
+// @Success     200 {array}  dto.ReviewedWeekResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Router      /mentor-reviews/me [get]
+//
 // ListMine handles GET /mentor-reviews/me: the weeks the signed-in student has reviewed.
 func (h *MentorReviewHandlers) ListMine(w http.ResponseWriter, r *http.Request) {
 	reviewed, err := h.svc.ListMine(r.Context(), middleware.CtxUserID(r.Context()), middleware.CtxRoles(r.Context()))
@@ -45,6 +58,21 @@ func (h *MentorReviewHandlers) ListMine(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// @Summary     Send this week's mentor review (student)
+// @Description See docs/mentor_reviews.md for the form rules and every answer.
+// @Tags        mentor-reviews
+// @Accept      json
+// @Produce     json
+// @Security    BearerAuth
+// @Param       request body dto.MentorReviewRequest true "The review"
+// @Success     201 {object} dto.ReviewedWeekResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Failure     409 {object} handlers.ErrorResponse
+// @Failure     422 {object} handlers.ErrorResponse
+// @Router      /mentor-reviews [post]
+//
 // Submit handles POST /mentor-reviews: the student's review of one week.
 func (h *MentorReviewHandlers) Submit(w http.ResponseWriter, r *http.Request) {
 	var req dto.MentorReviewRequest
@@ -104,6 +132,8 @@ func writeMentorReviewError(w http.ResponseWriter, op string, err error) {
 			details[i] = ErrorDetail{Field: f.Field, Message: f.Message}
 		}
 		writeError(w, http.StatusUnprocessableEntity, "validation_failed", invalid.Error(), details)
+	case errors.Is(err, service.ErrMentorReviewRange):
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error(), nil)
 	case errors.Is(err, service.ErrMentorReviewForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "only students send mentor reviews", nil)
 	case errors.Is(err, service.ErrMentorReviewModuleNotFound):
@@ -120,4 +150,139 @@ func writeMentorReviewError(w http.ResponseWriter, op string, err error) {
 		log.Printf("mentor review handler: %s error: %v", op, err)
 		writeError(w, http.StatusInternalServerError, "server_error", "could not handle the mentor review", nil)
 	}
+}
+
+// ---- admin read routes (registered with RequireRole "admin": mentors never see the reviews about them) ----------
+
+// @Summary     Mentor reviews with every answer (admin)
+// @Description Filter by week, mentor and team; every filter is optional. Ordered by week, mentor, student.
+// @Tags        mentor-reviews
+// @Produce     json
+// @Security    BearerAuth
+// @Param       module_id query int false "Week (module) id"
+// @Param       mentor_id query int false "Mentor user id"
+// @Param       team_id   query int false "Team id"
+// @Success     200 {array}  dto.MentorReviewResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Router      /mentor-reviews [get]
+func (h *MentorReviewHandlers) List(w http.ResponseWriter, r *http.Request) {
+	ids, ok := queryIDs(w, r, "module_id", "mentor_id", "team_id")
+	if !ok {
+		return
+	}
+	rows, err := h.svc.ListReviews(r.Context(), ids["module_id"], ids["mentor_id"], ids["team_id"])
+	if err != nil {
+		writeMentorReviewError(w, "List", err)
+		return
+	}
+	resp := make([]dto.MentorReviewResponse, len(rows))
+	for i, row := range rows {
+		resp[i] = dto.MentorReviewResponse{
+			ID: row.ID, ModuleID: row.ModuleID, ModuleTitle: row.ModuleTitle,
+			Student:    dto.ReviewPerson{ID: row.StudentID, Name: row.StudentName, Email: row.StudentEmail},
+			Mentor:     dto.ReviewPerson{ID: row.MentorID, Name: row.MentorName, Email: row.MentorEmail},
+			HadSession: row.HadSession, NoSessionReason: row.NoSessionReason, Topics: row.Topics, OtherTopic: row.OtherTopic,
+			Overall: row.Overall, Comment: row.Comment, SubmittedAt: row.SubmittedAt,
+		}
+		if row.TeamID != nil && row.TeamName != nil {
+			resp[i].Team = &dto.ReviewTeam{ID: *row.TeamID, Name: *row.TeamName}
+		}
+		if row.Ratings != nil {
+			resp[i].Ratings = &dto.MentorReviewRatingsResponse{Clarity: row.Ratings.Clarity, Engagement: row.Ratings.Engagement,
+				Comfort: row.Ratings.Comfort, Time: row.Ratings.Time}
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// @Summary     Mentor review numbers per week and mentor (admin)
+// @Description Reviews, expected students (today's teams), sessions held, averages, topic counts and no-session reasons for the weeks from from_module to to_module (by opening date, both optional and included).
+// @Tags        mentor-reviews
+// @Produce     json
+// @Security    BearerAuth
+// @Param       from_module query int false "First week (module) id"
+// @Param       to_module   query int false "Last week (module) id"
+// @Success     200 {array}  dto.MentorReviewSummaryResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /mentor-reviews/summary [get]
+func (h *MentorReviewHandlers) Summary(w http.ResponseWriter, r *http.Request) {
+	ids, ok := queryIDs(w, r, "from_module", "to_module")
+	if !ok {
+		return
+	}
+	sums, err := h.svc.Summary(r.Context(), ids["from_module"], ids["to_module"])
+	if err != nil {
+		writeMentorReviewError(w, "Summary", err)
+		return
+	}
+	resp := make([]dto.MentorReviewSummaryResponse, len(sums))
+	for i, s := range sums {
+		resp[i] = dto.MentorReviewSummaryResponse{
+			ModuleID: s.ModuleID, ModuleTitle: s.ModuleTitle,
+			Mentor:  dto.ReviewPerson{ID: s.MentorID, Name: s.MentorName, Email: s.MentorEmail},
+			Reviews: s.Reviews, Expected: s.Expected, SessionsHeld: s.SessionsHeld, NoSession: s.NoSession,
+			Averages: s.Averages, Topics: s.Topics, NoSessionReasons: s.NoSessionReasons,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// @Summary     Students who have not sent the week's review (admin)
+// @Description Students in a team with a mentor (today's teams), enrolled in the week, without a review for it.
+// @Tags        mentor-reviews
+// @Produce     json
+// @Security    BearerAuth
+// @Param       module_id query int true "Week (module) id"
+// @Success     200 {array}  dto.MissingReviewResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /mentor-reviews/missing [get]
+func (h *MentorReviewHandlers) Missing(w http.ResponseWriter, r *http.Request) {
+	ids, ok := queryIDs(w, r, "module_id")
+	if !ok {
+		return
+	}
+	if ids["module_id"] == nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "module_id is required", nil)
+		return
+	}
+	missing, err := h.svc.Missing(r.Context(), *ids["module_id"])
+	if err != nil {
+		writeMentorReviewError(w, "Missing", err)
+		return
+	}
+	resp := make([]dto.MissingReviewResponse, len(missing))
+	for i, m := range missing {
+		resp[i] = dto.MissingReviewResponse{
+			Student: dto.ReviewPerson{ID: m.StudentID, Name: m.StudentName, Email: m.StudentEmail},
+			Team:    dto.ReviewTeam{ID: m.TeamID, Name: m.TeamName},
+			Mentor:  dto.ReviewPerson{ID: m.MentorID, Name: m.MentorName, Email: m.MentorEmail},
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// queryIDs reads optional positive ids from the query string; an empty value counts as not sent. A value that is
+// not a positive whole number is a 400 naming the parameter.
+func queryIDs(w http.ResponseWriter, r *http.Request, names ...string) (map[string]*int64, bool) {
+	out := make(map[string]*int64, len(names))
+	q := r.URL.Query()
+	for _, name := range names {
+		raw := strings.TrimSpace(q.Get(name))
+		if raw == "" {
+			out[name] = nil
+			continue
+		}
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "bad_request", name+" must be a positive whole number", nil)
+			return nil, false
+		}
+		out[name] = &id
+	}
+	return out, true
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -171,6 +172,9 @@ func TestMentorReviewOpensAt(t *testing.T) {
 // fakeReviewStore is an in-memory mentorReviewStore.
 type fakeReviewStore struct {
 	module      *store.Module
+	module2     *store.Module
+	expected    []store.ExpectedReviewer
+	gotFilter   store.MentorReviewFilter
 	moduleErr   error
 	enrolled    bool
 	exists      bool
@@ -185,10 +189,20 @@ func (f *fakeReviewStore) GetModuleByID(_ context.Context, id int64) (*store.Mod
 	if f.moduleErr != nil {
 		return nil, f.moduleErr
 	}
+	if f.module2 != nil && f.module2.ID == id {
+		return f.module2, nil
+	}
 	if f.module == nil || f.module.ID != id {
 		return nil, store.ErrModuleNotFound
 	}
 	return f.module, nil
+}
+func (f *fakeReviewStore) ListMentorReviews(_ context.Context, filter store.MentorReviewFilter) ([]store.MentorReviewRow, error) {
+	f.gotFilter = filter
+	return []store.MentorReviewRow{}, nil
+}
+func (f *fakeReviewStore) ListExpectedReviewers(context.Context, *int64, *time.Time, *time.Time) ([]store.ExpectedReviewer, error) {
+	return f.expected, nil
 }
 func (f *fakeReviewStore) IsUserEnrolled(context.Context, int64, int64) (bool, error) {
 	return f.enrolled, nil
@@ -353,5 +367,114 @@ func TestListMineReturnsTheStudentsWeeks(t *testing.T) {
 	got, err := newReviewService(f, saturday).ListMine(context.Background(), 10, []string{"student"})
 	if err != nil || !reflect.DeepEqual(got, f.reviewed) {
 		t.Errorf("got %v, %v; want %v", got, err, f.reviewed)
+	}
+}
+
+// ---- admin read: summary math, range rules, missing list ----
+
+func reviewRow(module, mentor int64, hadSession bool, overall int, topics []string, reason string, r *store.MentorReviewRatings) store.MentorReviewRow {
+	row := store.MentorReviewRow{ModuleID: module, ModuleTitle: fmt.Sprintf("Week %d", module),
+		ModuleOpensAt: weekOpens.AddDate(0, 0, 7*int(module)), MentorID: mentor, MentorName: fmt.Sprintf("Mentor %d", mentor),
+		HadSession: hadSession, Overall: overall, Topics: topics, Ratings: r}
+	if reason != "" {
+		row.NoSessionReason = &reason
+	}
+	return row
+}
+
+func expectedRow(module, mentor int64, reviewed bool) store.ExpectedReviewer {
+	return store.ExpectedReviewer{ModuleID: module, ModuleTitle: fmt.Sprintf("Week %d", module),
+		ModuleOpensAt: weekOpens.AddDate(0, 0, 7*int(module)), MentorID: mentor, MentorName: fmt.Sprintf("Mentor %d", mentor), Reviewed: reviewed}
+}
+
+func TestSummarizeMentorReviews(t *testing.T) {
+	r := func(c, e, co, ti int) *store.MentorReviewRatings {
+		return &store.MentorReviewRatings{Clarity: c, Engagement: e, Comfort: co, Time: ti}
+	}
+	rows := []store.MentorReviewRow{
+		reviewRow(2, 7, true, 5, []string{"goals", "other"}, "", r(5, 4, 5, 3)),
+		reviewRow(2, 7, true, 4, []string{"goals"}, "", r(4, 4, 4, 4)),
+		reviewRow(2, 7, false, 2, nil, "not-scheduled", nil),
+		reviewRow(1, 7, true, 3, []string{"career"}, "", r(3, 3, 3, 3)),
+	}
+	expected := []store.ExpectedReviewer{
+		expectedRow(2, 7, true), expectedRow(2, 7, true), expectedRow(2, 7, true), expectedRow(2, 7, false),
+		expectedRow(2, 9, false), expectedRow(2, 9, false), // mentor 9: a team, no reviews yet
+	}
+	got := SummarizeMentorReviews(rows, expected)
+	if len(got) != 3 {
+		t.Fatalf("got %d summaries, want 3 (week 1/mentor 7, week 2/mentor 7, week 2/mentor 9): %+v", len(got), got)
+	}
+	if got[0].ModuleID != 1 || got[1].ModuleID != 2 || got[1].MentorID != 7 || got[2].MentorID != 9 {
+		t.Errorf("order: %d/%d, %d/%d, %d/%d", got[0].ModuleID, got[0].MentorID, got[1].ModuleID, got[1].MentorID, got[2].ModuleID, got[2].MentorID)
+	}
+
+	w2 := got[1]
+	if w2.Reviews != 3 || w2.Expected != 4 || w2.SessionsHeld != 2 || w2.NoSession != 1 {
+		t.Errorf("week 2 counts: reviews %d expected %d held %d none %d", w2.Reviews, w2.Expected, w2.SessionsHeld, w2.NoSession)
+	}
+	wantAvg := map[string]float64{"clarity": 4.5, "engagement": 4, "comfort": 4.5, "time": 3.5, "overall": 3.67}
+	for k, want := range wantAvg {
+		if w2.Averages[k] == nil || *w2.Averages[k] != want {
+			t.Errorf("week 2 average %s = %v, want %v", k, w2.Averages[k], want)
+		}
+	}
+	if w2.Topics["goals"] != 2 || w2.Topics["other"] != 1 || w2.Topics["career"] != 0 || len(w2.Topics) != 6 {
+		t.Errorf("week 2 topics: %v", w2.Topics)
+	}
+	if w2.NoSessionReasons["not-scheduled"] != 1 || w2.NoSessionReasons["other"] != 0 || len(w2.NoSessionReasons) != 4 {
+		t.Errorf("week 2 reasons: %v", w2.NoSessionReasons)
+	}
+
+	none := got[2]
+	if none.Reviews != 0 || none.Expected != 2 || none.Averages["overall"] != nil || none.Averages["clarity"] != nil {
+		t.Errorf("mentor without reviews: %+v", none)
+	}
+
+	onlyNoSession := SummarizeMentorReviews([]store.MentorReviewRow{reviewRow(3, 7, false, 1, nil, "mentor-unavailable", nil)}, nil)
+	if a := onlyNoSession[0].Averages; a["clarity"] != nil || a["overall"] == nil || *a["overall"] != 1 {
+		t.Errorf("no session at all: ratings must be null, overall 1: %v", a)
+	}
+	if out := SummarizeMentorReviews(nil, nil); out == nil || len(out) != 0 {
+		t.Errorf("nothing: %v, want an empty list", out)
+	}
+}
+
+func TestMentorReviewSummaryRangeAndMissing(t *testing.T) {
+	ctx := context.Background()
+	f := openWeek() // module 4
+	f.expected = []store.ExpectedReviewer{expectedRow(4, 7, true), expectedRow(4, 7, false), expectedRow(4, 9, false)}
+	svc := newReviewService(f, saturday)
+
+	if _, err := svc.Summary(ctx, ptr(int64(99)), nil); !errors.Is(err, ErrMentorReviewModuleNotFound) {
+		t.Errorf("unknown from_module: %v", err)
+	}
+	if _, err := svc.Summary(ctx, nil, ptr(int64(99))); !errors.Is(err, ErrMentorReviewModuleNotFound) {
+		t.Errorf("unknown to_module: %v", err)
+	}
+	f.module2 = &store.Module{ID: 5, OpensAt: weekOpens.AddDate(0, 0, 7)}
+	if _, err := svc.Summary(ctx, ptr(int64(5)), ptr(int64(4))); !errors.Is(err, ErrMentorReviewRange) {
+		t.Errorf("from after to: %v, want the range error", err)
+	}
+	if _, err := svc.Summary(ctx, ptr(int64(4)), ptr(int64(5))); err != nil {
+		t.Errorf("from before to: %v", err)
+	}
+	if f.gotFilter.OpensFrom == nil || !f.gotFilter.OpensFrom.Equal(weekOpens) || f.gotFilter.OpensTo == nil || !f.gotFilter.OpensTo.Equal(weekOpens.AddDate(0, 0, 7)) {
+		t.Errorf("the weeks' opening dates must bound the query: %+v", f.gotFilter)
+	}
+	if _, err := svc.Summary(ctx, ptr(int64(4)), ptr(int64(4))); err != nil {
+		t.Errorf("one week: %v", err)
+	}
+
+	missing, err := svc.Missing(ctx, 4)
+	if err != nil || len(missing) != 2 || missing[0].Reviewed || missing[1].MentorID != 9 {
+		t.Errorf("missing: %+v, %v", missing, err)
+	}
+	if _, err := svc.Missing(ctx, 99); !errors.Is(err, ErrMentorReviewModuleNotFound) {
+		t.Errorf("missing for an unknown week: %v", err)
+	}
+	f.expected = nil
+	if m, _ := svc.Missing(ctx, 4); m == nil || len(m) != 0 {
+		t.Errorf("nobody missing: %v, want an empty list", m)
 	}
 }

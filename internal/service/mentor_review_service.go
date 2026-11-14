@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -95,6 +96,8 @@ type mentorReviewStore interface {
 	HasMentorReview(ctx context.Context, moduleID, studentID int64) (bool, error)
 	CreateMentorReview(ctx context.Context, in store.MentorReviewInput) (*store.MentorReview, error)
 	ListReviewedModules(ctx context.Context, studentID int64) ([]store.ReviewedModule, error)
+	ListMentorReviews(ctx context.Context, f store.MentorReviewFilter) ([]store.MentorReviewRow, error)
+	ListExpectedReviewers(ctx context.Context, moduleID *int64, opensFrom, opensTo *time.Time) ([]store.ExpectedReviewer, error)
 }
 
 // MentorReviewService handles the weekly mentor reviews.
@@ -338,4 +341,177 @@ func contains(list []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// ---- reading reviews (admin only: mentors never see the reviews about them) ------------------------------------
+
+// ErrMentorReviewRange is returned when from_module opens after to_module.
+var ErrMentorReviewRange = errors.New("from_module must not open after to_module")
+
+// MentorReviewSummary is one mentor's numbers for one week.
+type MentorReviewSummary struct {
+	ModuleID      int64
+	ModuleTitle   string
+	ModuleOpensAt time.Time
+	MentorID      int64
+	MentorName    string
+	MentorEmail   string
+	// Reviews is how many reviews about this mentor came in for the week.
+	Reviews int
+	// Expected is how many students of the mentor's team (as the teams are today) are asked for the week.
+	Expected     int
+	SessionsHeld int
+	NoSession    int
+	// Averages has clarity, engagement, comfort and time (over reviews with a session) and overall (over all
+	// reviews), rounded to two decimals; nil when there is nothing to average.
+	Averages         map[string]*float64
+	Topics           map[string]int
+	NoSessionReasons map[string]int
+}
+
+// ListReviews returns the reviews with every answer, filtered by week, mentor and team (each optional).
+func (s *MentorReviewService) ListReviews(ctx context.Context, moduleID, mentorID, teamID *int64) ([]store.MentorReviewRow, error) {
+	return s.store.ListMentorReviews(ctx, store.MentorReviewFilter{ModuleID: moduleID, MentorID: mentorID, TeamID: teamID})
+}
+
+// Summary returns per week and mentor the counts and averages for the weeks from fromModule to toModule (by the
+// weeks' opening dates; both optional, both included).
+func (s *MentorReviewService) Summary(ctx context.Context, fromModule, toModule *int64) ([]MentorReviewSummary, error) {
+	opensFrom, err := s.moduleOpensAt(ctx, fromModule)
+	if err != nil {
+		return nil, err
+	}
+	opensTo, err := s.moduleOpensAt(ctx, toModule)
+	if err != nil {
+		return nil, err
+	}
+	if opensFrom != nil && opensTo != nil && opensFrom.After(*opensTo) {
+		return nil, ErrMentorReviewRange
+	}
+	rows, err := s.store.ListMentorReviews(ctx, store.MentorReviewFilter{OpensFrom: opensFrom, OpensTo: opensTo})
+	if err != nil {
+		return nil, err
+	}
+	expected, err := s.store.ListExpectedReviewers(ctx, nil, opensFrom, opensTo)
+	if err != nil {
+		return nil, err
+	}
+	return SummarizeMentorReviews(rows, expected), nil
+}
+
+// Missing returns the students who are asked for the week's review (today's teams) and have not sent it.
+func (s *MentorReviewService) Missing(ctx context.Context, moduleID int64) ([]store.ExpectedReviewer, error) {
+	if _, err := s.moduleOpensAt(ctx, &moduleID); err != nil {
+		return nil, err
+	}
+	expected, err := s.store.ListExpectedReviewers(ctx, &moduleID, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	missing := []store.ExpectedReviewer{}
+	for _, e := range expected {
+		if !e.Reviewed {
+			missing = append(missing, e)
+		}
+	}
+	return missing, nil
+}
+
+func (s *MentorReviewService) moduleOpensAt(ctx context.Context, moduleID *int64) (*time.Time, error) {
+	if moduleID == nil {
+		return nil, nil
+	}
+	m, err := s.store.GetModuleByID(ctx, *moduleID)
+	if errors.Is(err, store.ErrModuleNotFound) {
+		return nil, ErrMentorReviewModuleNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &m.OpensAt, nil
+}
+
+// SummarizeMentorReviews adds up the reviews per week and mentor. A mentor appears for a week when reviews about
+// them came in, or when students of their team are expected to review that week (then with zero reviews).
+func SummarizeMentorReviews(rows []store.MentorReviewRow, expected []store.ExpectedReviewer) []MentorReviewSummary {
+	type key struct{ module, mentor int64 }
+	type sums struct{ clarity, engagement, comfort, time, rated, overall int }
+	byKey := map[key]*MentorReviewSummary{}
+	totals := map[key]*sums{}
+	get := func(k key, title string, opens time.Time, name, email string) (*MentorReviewSummary, *sums) {
+		if s, ok := byKey[k]; ok {
+			return s, totals[k]
+		}
+		s := &MentorReviewSummary{ModuleID: k.module, ModuleTitle: title, ModuleOpensAt: opens,
+			MentorID: k.mentor, MentorName: name, MentorEmail: email,
+			Topics: map[string]int{}, NoSessionReasons: map[string]int{}}
+		for _, t := range MentorReviewTopics {
+			s.Topics[t] = 0
+		}
+		for _, r := range MentorReviewNoSessionReasons {
+			s.NoSessionReasons[r] = 0
+		}
+		byKey[k], totals[k] = s, &sums{}
+		return s, totals[k]
+	}
+	for _, r := range rows {
+		s, t := get(key{r.ModuleID, r.MentorID}, r.ModuleTitle, r.ModuleOpensAt, r.MentorName, r.MentorEmail)
+		s.Reviews++
+		t.overall += r.Overall
+		if r.HadSession {
+			s.SessionsHeld++
+		} else {
+			s.NoSession++
+			if r.NoSessionReason != nil {
+				s.NoSessionReasons[*r.NoSessionReason]++
+			}
+		}
+		for _, topic := range r.Topics {
+			s.Topics[topic]++
+		}
+		if r.Ratings != nil {
+			t.rated++
+			t.clarity += r.Ratings.Clarity
+			t.engagement += r.Ratings.Engagement
+			t.comfort += r.Ratings.Comfort
+			t.time += r.Ratings.Time
+		}
+	}
+	for _, e := range expected {
+		s, _ := get(key{e.ModuleID, e.MentorID}, e.ModuleTitle, e.ModuleOpensAt, e.MentorName, e.MentorEmail)
+		s.Expected++
+	}
+
+	out := make([]MentorReviewSummary, 0, len(byKey))
+	for k, s := range byKey {
+		t := totals[k]
+		s.Averages = map[string]*float64{
+			"clarity": average(t.clarity, t.rated), "engagement": average(t.engagement, t.rated),
+			"comfort": average(t.comfort, t.rated), "time": average(t.time, t.rated),
+			"overall": average(t.overall, s.Reviews),
+		}
+		out = append(out, *s)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if !a.ModuleOpensAt.Equal(b.ModuleOpensAt) {
+			return a.ModuleOpensAt.Before(b.ModuleOpensAt)
+		}
+		if a.ModuleID != b.ModuleID {
+			return a.ModuleID < b.ModuleID
+		}
+		if a.MentorName != b.MentorName {
+			return a.MentorName < b.MentorName
+		}
+		return a.MentorID < b.MentorID
+	})
+	return out
+}
+
+func average(sum, n int) *float64 {
+	if n == 0 {
+		return nil
+	}
+	v := math.Round(float64(sum)/float64(n)*100) / 100
+	return &v
 }

@@ -203,6 +203,10 @@ func main() {
 	// Weekly mentor reviews (students only; the service answers 403 to everyone else)
 	mux.Handle("GET /mentor-reviews/me", authenticator.Middleware(http.HandlerFunc(mentorReviewH.ListMine)))
 	mux.Handle("POST /mentor-reviews", authenticator.Middleware(http.HandlerFunc(mentorReviewH.Submit)))
+	// reading the answers: admins only (mentors never see the reviews about them)
+	mux.Handle("GET /mentor-reviews", authenticator.RequireRole(http.HandlerFunc(mentorReviewH.List), "admin"))
+	mux.Handle("GET /mentor-reviews/summary", authenticator.RequireRole(http.HandlerFunc(mentorReviewH.Summary), "admin"))
+	mux.Handle("GET /mentor-reviews/missing", authenticator.RequireRole(http.HandlerFunc(mentorReviewH.Missing), "admin"))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
 	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))

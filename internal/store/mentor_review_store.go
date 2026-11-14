@@ -158,3 +158,139 @@ func (s *StoreImpl) ListReviewedModules(ctx context.Context, studentID int64) ([
 	}
 	return reviewed, rows.Err()
 }
+
+// ---- reading reviews (admin) ----------------------------------------------------------------------------------
+
+// MentorReviewFilter narrows the admin list; nil fields do not filter. OpensFrom/OpensTo bound the module's opens_at.
+type MentorReviewFilter struct {
+	ModuleID  *int64
+	MentorID  *int64
+	TeamID    *int64
+	OpensFrom *time.Time
+	OpensTo   *time.Time
+}
+
+// MentorReviewRow is one stored review with the names the admin pages show.
+type MentorReviewRow struct {
+	ID              int64
+	ModuleID        int64
+	ModuleTitle     string
+	ModuleOpensAt   time.Time
+	StudentID       int64
+	StudentName     string
+	StudentEmail    string
+	MentorID        int64
+	MentorName      string
+	MentorEmail     string
+	TeamID          *int64
+	TeamName        *string
+	HadSession      bool
+	NoSessionReason *string
+	Topics          []string
+	OtherTopic      *string
+	Ratings         *MentorReviewRatings
+	Overall         int
+	Comment         *string
+	SubmittedAt     time.Time
+}
+
+// ListMentorReviews returns the reviews matching the filter, by week, then mentor, then student.
+func (s *StoreImpl) ListMentorReviews(ctx context.Context, f MentorReviewFilter) ([]MentorReviewRow, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT mr.id, mr.module_id, m.title, m.opens_at,
+		       mr.student_id, st.name, st.email::text, mr.mentor_id, me.name, me.email::text, mr.team_id, t.name,
+		       mr.had_session, mr.no_session_reason, mr.topics, mr.other_topic,
+		       mr.rating_clarity, mr.rating_engagement, mr.rating_comfort, mr.rating_time,
+		       mr.overall, mr.comment, mr.submitted_at
+		  FROM mentor_reviews mr
+		  JOIN modules m  ON m.id = mr.module_id AND m.deleted_at IS NULL
+		  JOIN users st   ON st.id = mr.student_id
+		  JOIN users me   ON me.id = mr.mentor_id
+		  LEFT JOIN teams t ON t.id = mr.team_id
+		 WHERE ($1::bigint IS NULL OR mr.module_id = $1)
+		   AND ($2::bigint IS NULL OR mr.mentor_id = $2)
+		   AND ($3::bigint IS NULL OR mr.team_id = $3)
+		   AND ($4::timestamptz IS NULL OR m.opens_at >= $4)
+		   AND ($5::timestamptz IS NULL OR m.opens_at <= $5)
+		 ORDER BY m.opens_at, mr.module_id, me.name, mr.mentor_id, st.name, mr.student_id`,
+		f.ModuleID, f.MentorID, f.TeamID, f.OpensFrom, f.OpensTo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []MentorReviewRow{}
+	for rows.Next() {
+		var r MentorReviewRow
+		var clarity, engagement, comfort, timeRating sql.NullInt16
+		if err := rows.Scan(&r.ID, &r.ModuleID, &r.ModuleTitle, &r.ModuleOpensAt,
+			&r.StudentID, &r.StudentName, &r.StudentEmail, &r.MentorID, &r.MentorName, &r.MentorEmail, &r.TeamID, &r.TeamName,
+			&r.HadSession, &r.NoSessionReason, pq.Array(&r.Topics), &r.OtherTopic,
+			&clarity, &engagement, &comfort, &timeRating, &r.Overall, &r.Comment, &r.SubmittedAt); err != nil {
+			return nil, err
+		}
+		if clarity.Valid {
+			r.Ratings = &MentorReviewRatings{Clarity: int(clarity.Int16), Engagement: int(engagement.Int16),
+				Comfort: int(comfort.Int16), Time: int(timeRating.Int16)}
+		}
+		if r.Topics == nil {
+			r.Topics = []string{}
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// ExpectedReviewer is a student who is asked for a week's review today: an active student (no staff role) in a team
+// with a mentor, enrolled in the module. Reviewed says whether their review of that module is in.
+type ExpectedReviewer struct {
+	ModuleID      int64
+	ModuleTitle   string
+	ModuleOpensAt time.Time
+	StudentID     int64
+	StudentName   string
+	StudentEmail  string
+	TeamID        int64
+	TeamName      string
+	MentorID      int64
+	MentorName    string
+	MentorEmail   string
+	Reviewed      bool
+}
+
+// ListExpectedReviewers lists the expected reviewers of the modules in the range (or of one module). Teams change,
+// so this is who is expected according to today's teams.
+func (s *StoreImpl) ListExpectedReviewers(ctx context.Context, moduleID *int64, opensFrom, opensTo *time.Time) ([]ExpectedReviewer, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT m.id, m.title, m.opens_at, u.id, u.name, u.email::text, t.id, t.name, me.id, me.name, me.email::text,
+		       EXISTS (SELECT 1 FROM mentor_reviews mr WHERE mr.module_id = m.id AND mr.student_id = u.id)
+		  FROM team_members tm
+		  JOIN teams t     ON t.id = tm.team_id AND t.mentor_id IS NOT NULL
+		  JOIN users me    ON me.id = t.mentor_id
+		  JOIN users u     ON u.id = tm.student_id AND u.left_at IS NULL AND u.deleted_at IS NULL
+		  JOIN enrollments e ON e.user_id = u.id
+		  JOIN modules m   ON m.id = e.module_id AND m.deleted_at IS NULL
+		 WHERE ($1::bigint IS NULL OR m.id = $1)
+		   AND ($2::timestamptz IS NULL OR m.opens_at >= $2)
+		   AND ($3::timestamptz IS NULL OR m.opens_at <= $3)
+		   AND EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role = 'student'
+		                  AND (r.expires_at IS NULL OR r.expires_at > NOW()))
+		   AND NOT EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id AND r.role IN ('mentor', 'lecturer', 'admin')
+		                  AND (r.expires_at IS NULL OR r.expires_at > NOW()))
+		 ORDER BY m.opens_at, m.id, t.name, t.id, u.name, u.id`,
+		moduleID, opensFrom, opensTo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ExpectedReviewer{}
+	for rows.Next() {
+		var e ExpectedReviewer
+		if err := rows.Scan(&e.ModuleID, &e.ModuleTitle, &e.ModuleOpensAt, &e.StudentID, &e.StudentName, &e.StudentEmail,
+			&e.TeamID, &e.TeamName, &e.MentorID, &e.MentorName, &e.MentorEmail, &e.Reviewed); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
