@@ -75,6 +75,15 @@ func (q *Query) FindRefreshTokenByHash(ctx context.Context, tokenHash string) *s
 	)
 }
 
+// RetireRefreshToken lets a refresh token that was just replaced live at most `grace` longer (never longer than it
+// already would).
+func (q *Query) RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE refresh_tokens SET expires_at = LEAST(expires_at, NOW() + make_interval(secs => $2)) WHERE token_hash = $1`,
+		tokenHash, grace.Seconds(),
+	)
+}
+
 func (q *Query) DeleteRefreshToken(ctx context.Context, tokenHash string) (sql.Result, error) {
 	return q.DBTX.ExecContext(ctx,
 		`DELETE FROM refresh_tokens WHERE token_hash = $1`,

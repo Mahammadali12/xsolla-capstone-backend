@@ -48,6 +48,7 @@ type RefreshTokenStore interface {
 	DeleteRefreshTokensForUser(ctx context.Context, userID int64) error
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error
 }
 
 // AuthService coordinates auth operations between handlers and the store.
@@ -201,6 +202,11 @@ func hashRefreshToken(token string) string {
 func (s *AuthService) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error) {
 	hashed := hashRefreshToken(tokenHash)
 	return s.refreshTokenStore.FindRefreshTokenByHash(ctx, hashed)
+}
+
+// RetireRefreshToken keeps a refresh token that a refresh just replaced valid for at most `grace`.
+func (s *AuthService) RetireRefreshToken(ctx context.Context, token string, grace time.Duration) error {
+	return s.refreshTokenStore.RetireRefreshToken(ctx, hashRefreshToken(token), grace)
 }
 
 // DeleteRefreshToken removes a refresh token by hash.

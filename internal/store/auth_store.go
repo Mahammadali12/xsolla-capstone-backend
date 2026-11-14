@@ -358,6 +358,12 @@ func (s *StoreImpl) DeleteRefreshTokensForUser(ctx context.Context, userID int64
 }
 
 // DeleteRefreshToken removes a refresh token by hash.
+// RetireRefreshToken shortens a replaced refresh token's life to the grace period.
+func (s *StoreImpl) RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error {
+	_, err := s.DB().RetireRefreshToken(ctx, tokenHash, grace)
+	return err
+}
+
 func (s *StoreImpl) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	_, err := s.DB().DeleteRefreshToken(ctx, tokenHash)
 	return err

@@ -43,6 +43,9 @@ func (m *mockGoogleTokenService) SaveRefreshToken(ctx context.Context, userID in
 func (m *mockGoogleTokenService) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	return nil
 }
+func (m *mockGoogleTokenService) RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error {
+	return nil
+}
 func (m *mockGoogleTokenService) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
 	return nil, nil
 }

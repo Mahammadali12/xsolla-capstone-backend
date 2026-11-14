@@ -30,6 +30,7 @@ type Store interface {
 	DeleteRefreshTokensForUser(ctx context.Context, userID int64) error
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error
 	CountRefreshTokens(ctx context.Context) *sql.Row
 
 	// Module methods
