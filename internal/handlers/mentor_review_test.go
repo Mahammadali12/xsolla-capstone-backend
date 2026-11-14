@@ -119,7 +119,7 @@ func TestPostMentorReviewCreated(t *testing.T) {
 func TestPostMentorReviewErrors(t *testing.T) {
 	notOpen := func() *reviewStore {
 		s := openReviewStore()
-		s.module.ClosesAt = time.Now().Add(72 * time.Hour) // the weekend has not started
+		s.module.ClosesAt = time.Now().Add(10 * 24 * time.Hour) // the last weekend before it is at least 2 days away
 		return s
 	}
 	with := func(edit func(*reviewStore)) func() *reviewStore {

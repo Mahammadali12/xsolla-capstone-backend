@@ -75,14 +75,15 @@ Text is trimmed; empty optional text, `[]` and `{}` count as "not sent". A value
 
 ### When a week can be reviewed
 
-From **48 hours before the module closes** (Saturday 00:00 for a module that closes Monday 00:00), but never before
-the module opens, and at any time after it closed (a missing review can always be sent). Times are the module's
-stored `opens_at` / `closes_at`, compared in UTC.
+From **Saturday 00:00, Baku time, of the last weekend before the module closes** (the moment the front-end starts
+showing the form), but never before the module opens, and at any time after it closed (a missing review can always
+be sent). A week that closes on Sunday night, Monday 00:00 or Monday 23:59 opens its review on the Saturday just
+before. The 422 message says when it opens, in Baku time (`service.SchoolLocation`, UTC+4).
 
 ## Decisions taken (BACKEND_REQUIREMENTS.md section 8)
 
 - D1: mentors do not see reviews; there is no route that shows them.
-- D2: the review window comes from the module's own `closes_at` (no separate school time zone).
+- D2: "Saturday" is counted in the school's time zone, Asia/Baku (UTC+4).
 - D3: the mentor is the team's mentor when the review is sent; with no team or no mentor the review is refused (422).
 - D5: there is no end to the window, so the front-end's lock can always be cleared.
 - Not built yet: the server-side lock (D4, optional), the Saturday reminder notification, and the admin read routes

@@ -141,14 +141,30 @@ func TestValidateMentorReviewRules(t *testing.T) {
 }
 
 func TestMentorReviewOpensAt(t *testing.T) {
-	opens := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)   // Monday
-	closes := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC) // next Monday
-	if got, want := MentorReviewOpensAt(opens, closes), time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
-		t.Errorf("week: opens at %v, want Saturday %v", got, want)
+	baku := func(day, hour, minute int) time.Time {
+		return time.Date(2026, 11, day, hour, minute, 0, 0, SchoolLocation)
 	}
-	shortCloses := opens.Add(36 * time.Hour)
-	if got := MentorReviewOpensAt(opens, shortCloses); !got.Equal(opens) {
-		t.Errorf("module shorter than 48h: opens at %v, want the module's start %v", got, opens)
+	satMidnight := baku(14, 0, 0) // Saturday 14 November, 00:00 in Baku = Friday 20:00 UTC
+	cases := []struct {
+		name          string
+		opens, closes time.Time
+		want          time.Time
+	}{
+		{"closes Monday 23:59 (the week in the bug report)", baku(10, 0, 0), baku(16, 23, 59), satMidnight},
+		{"closes Monday 00:00", baku(9, 0, 0), baku(16, 0, 0), satMidnight},
+		{"closes Sunday 23:59", baku(9, 0, 0), baku(15, 23, 59), satMidnight},
+		{"closes Saturday 18:00", baku(9, 0, 0), baku(14, 18, 0), satMidnight},
+		{"closes Wednesday noon: the weekend before", baku(9, 0, 0), baku(18, 12, 0), satMidnight},
+		{"closing time given in UTC", baku(9, 0, 0), time.Date(2026, 11, 16, 19, 59, 0, 0, time.UTC), satMidnight},
+		{"week opens on Sunday: never before it opens", baku(15, 9, 0), baku(16, 23, 59), baku(15, 9, 0)},
+	}
+	for _, tc := range cases {
+		if got := MentorReviewOpensAt(tc.opens, tc.closes); !got.Equal(tc.want) {
+			t.Errorf("%s: opens at %v, want %v", tc.name, got.In(SchoolLocation), tc.want)
+		}
+	}
+	if _, offset := satMidnight.Zone(); offset != 4*60*60 {
+		t.Errorf("school time zone offset %d, want UTC+4", offset)
 	}
 }
 
@@ -193,9 +209,10 @@ func (f *fakeReviewStore) ListReviewedModules(context.Context, int64) ([]store.R
 }
 
 var (
-	weekOpens  = time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
-	weekCloses = time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
-	saturday   = time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	// a week like the real ones: Monday 00:00 to the next Monday 23:59, Baku time
+	weekOpens  = time.Date(2026, 11, 10, 0, 0, 0, 0, SchoolLocation)
+	weekCloses = time.Date(2026, 11, 16, 23, 59, 0, 0, SchoolLocation)
+	saturday   = time.Date(2026, 11, 14, 0, 0, 0, 0, SchoolLocation)
 )
 
 func newReviewService(f *fakeReviewStore, now time.Time) *MentorReviewService {
@@ -297,7 +314,7 @@ func TestSubmitMentorReviewFlow(t *testing.T) {
 
 	t.Run("one second before Saturday", func(t *testing.T) {
 		_, err := newReviewService(openWeek(), saturday.Add(-time.Second)).Submit(ctx, 10, student, withSession())
-		if !errors.Is(err, ErrMentorReviewNotOpen) || !strings.Contains(err.Error(), "2026-11-14T00:00:00Z") {
+		if !errors.Is(err, ErrMentorReviewNotOpen) || !strings.Contains(err.Error(), "Saturday 14 November 2026 at 00:00 (Baku time)") {
 			t.Errorf("error %v, want not open with the opening time", err)
 		}
 	})

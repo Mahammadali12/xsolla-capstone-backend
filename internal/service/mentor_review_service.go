@@ -17,13 +17,22 @@ import (
 // mentor. Rules agreed with the front-end (xsolla-capstone-frontend backend_requirements/BACKEND_REQUIREMENTS.md).
 
 const (
-	// MentorReviewOpensBeforeClose is how long before a module closes its review can be sent (Saturday and Sunday).
-	MentorReviewOpensBeforeClose = 48 * time.Hour
 	// MentorReviewMaxComment is the longest comment, in characters.
 	MentorReviewMaxComment = 1000
 	// MentorReviewMaxOtherTopic is the longest "other" topic, in characters.
 	MentorReviewMaxOtherTopic = 120
 )
+
+// SchoolLocation is the school's time zone: "Saturday" and "Sunday" are counted in it. Azerbaijan has been on
+// UTC+4 all year since 2016; the fixed zone is the fallback when the system has no time zone database.
+var SchoolLocation = loadSchoolLocation()
+
+func loadSchoolLocation() *time.Location {
+	if loc, err := time.LoadLocation("Asia/Baku"); err == nil {
+		return loc
+	}
+	return time.FixedZone("Asia/Baku", 4*60*60)
+}
 
 var (
 	// MentorReviewTopics are the things a 1:1 can be about.
@@ -143,16 +152,20 @@ func (s *MentorReviewService) Submit(ctx context.Context, userID int64, roles []
 	}
 
 	if opens := MentorReviewOpensAt(module.OpensAt, module.ClosesAt); s.now().Before(opens) {
-		return nil, fmt.Errorf("%w: it opens at %s", ErrMentorReviewNotOpen, opens.UTC().Format(time.RFC3339))
+		return nil, fmt.Errorf("%w: it opens on %s", ErrMentorReviewNotOpen, opens.In(SchoolLocation).Format("Monday 2 January 2006 at 15:04 (Baku time)"))
 	}
 
 	return s.store.CreateMentorReview(ctx, in)
 }
 
-// MentorReviewOpensAt is when a module's review can first be sent: 48 hours before it closes (the weekend),
-// but never before the module opens. There is no end: a missing review can be sent at any time later.
+// MentorReviewOpensAt is when a module's review can first be sent: Saturday 00:00 (school time) of the last
+// weekend before the module closes, which is when the front-end starts showing the form. Whether a week closes on
+// Sunday night, Monday 00:00 or Monday 23:59, that is the Saturday just before. Never before the module opens.
+// There is no end: a missing review can be sent at any time later.
 func MentorReviewOpensAt(opensAt, closesAt time.Time) time.Time {
-	from := closesAt.Add(-MentorReviewOpensBeforeClose)
+	c := closesAt.In(SchoolLocation)
+	back := (int(c.Weekday()) - int(time.Saturday) + 7) % 7
+	from := time.Date(c.Year(), c.Month(), c.Day()-back, 0, 0, 0, 0, SchoolLocation)
 	if from.Before(opensAt) {
 		return opensAt
 	}
