@@ -65,6 +65,7 @@ func main() {
 	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
 	teamSvc := service.NewTeamService(store, mentorSlotSvc)
 	mentorReviewSvc := service.NewMentorReviewService(store)
+	analyticsSvc := service.NewAnalyticsService(store)
 	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage
@@ -95,6 +96,7 @@ func main() {
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
 	mentorReviewH := handlers.NewMentorReviewHandlers(mentorReviewSvc)
+	analyticsH := handlers.NewAnalyticsHandlers(analyticsSvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
 	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
 	profileH := handlers.NewProfileHandlers(profileSvc, preferencesSvc, cfg.PublicAPIURL)
@@ -163,6 +165,13 @@ func main() {
 	// Team read side (student/mentor)
 	mux.Handle("GET /teams/me", authenticator.Middleware(http.HandlerFunc(teamH.GetMyTeam)))
 	mux.Handle("GET /mentors/me/team", authenticator.Middleware(http.HandlerFunc(teamH.GetMentorTeam)))
+
+	// Admin-only analytics (read-only reporting layer)
+	mux.Handle("GET /analytics/overview", authenticator.RequireRole(http.HandlerFunc(analyticsH.Overview), "admin"))
+	mux.Handle("GET /analytics/students", authenticator.RequireRole(http.HandlerFunc(analyticsH.ListStudents), "admin"))
+	mux.Handle("GET /analytics/students/{studentId}", authenticator.RequireRole(http.HandlerFunc(analyticsH.Student), "admin"))
+	mux.Handle("GET /analytics/mentors", authenticator.RequireRole(http.HandlerFunc(analyticsH.ListMentors), "admin"))
+	mux.Handle("GET /analytics/mentors/{mentorId}", authenticator.RequireRole(http.HandlerFunc(analyticsH.Mentor), "admin"))
 
 	mux.Handle("POST /modules", authenticator.Middleware(http.HandlerFunc(moduleH.CreateModule)))
 	mux.Handle("GET /modules", authenticator.Middleware(http.HandlerFunc(moduleH.ListModules)))
