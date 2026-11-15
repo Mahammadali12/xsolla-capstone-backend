@@ -61,6 +61,83 @@ func TestRender(t *testing.T) {
 	if message.Body != "Hi Mentor One, event 18422 in 123" {
 		t.Fatalf("body = %q", message.Body)
 	}
+	if message.HTMLBody != "" {
+		t.Fatalf("html body = %q, want empty", message.HTMLBody)
+	}
+}
+
+func TestRenderHTML(t *testing.T) {
+	dir := newDir(t)
+	writeTemplate(t, dir, layoutFile, `<html><body>{{if .Logo}}<img src="cid:xsolla-lms-logo">{{else}}<span>Xsolla LMS</span>{{end}}{{.Content}}</body></html>`)
+	writeTemplate(t, dir, "booking.subject.tmpl", "Booked: {{.Payload.starts_at}}")
+	writeTemplate(t, dir, "booking.body.tmpl", "Hi {{.Recipient.Name}}, plain")
+	writeTemplate(t, dir, "booking.html.tmpl", "<h1>{{.Payload.title}}</h1><p>Hi {{.Recipient.Name}}</p>")
+
+	set, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	event := testEvent(`{"starts_at":"2026-11-19T10:00:00Z","title":"Mentor slot"}`)
+	message, err := set.Render("booking", event, events.Recipient{ID: 7, Name: "Mentor One"})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if message.Body != "Hi Mentor One, plain" {
+		t.Fatalf("body = %q", message.Body)
+	}
+	if !strings.Contains(message.HTMLBody, "<h1>Mentor slot</h1>") {
+		t.Fatalf("html body missing fragment: %q", message.HTMLBody)
+	}
+	if !strings.Contains(message.HTMLBody, "<span>Xsolla LMS</span>") {
+		t.Fatalf("html body does not use the wordmark fallback: %q", message.HTMLBody)
+	}
+
+	set.UseLogo()
+	message, err = set.Render("booking", event, events.Recipient{ID: 7, Name: "Mentor One"})
+	if err != nil {
+		t.Fatalf("render with logo: %v", err)
+	}
+	if !strings.Contains(message.HTMLBody, `src="cid:xsolla-lms-logo"`) {
+		t.Fatalf("html body does not reference the logo: %q", message.HTMLBody)
+	}
+}
+
+func TestRenderHTMLEscapesPayload(t *testing.T) {
+	dir := newDir(t)
+	writeTemplate(t, dir, layoutFile, `<html><body>{{.Content}}</body></html>`)
+	writeTemplate(t, dir, "booking.subject.tmpl", "s")
+	writeTemplate(t, dir, "booking.body.tmpl", "b")
+	writeTemplate(t, dir, "booking.html.tmpl", "<p>{{.Payload.title}}</p>")
+
+	set, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	message, err := set.Render("booking", testEvent(`{"title":"<script>alert(1)</script>"}`), events.Recipient{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(message.HTMLBody, "&lt;script&gt;alert(1)&lt;/script&gt;") {
+		t.Fatalf("payload was not escaped: %q", message.HTMLBody)
+	}
+}
+
+func TestRenderHTMLMissingData(t *testing.T) {
+	dir := newDir(t)
+	writeTemplate(t, dir, layoutFile, `<html><body>{{.Content}}</body></html>`)
+	writeTemplate(t, dir, "booking.subject.tmpl", "s")
+	writeTemplate(t, dir, "booking.body.tmpl", "b")
+	writeTemplate(t, dir, "booking.html.tmpl", "<p>{{.Payload.starts_at}}</p>")
+
+	set, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if _, err := set.Render("booking", testEvent(`{"slot_id":123}`), events.Recipient{}); err == nil {
+		t.Fatal("want an error for the missing starts_at")
+	} else if !strings.Contains(err.Error(), "starts_at") {
+		t.Fatalf("error does not name the missing key: %v", err)
+	}
 }
 
 func TestRenderMissingData(t *testing.T) {
@@ -113,6 +190,17 @@ func TestLoadDirRejectsBadLayout(t *testing.T) {
 		{"empty name", map[string]string{
 			".subject.tmpl": "s",
 			".body.tmpl":    "b",
+		}},
+		{"html without layout", map[string]string{
+			"booking.subject.tmpl": "s",
+			"booking.body.tmpl":    "b",
+			"booking.html.tmpl":    "<p>x</p>",
+		}},
+		{"malformed html", map[string]string{
+			layoutFile:             "<html>{{.Content}}</html>",
+			"booking.subject.tmpl": "s",
+			"booking.body.tmpl":    "b",
+			"booking.html.tmpl":    "{{.Payload",
 		}},
 	}
 	for _, tc := range cases {

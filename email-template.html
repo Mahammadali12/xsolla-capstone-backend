@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>{{subject}}</title>
+  <!--[if mso]>
+  <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <style>table, td, div, p, a { font-family: Arial, Helvetica, sans-serif !important; }</style>
+  <![endif]-->
+  <style>
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0; mso-table-rspace: 0; }
+    img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+    body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+
+    @media screen and (max-width: 620px) {
+      .container { width: 100% !important; }
+      .px { padding-left: 24px !important; padding-right: 24px !important; }
+      .h1 { font-size: 24px !important; line-height: 30px !important; }
+      .btn-td { display: block !important; width: 100% !important; }
+      .btn-a { display: block !important; text-align: center !important; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .bg-page { background-color: #121117 !important; }
+      .bg-card { background-color: #1C1B23 !important; }
+      .bg-soft { background-color: #26242F !important; }
+      .text-ink { color: #F2F1F6 !important; }
+      .text-muted { color: #A5A2B3 !important; }
+      .border { border-color: #80EAFF !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-page" style="margin:0; padding:0; background-color:#F3F2F7;">
+
+  <!-- Preheader: inbox preview text, hidden in the body -->
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F3F2F7;">
+    {{preheader}}
+    &#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-page" style="background-color:#F3F2F7;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+
+        <table role="presentation" class="container" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px; max-width:560px;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="left" style="padding:0 0 24px 8px;">
+              <!-- Replace {{logo_url}} with an absolute, publicly hosted https URL (PNG, ~2x size). Not base64, not SVG. -->
+              <!-- <img src="{{logo_url}}" alt="{{logo_alt}}" width="120" height="auto" style="display:block; width:120px; height:auto; max-width:120px; font-family:Arial, Helvetica, sans-serif; font-size:16px; color:#1B1A22;"> -->
+              <img src="xsolla_lms.svg" alt="{{logo_alt}}" width="120" height="auto" style="display:block; width:120px; height:auto; max-width:120px; font-family:Arial, Helvetica, sans-serif; font-size:16px; color:#1B1A22;">
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td class="bg-card" style="background-color:#FFFFFF; border-radius:16px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+                <!-- Accent bar -->
+                <tr>
+                  <td style="height:4px; line-height:4px; font-size:4px; background-color:#80EAFF; border-radius:16px 16px 0 0;">&nbsp;</td>
+                </tr>
+
+                <!-- Heading + body -->
+                <tr>
+                  <td class="px" style="padding:40px 40px 8px 40px;">
+                    <h1 class="h1 text-ink" style="margin:0 0 16px 0; font-family:Georgia, 'Times New Roman', serif; font-size:28px; line-height:36px; font-weight:700; color:#1B1A22;">
+                      {{title}}
+                    </h1>
+                    <p class="text-ink" style="margin:0 0 16px 0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; color:#1B1A22;">
+                      Hi {{recipient_name}},
+                    </p>
+                    <p class="text-muted" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; color:#4A4757;">
+                      {{message}}
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Details block (delete the whole <tr> if the notification has no key-value data) -->
+                <tr>
+                  <td class="px" style="padding:24px 40px 8px 40px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-soft" style="background-color:#F7F6FB; border-radius:12px;">
+                      <tr>
+                        <td style="padding:20px 24px;">
+                          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                              <td class="text-muted" width="40%" valign="top" style="padding:0 0 10px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; color:#6B6878;">{{detail_1_label}}</td>
+                              <td class="text-ink" valign="top" style="padding:0 0 10px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; font-weight:bold; color:#1B1A22;">{{detail_1_value}}</td>
+                            </tr>
+                            <tr>
+                              <td class="text-muted" width="40%" valign="top" style="padding:0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; color:#6B6878;">{{detail_2_label}}</td>
+                              <td class="text-ink" valign="top" style="padding:0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; font-weight:bold; color:#1B1A22;">{{detail_2_value}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- CTA button (bulletproof: VML for Outlook, padded link for everyone else) -->
+                <tr>
+                  <td class="px" style="padding:24px 40px 40px 40px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td class="btn-td" align="center" bgcolor="#5B3FFF" style="border-radius:10px; background-color:#80EAFF;">
+                          <!--[if mso]>
+                          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{cta_url}}" style="height:48px; v-text-anchor:middle; width:200px;" arcsize="20%" stroke="f" fillcolor="#5B3FFF">
+                            <w:anchorlock/>
+                            <center style="color:#FFFFFF; font-family:Arial, sans-serif; font-size:16px; font-weight:bold;">{{cta_label}}</center>
+                          </v:roundrect>
+                          <![endif]-->
+                          <!--[if !mso]><!-- -->
+                          <a class="btn-a" href="{{cta_url}}" target="_blank" style="display:inline-block; padding:14px 28px; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:20px; font-weight:bold; color:#000000; text-decoration:none; border-radius:10px; background-color:#80EAFF;">{{cta_label}}</a>
+                          <!--<![endif]-->
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Fallback link -->
+                <tr>
+                  <td class="px border" style="padding:24px 40px 32px 40px; border-top:1px solid #ECEAF2;">
+                    <p class="text-muted" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#6B6878;">
+                      Button not working? Paste this link into your browser:<br>
+                      <a href="{{cta_url}}" target="_blank" style="color:#80EAFF; word-break:break-all;">{{cta_url}}</a>
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

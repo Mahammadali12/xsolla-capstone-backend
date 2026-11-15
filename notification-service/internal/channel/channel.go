@@ -9,9 +9,10 @@ import (
 
 // Message is the rendered notification for one recipient.
 type Message struct {
-	EventID int64 // for tracing
-	Subject string
-	Body    string
+	EventID  int64 // for tracing
+	Subject  string
+	Body     string // plain text, always present
+	HTMLBody string // optional HTML alternate; empty means plain text only
 }
 
 // Channel sends one message to one recipient. Implementations must be safe for
