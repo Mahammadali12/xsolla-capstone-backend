@@ -39,6 +39,7 @@ type Enrollment struct {
 	UserID    int64
 	CreatedAt time.Time
 	Grade     *string
+	GradedBy  *int64
 	Email     string
 	Name      string
 	Role      string
@@ -210,7 +211,7 @@ func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, u
 	q := WithTx(tx)
 
 	var e Enrollment
-	err = q.UpdateEnrollmentGrade(ctx, moduleID, userID, grade, feedback).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.CreatedAt)
+	err = q.UpdateEnrollmentGrade(ctx, moduleID, userID, grade, feedback, gradedBy).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.GradedBy, &e.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotEnrolled
@@ -262,7 +263,7 @@ func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64)
 	var enrollments []Enrollment
 	for rows.Next() {
 		var e Enrollment
-		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.Email, &e.Name); err != nil {
+		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.GradedBy, &e.Email, &e.Name); err != nil {
 			return nil, err
 		}
 		enrollments = append(enrollments, e)
