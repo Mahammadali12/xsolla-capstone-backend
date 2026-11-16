@@ -1,5 +1,60 @@
 basePath: /
 definitions:
+  dto.AnalyticsOverviewResponse:
+    properties:
+      generated_at:
+        type: string
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      weeks:
+        items:
+          $ref: '#/definitions/dto.AnalyticsWeekResponse'
+        type: array
+    type: object
+  dto.AnalyticsPeriodResponse:
+    properties:
+      from:
+        type: string
+      to:
+        type: string
+    type: object
+  dto.AnalyticsPersonResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.AnalyticsWeekResponse:
+    properties:
+      green_count:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      opens_at:
+        type: string
+      red_count:
+        type: integer
+      total_count:
+        type: integer
+      yellow_count:
+        type: integer
+    type: object
+  dto.AssignmentStatusResponse:
+    properties:
+      eligible_count:
+        type: integer
+      late_count:
+        type: integer
+      missing_count:
+        type: integer
+      on_time_count:
+        type: integer
+    type: object
   dto.AuthResponse:
     properties:
       access_token:
@@ -109,7 +164,14 @@ definitions:
     properties:
       created_at:
         type: string
+      feedback:
+        description: |-
+          Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written
+          (both left out for a week graded before they were kept, and Feedback for other students' enrollments).
+        type: string
       grade:
+        type: string
+      graded_at:
         type: string
       id:
         type: integer
@@ -117,6 +179,15 @@ definitions:
         type: integer
       user_id:
         type: integer
+    type: object
+  dto.FeedbackDimensionResponse:
+    properties:
+      average:
+        type: number
+      count:
+        type: integer
+      dimension:
+        type: string
     type: object
   dto.FileResponse:
     properties:
@@ -160,6 +231,9 @@ definitions:
     type: object
   dto.GradeEnrollmentRequest:
     properties:
+      feedback:
+        description: 'the mentor''s module feedback: required, 1 to 1000 characters'
+        type: string
       grade:
         type: string
     type: object
@@ -272,6 +346,30 @@ definitions:
     properties:
       refresh_token:
         type: string
+    type: object
+  dto.MarkAllNotificationsReadResponse:
+    properties:
+      marked:
+        type: integer
+    type: object
+  dto.MentorAnalyticsResponse:
+    properties:
+      feedback_by_dimension:
+        items:
+          $ref: '#/definitions/dto.FeedbackDimensionResponse'
+        type: array
+      generated_at:
+        type: string
+      mentor:
+        $ref: '#/definitions/dto.AnalyticsPersonResponse'
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      standing_attribution:
+        type: string
+      student_standing_by_week:
+        items:
+          $ref: '#/definitions/dto.AnalyticsWeekResponse'
+        type: array
     type: object
   dto.MentorReviewRatingsResponse:
     properties:
@@ -398,6 +496,22 @@ definitions:
       title:
         type: string
     type: object
+  dto.NotificationResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      read_at:
+        type: string
+      title:
+        type: string
+      type:
+        description: the event, e.g. enrollment.graded, module.created, mentor_slot.booked
+        type: string
+    type: object
   dto.PasswordResetRequest:
     properties:
       new_password:
@@ -436,6 +550,23 @@ definitions:
         type: string
       visibility:
         type: string
+    type: object
+  dto.QuizAccuracyResponse:
+    properties:
+      accuracy:
+        type: number
+      attempt_count:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      opens_at:
+        type: string
+      possible_total:
+        type: integer
+      score_total:
+        type: integer
     type: object
   dto.RefreshRequest:
     properties:
@@ -483,6 +614,21 @@ definitions:
       password:
         example: secret123
         type: string
+    type: object
+  dto.StudentAnalyticsResponse:
+    properties:
+      assignment_status:
+        $ref: '#/definitions/dto.AssignmentStatusResponse'
+      generated_at:
+        type: string
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      quiz_accuracy_by_module:
+        items:
+          $ref: '#/definitions/dto.QuizAccuracyResponse'
+        type: array
+      student:
+        $ref: '#/definitions/dto.AnalyticsPersonResponse'
     type: object
   dto.TokenResponse:
     properties:
@@ -602,6 +748,204 @@ info:
   title: Xsolla School LMS API
   version: "1.0"
 paths:
+  /analytics/mentors:
+    get:
+      description: Active mentors matching q, id/name/email only.
+      parameters:
+      - description: Name or email fragment
+        in: query
+        name: q
+        type: string
+      - description: Page size, 1-100 (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Rows to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AnalyticsPersonResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mentor selector (admin)
+      tags:
+      - analytics
+  /analytics/mentors/{mentorId}:
+    get:
+      description: Averages are over submitted reviews in the period, per dimension,
+        and null when nobody rated it. Weekly standing uses today's team membership
+        (standing_attribution).
+      parameters:
+      - description: Mentor user id
+        in: path
+        name: mentorId
+        required: true
+        type: integer
+      - description: Start date, YYYY-MM-DD (inclusive)
+        in: query
+        name: from
+        type: string
+      - description: End date, YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MentorAnalyticsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: One mentor's feedback averages and students' standing (admin)
+      tags:
+      - analytics
+  /analytics/overview:
+    get:
+      description: Green/yellow/red counts per module (week). Total counts only students
+        with a recorded grade; weeks without grades have zero counts.
+      parameters:
+      - description: Start date, YYYY-MM-DD (inclusive)
+        in: query
+        name: from
+        type: string
+      - description: End date, YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AnalyticsOverviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Weekly student standing, school-wide (admin)
+      tags:
+      - analytics
+  /analytics/students:
+    get:
+      description: Active students matching q, id/name/email only.
+      parameters:
+      - description: Name or email fragment
+        in: query
+        name: q
+        type: string
+      - description: Page size, 1-100 (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Rows to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AnalyticsPersonResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Student selector (admin)
+      tags:
+      - analytics
+  /analytics/students/{studentId}:
+    get:
+      description: Assignment deadlines in the period are classified by the student's
+        first submission; quiz accuracy is sum(score)/sum(total) per module.
+      parameters:
+      - description: Student user id
+        in: path
+        name: studentId
+        required: true
+        type: integer
+      - description: Start date, YYYY-MM-DD (inclusive)
+        in: query
+        name: from
+        type: string
+      - description: End date, YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      - description: Only this module (week)
+        in: query
+        name: module_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StudentAnalyticsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: One student's submission status and quiz accuracy (admin)
+      tags:
+      - analytics
   /auth/google/callback:
     get:
       description: Handle Google OAuth redirect, exchange code for tokens, store encrypted
@@ -1795,7 +2139,9 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Set a student's module grade red/yellow/green (mentor/admin only)
+      description: |-
+        Set a student's module grade red/yellow/green with the mentor's module feedback (required, 1 to 1000
+        characters). A new grade replaces the old grade and feedback. Mentor of the student or admin only.
       parameters:
       - description: Module ID
         in: path
@@ -1832,11 +2178,109 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Grade enrollment
       tags:
       - enrollments
+  /notifications:
+    get:
+      description: |-
+        The signed-in user's unread in-app notifications, newest first. They are made by the notification
+        service from the same events, policies and templates as the emails. Read ones are not listed.
+      parameters:
+      - description: How many, 1 to 100 (default 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.NotificationResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: NOTIFY_DATABASE_URL is not set
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My unread notifications
+      tags:
+      - notifications
+  /notifications/{id}/read:
+    post:
+      description: |-
+        Marks one of the signed-in user's notifications read, so it is no longer listed. Marking it again is
+        fine. Someone else's notification answers 404.
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark a notification read
+      tags:
+      - notifications
+  /notifications/read-all:
+    post:
+      description: Marks every unread notification of the signed-in user read.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MarkAllNotificationsReadResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark all notifications read
+      tags:
+      - notifications
   /users/{id}/profile:
     get:
       description: 'As the caller may see it: a "staff_only" profile comes back empty

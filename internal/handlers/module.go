@@ -25,7 +25,7 @@ type ModuleService interface {
 	CreateEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) (*store.Enrollment, error)
 	DeleteEnrollment(ctx context.Context, actorID int64, actorRoles []string, moduleID int64, userID int64) error
 	GetEnrollmentsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.Enrollment, error)
-	UpdateEnrollmentGrade(ctx context.Context, userID int64, roles []string, moduleID int64, studentID int64, grade string) (*store.Enrollment, error)
+	UpdateEnrollmentGrade(ctx context.Context, userID int64, roles []string, moduleID int64, studentID int64, grade string, feedback string) (*store.Enrollment, error)
 }
 
 type ModuleHandlers struct {
@@ -402,13 +402,16 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 			UserID:    e.UserID,
 			Grade:     e.Grade,
 			CreatedAt: e.CreatedAt,
+			Feedback:  e.GradeFeedback,
+			GradedAt:  e.GradedAt,
 		}
 	}
 	writeJSON(w, 200, resp)
 }
 
 // @Summary     Grade enrollment
-// @Description Set a student's module grade red/yellow/green (mentor/admin only)
+// @Description Set a student's module grade red/yellow/green with the mentor's module feedback (required, 1 to 1000
+// @Description characters). A new grade replaces the old grade and feedback. Mentor of the student or admin only.
 // @Tags        enrollments
 // @Accept      json
 // @Produce     json
@@ -420,6 +423,7 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 // @Failure     400 {object} handlers.ErrorResponse
 // @Failure     403 {object} handlers.ErrorResponse
 // @Failure     404 {object} handlers.ErrorResponse
+// @Failure     422 {object} handlers.ErrorResponse
 // @Router      /modules/{moduleId}/enrollments/{userId}/grade [patch]
 func (h *ModuleHandlers) GradeEnrollment(w http.ResponseWriter, r *http.Request) {
 	actorID := middleware.CtxUserID(r.Context())
@@ -442,12 +446,14 @@ func (h *ModuleHandlers) GradeEnrollment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	e, err := h.svc.UpdateEnrollmentGrade(r.Context(), actorID, actorRoles, moduleID, studentID, req.Grade)
+	e, err := h.svc.UpdateEnrollmentGrade(r.Context(), actorID, actorRoles, moduleID, studentID, req.Grade, req.Feedback)
 	if err != nil {
 		if errors.Is(err, store.ErrNotModuleTeacher) {
 			writeError(w, 403, "forbidden", "only mentors and admins can grade enrollments", nil)
 		} else if errors.Is(err, service.ErrInvalidGrade) {
 			writeError(w, 422, "validation_failed", err.Error(), nil)
+		} else if errors.Is(err, service.ErrGradeFeedbackRequired) || errors.Is(err, service.ErrGradeFeedbackTooLong) {
+			writeError(w, 422, "validation_failed", err.Error(), []ErrorDetail{{Field: "feedback", Message: err.Error()}})
 		} else if errors.Is(err, store.ErrNotEnrolled) {
 			writeError(w, 404, "not_found", "enrollment not found", nil)
 		} else {
@@ -462,5 +468,7 @@ func (h *ModuleHandlers) GradeEnrollment(w http.ResponseWriter, r *http.Request)
 		UserID:    e.UserID,
 		Grade:     e.Grade,
 		CreatedAt: e.CreatedAt,
+		Feedback:  e.GradeFeedback,
+		GradedAt:  e.GradedAt,
 	})
 }

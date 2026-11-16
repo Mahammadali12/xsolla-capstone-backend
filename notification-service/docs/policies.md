@@ -11,7 +11,7 @@ exists.
   "mentor_slot.booked": {
     "enabled": true,
     "recipients": ["mentor", "student"],
-    "channels": ["email"],
+    "channels": ["in_app", "email"],
     "template": "booking_confirmation"
   }
 }
@@ -21,7 +21,7 @@ exists.
 | --- | --- |
 | `enabled` | When false, matching events are acknowledged and ignored. |
 | `recipients` | Recipient roles to notify: `student`, `mentor`, `lecturer`, `admin`. |
-| `channels` | Delivery channels, e.g. `email`. |
+| `channels` | Delivery channels: `email` sends the message, `in_app` saves it for the LMS (see `in-app.md`). |
 | `template` | Message template name used to render the notification. |
 
 The event type is the JSON key, so it is not repeated inside the entry.

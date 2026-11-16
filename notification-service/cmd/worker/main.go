@@ -89,7 +89,8 @@ func main() {
 		log.Printf("notification worker: email channel sends via %s:%s", cfg.SMTPHost, cfg.SMTPPort)
 		email = sender
 	}
-	channels := map[string]channel.Channel{"email": email}
+	// in_app keeps each notification in the notifications table for the LMS to show.
+	channels := map[string]channel.Channel{"email": email, "in_app": channel.NewInApp(db)}
 	dispatch := notification.NewDispatcher(registry, templates, db, channels)
 	cons := consumer.New(dispatch.Handle)
 	mgr := broker.NewManager(cfg.RabbitMQURL, cons.Session)
