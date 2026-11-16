@@ -169,7 +169,12 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 		return nil, store.ErrNotEnrolled
 	}
 
-	return ci, nil
+	// a student's deadline follows their 1:1
+	items := []store.ContentItem{*ci}
+	if err := s.personalizeDeadlines(ctx, userID, items); err != nil {
+		return nil, err
+	}
+	return &items[0], nil
 }
 
 // GetContentItemsForModule returns the content tree for a module.
@@ -194,9 +199,18 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 		if !teacher {
 			return nil, store.ErrNotEnrolled
 		}
+		return s.store.GetContentItemsForModule(ctx, moduleID, true)
 	}
 
-	return s.store.GetContentItemsForModule(ctx, moduleID, true)
+	items, err := s.store.GetContentItemsForModule(ctx, moduleID, true)
+	if err != nil {
+		return nil, err
+	}
+	// a student's deadlines follow their 1:1
+	if err := s.personalizeDeadlines(ctx, userID, items); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 // UpdateContentItem updates a content item if the user is authorized.

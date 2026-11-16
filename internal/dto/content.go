@@ -42,6 +42,11 @@ type ContentItemResponse struct {
 	DueAt       *time.Time  `json:"due_at,omitempty"`
 	Url         *string     `json:"url,omitempty"`
 	Children    []ContentItemResponse `json:"children,omitempty"`
+
+	// For a student whose deadline follows their 1:1: due_at is their own deadline, task_due_at the one the
+	// lecturer set, and due_from says why ("one_on_one" or "no_one_on_one"). Left out otherwise.
+	TaskDueAt *time.Time `json:"task_due_at,omitempty"`
+	DueFrom   string     `json:"due_from,omitempty"`
 }
 
 // AssignmentResponse is the assignment object returned in responses.
@@ -64,4 +69,8 @@ type ContentTreeNode struct {
 	Url         *string              `json:"url,omitempty"`
 	DueAt       *time.Time           `json:"due_at,omitempty"`
 	Children    []*ContentTreeNode   `json:"children,omitempty"`
+
+	// Same as on ContentItemResponse.
+	TaskDueAt *time.Time `json:"task_due_at,omitempty"`
+	DueFrom   string     `json:"due_from,omitempty"`
 }
