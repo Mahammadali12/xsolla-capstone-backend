@@ -115,6 +115,7 @@ func main() {
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
 	eventH := handlers.NewEventHandlers(eventSvc)
 	lectureFeedbackH := handlers.NewLectureFeedbackHandlers(service.NewLectureFeedbackService(store))
+	reportH := handlers.NewReportHandlers(service.NewReportService(store))
 	notificationH := handlers.NewNotificationHandlers(service.NewNotificationService(notificationStore))
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
@@ -233,6 +234,14 @@ func main() {
 	mux.Handle("POST /lecture-feedback", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Submit)))
 	mux.Handle("GET /lecture-feedback", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.List), "admin"))
 	mux.Handle("GET /lecture-feedback/summary", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.Summary), "admin"))
+
+	// Reports: anyone signed in sends one; only admins read and handle them.
+	mux.Handle("POST /reports", authenticator.Middleware(http.HandlerFunc(reportH.Send)))
+	mux.Handle("GET /reports", authenticator.RequireRole(http.HandlerFunc(reportH.List), "admin"))
+	mux.Handle("GET /reports/summary", authenticator.RequireRole(http.HandlerFunc(reportH.Summary), "admin"))
+	mux.Handle("GET /reports/{id}", authenticator.RequireRole(http.HandlerFunc(reportH.Get), "admin"))
+	mux.Handle("PATCH /reports/{id}", authenticator.RequireRole(http.HandlerFunc(reportH.Update), "admin"))
+	mux.Handle("DELETE /reports/{id}", authenticator.RequireRole(http.HandlerFunc(reportH.Delete), "admin"))
 
 	// In-app notifications: every signed-in user reads and marks only their own.
 	mux.Handle("GET /notifications", authenticator.Middleware(http.HandlerFunc(notificationH.Unread)))
