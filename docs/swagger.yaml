@@ -347,6 +347,11 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.MarkAllNotificationsReadResponse:
+    properties:
+      marked:
+        type: integer
+    type: object
   dto.MentorAnalyticsResponse:
     properties:
       feedback_by_dimension:
@@ -489,6 +494,22 @@ definitions:
       opens_at:
         type: string
       title:
+        type: string
+    type: object
+  dto.NotificationResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      read_at:
+        type: string
+      title:
+        type: string
+      type:
+        description: the event, e.g. enrollment.graded, module.created, mentor_slot.booked
         type: string
     type: object
   dto.PasswordResetRequest:
@@ -2166,6 +2187,100 @@ paths:
       summary: Grade enrollment
       tags:
       - enrollments
+  /notifications:
+    get:
+      description: |-
+        The signed-in user's unread in-app notifications, newest first. They are made by the notification
+        service from the same events, policies and templates as the emails. Read ones are not listed.
+      parameters:
+      - description: How many, 1 to 100 (default 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.NotificationResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: NOTIFY_DATABASE_URL is not set
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My unread notifications
+      tags:
+      - notifications
+  /notifications/{id}/read:
+    post:
+      description: |-
+        Marks one of the signed-in user's notifications read, so it is no longer listed. Marking it again is
+        fine. Someone else's notification answers 404.
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark a notification read
+      tags:
+      - notifications
+  /notifications/read-all:
+    post:
+      description: Marks every unread notification of the signed-in user read.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MarkAllNotificationsReadResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark all notifications read
+      tags:
+      - notifications
   /users/{id}/profile:
     get:
       description: 'As the caller may see it: a "staff_only" profile comes back empty
