@@ -85,6 +85,10 @@ func main() {
 	teamSvc := service.NewTeamService(store, mentorSlotSvc)
 	mentorReviewSvc := service.NewMentorReviewService(store)
 	analyticsSvc := service.NewAnalyticsService(store)
+	summaryProvider := service.NewGeminiSummaryProvider(cfg.GeminiAPIKey, cfg.GeminiModel,
+		time.Duration(cfg.AISummaryTimeoutSeconds)*time.Second)
+	analyticsSummarySvc := service.NewAnalyticsSummaryService(store, summaryProvider,
+		cfg.AISummaryMaxInputChars, cfg.AISummaryMaxOutputChars)
 	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage
@@ -117,6 +121,7 @@ func main() {
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
 	mentorReviewH := handlers.NewMentorReviewHandlers(mentorReviewSvc)
 	analyticsH := handlers.NewAnalyticsHandlers(analyticsSvc)
+	analyticsSummaryH := handlers.NewAnalyticsSummaryHandlers(analyticsSummarySvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
 	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
 	profileH := handlers.NewProfileHandlers(profileSvc, preferencesSvc, cfg.PublicAPIURL)
@@ -192,6 +197,8 @@ func main() {
 	mux.Handle("GET /analytics/students/{studentId}", authenticator.RequireRole(http.HandlerFunc(analyticsH.Student), "admin"))
 	mux.Handle("GET /analytics/mentors", authenticator.RequireRole(http.HandlerFunc(analyticsH.ListMentors), "admin"))
 	mux.Handle("GET /analytics/mentors/{mentorId}", authenticator.RequireRole(http.HandlerFunc(analyticsH.Mentor), "admin"))
+	mux.Handle("POST /analytics/students/{studentId}/ai-summary", authenticator.RequireRole(http.HandlerFunc(analyticsSummaryH.Student), "admin"))
+	mux.Handle("POST /analytics/mentors/{mentorId}/ai-summary", authenticator.RequireRole(http.HandlerFunc(analyticsSummaryH.Mentor), "admin"))
 
 	mux.Handle("POST /modules", authenticator.Middleware(http.HandlerFunc(moduleH.CreateModule)))
 	mux.Handle("GET /modules", authenticator.Middleware(http.HandlerFunc(moduleH.ListModules)))

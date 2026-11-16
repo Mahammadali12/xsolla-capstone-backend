@@ -106,7 +106,12 @@ func NewAnalyticsService(s analyticsStore) *AnalyticsService {
 
 // ResolvePeriod applies the default period and validates the bounds. Dates are school dates.
 func (s *AnalyticsService) ResolvePeriod(from, to *time.Time) (AnalyticsPeriod, error) {
-	toDay := schoolDate(s.now())
+	return resolveAnalyticsPeriod(s.now(), from, to)
+}
+
+// resolveAnalyticsPeriod is shared with the AI summary endpoints so both describe exactly the same window.
+func resolveAnalyticsPeriod(now time.Time, from, to *time.Time) (AnalyticsPeriod, error) {
+	toDay := schoolDate(now)
 	if to != nil {
 		toDay = schoolDate(*to)
 	}
