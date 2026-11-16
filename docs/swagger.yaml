@@ -609,6 +609,52 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.ReportCountsResponse:
+    properties:
+      open:
+        type: integer
+      resolved:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.ReportPerson:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.ReportResponse:
+    properties:
+      admin_note:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      reporter:
+        allOf:
+        - $ref: '#/definitions/dto.ReportPerson'
+        description: null once the reporter's account is deleted
+      resolved_at:
+        type: string
+      resolved_by:
+        $ref: '#/definitions/dto.ReportPerson'
+      status:
+        description: open or resolved
+        type: string
+      subject:
+        type: string
+    type: object
   dto.ReviewPerson:
     properties:
       email:
@@ -632,11 +678,31 @@ definitions:
       submitted_at:
         type: string
     type: object
+  dto.SendReportRequest:
+    properties:
+      message:
+        description: 1 to 5000 characters
+        type: string
+      subject:
+        description: 1 to 200 characters
+        type: string
+    type: object
   dto.SentLectureFeedbackResponse:
     properties:
       event_id:
         type: integer
       submitted_at:
+        type: string
+    type: object
+  dto.SentReportResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      subject:
         type: string
     type: object
   dto.SignupRequest:
@@ -702,6 +768,15 @@ definitions:
       opens_at:
         type: string
       title:
+        type: string
+    type: object
+  dto.UpdateReportRequest:
+    properties:
+      admin_note:
+        description: up to 2000 characters; "" removes the note
+        type: string
+      status:
+        description: open or resolved
         type: string
     type: object
   dto.UserResponse:
@@ -2427,6 +2502,220 @@ paths:
       summary: Mark all notifications read
       tags:
       - notifications
+  /reports:
+    get:
+      description: Every report, newest first, with who sent it (admin only).
+      parameters:
+      - description: open or resolved
+        in: query
+        name: status
+        type: string
+      - description: 'the sender has this role: student, mentor, lecturer or admin'
+        in: query
+        name: role
+        type: string
+      - description: sent by this user
+        in: query
+        name: reporter_id
+        type: integer
+      - description: words in the subject or the message
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.ReportResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List reports
+      tags:
+      - reports
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Report a problem to the admins, e.g. a student's behaviour. Anyone signed in (student, mentor,
+        lecturer, admin) can send one. Only admins can read reports; the sender gets their own report back.
+      parameters:
+      - description: subject (1-200 characters) and message (1-5000)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendReportRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.SentReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: every problem with the form, in details
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send a report
+      tags:
+      - reports
+  /reports/{id}:
+    delete:
+      description: Removes a report for good (admin only).
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a report
+      tags:
+      - reports
+    get:
+      description: One report with who sent it and how it was handled (admin only).
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a report
+      tags:
+      - reports
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Mark a report resolved or open again, and/or write a note on it (admin only). Resolving records who
+        resolved it and when; reopening clears that. An empty admin_note removes the note.
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: status and/or admin_note
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateReportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Handle a report
+      tags:
+      - reports
+  /reports/summary:
+    get:
+      description: How many reports are open and how many resolved, e.g. for a badge
+        (admin only).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReportCountsResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Report counts
+      tags:
+      - reports
   /users/{id}/profile:
     get:
       description: 'As the caller may see it: a "staff_only" profile comes back empty
