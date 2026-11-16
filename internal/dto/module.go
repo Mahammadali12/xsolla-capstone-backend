@@ -46,6 +46,7 @@ type EnrollmentResponse struct {
 	ModuleID  int64     `json:"module_id"`
 	UserID    int64     `json:"user_id"`
 	Grade     *string   `json:"grade,omitempty"`
+	GradedBy  *int64    `json:"graded_by,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 
 	// Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written

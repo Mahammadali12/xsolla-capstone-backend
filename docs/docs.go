@@ -2937,6 +2937,9 @@ const docTemplate = `{
                 "graded_at": {
                     "type": "string"
                 },
+                "graded_by": {
+                    "type": "integer"
+                },
                 "id": {
                     "type": "integer"
                 },
