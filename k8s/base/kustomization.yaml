@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: xsolla
+
+resources:
+  - 00-namespace.yaml
+  - 02-postgres.yaml
+  - 03-rabbitmq.yaml
+  - 04-backends.yaml
+  - 05-frontends.yaml
+  - 06-ingress.yaml
