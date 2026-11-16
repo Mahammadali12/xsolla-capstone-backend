@@ -3,6 +3,7 @@ package channel
 
 import (
 	"context"
+	"time"
 
 	"xsolla-notification-service/internal/events"
 )
@@ -13,6 +14,11 @@ type Message struct {
 	Subject  string
 	Body     string // plain text, always present
 	HTMLBody string // optional HTML alternate; empty means plain text only
+
+	// The event the message was rendered from, for channels that keep it (in_app).
+	Producer   string
+	EventType  string
+	OccurredAt time.Time
 }
 
 // Channel sends one message to one recipient. Implementations must be safe for

@@ -21,6 +21,10 @@ type Config struct {
 	MigrationsDir   string
 	RabbitMQURL     string
 
+	// NotifyDatabaseURL is the notification service's database, which holds the in-app notifications
+	// (optional: without it the /notifications routes answer 503).
+	NotifyDatabaseURL string
+
 	// S3 object storage
 	S3Endpoint     string
 	S3Bucket       string
@@ -67,6 +71,7 @@ func Load() (*Config, error) {
 		CORSOrigin:      getenv("CORS_ORIGIN", defaults["CORS_ORIGIN"]),
 		MigrationsDir:   getenv("MIGRATIONS_DIR", defaults["MIGRATIONS_DIR"]),
 		RabbitMQURL:     getenv("RABBITMQ_URL", defaults["RABBITMQ_URL"]),
+		NotifyDatabaseURL: getenv("NOTIFY_DATABASE_URL", ""),
 
 		// S3 object storage
 		S3Endpoint:     getenv("S3_ENDPOINT", defaults["S3_ENDPOINT"]),
