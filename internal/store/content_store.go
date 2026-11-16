@@ -31,6 +31,11 @@ type ContentItem struct {
 	CreatedBy   *int64
 	CreatedAt   time.Time
 	DueAt       *time.Time
+
+	// Set only for a student whose deadline follows their 1:1: TaskDueAt is the deadline the lecturer set, DueAt is
+	// the student's own and DueFrom says why (service.DueFromOneOnOne or service.DueFromNoOneOnOne).
+	TaskDueAt *time.Time
+	DueFrom   string
 }
 
 // Assignment represents an assignment extension of a content item.

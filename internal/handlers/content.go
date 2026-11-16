@@ -35,6 +35,9 @@ func NewContentHandlers(svc ContentService) *ContentHandlers {
 
 // @Summary     List content items
 // @Description Get the content tree for a module (files, assignments)
+// @Description For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+// @Description (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+// @Description and due_from "one_on_one" or "no_one_on_one".
 // @Tags        content-items
 // @Produce     json
 // @Security    BearerAuth
@@ -157,6 +160,9 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 
 // @Summary     Get content item
 // @Description Get a single content item by ID
+// @Description For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+// @Description (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+// @Description and due_from "one_on_one" or "no_one_on_one".
 // @Tags        content-items
 // @Produce     json
 // @Security    BearerAuth
@@ -200,6 +206,8 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 		ParentID:    ci.ParentID,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
+		TaskDueAt:   ci.TaskDueAt,
+		DueFrom:     ci.DueFrom,
 	})
 }
 
@@ -317,6 +325,8 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			FileID:      ci.FileID,
 			Url:         ci.Url,
 			DueAt:       ci.DueAt,
+			TaskDueAt:   ci.TaskDueAt,
+			DueFrom:     ci.DueFrom,
 		}
 	}
 	return result
