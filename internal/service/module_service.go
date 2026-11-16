@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
@@ -205,11 +207,21 @@ func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int6
 		return nil, ErrNotEnrolled
 	}
 
-	return s.store.GetEnrollmentsForModule(ctx, moduleID)
+	enrollments, err := s.store.GetEnrollmentsForModule(ctx, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	// the mentor's module feedback is for its student only
+	for i := range enrollments {
+		if enrollments[i].UserID != userID {
+			enrollments[i].GradeFeedback = nil
+		}
+	}
+	return enrollments, nil
 }
 
-// UpdateEnrollmentGrade sets a student's grade for a module (mentor/admin only).
-func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64, roles []string, moduleID int64, studentID int64, grade string) (*store.Enrollment, error) {
+// UpdateEnrollmentGrade sets a student's grade for a module with the mentor's module feedback (mentor/admin only).
+func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64, roles []string, moduleID int64, studentID int64, grade string, feedback string) (*store.Enrollment, error) {
 	if auth.HasRole(roles, "admin") {
 		// Admin can grade any enrollment
 	} else if auth.HasRole(roles, "mentor") {
@@ -243,9 +255,26 @@ func (s *ModuleService) UpdateEnrollmentGrade(ctx context.Context, userID int64,
 		return nil, ErrInvalidGrade
 	}
 
+	feedback = strings.TrimSpace(feedback)
+	if feedback == "" {
+		return nil, ErrGradeFeedbackRequired
+	}
+	if utf8.RuneCountInString(feedback) > maxGradeFeedback {
+		return nil, ErrGradeFeedbackTooLong
+	}
+
 	gradePtr := &grade
-	return s.store.UpdateEnrollmentGrade(ctx, moduleID, studentID, gradePtr, userID)
+	return s.store.UpdateEnrollmentGrade(ctx, moduleID, studentID, gradePtr, feedback, userID)
 }
+
+// maxGradeFeedback is the longest module feedback that comes with a week grade, in characters.
+const maxGradeFeedback = 1000
+
+// The module feedback is required with every week grade.
+var (
+	ErrGradeFeedbackRequired = errors.New("feedback is required")
+	ErrGradeFeedbackTooLong  = errors.New("feedback must be at most 1000 characters")
+)
 
 // ErrNotModuleTeacher is re-exported from the store package for handler use.
 var ErrNotModuleTeacher = store.ErrNotModuleTeacher
