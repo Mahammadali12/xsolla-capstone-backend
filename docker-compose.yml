@@ -34,6 +34,8 @@ services:
       CORS_ORIGIN: http://localhost:5173
       # The notification stack's broker is published on the host, not in this compose file.
       RABBITMQ_URL: amqp://lms:lms@host.docker.internal:5672/
+      # The notification stack's database (in-app notifications), also published on the host.
+      NOTIFY_DATABASE_URL: host=host.docker.internal port=5433 user=notify password=notify dbname=notify sslmode=disable
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

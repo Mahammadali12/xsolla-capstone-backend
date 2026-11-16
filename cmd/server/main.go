@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"time"
@@ -48,6 +49,24 @@ func main() {
 	defer database.Close()
 	if err := db.Migrate(database, cfg.MigrationsDir); err != nil {
 		log.Fatalf("migrate: %v", err)
+	}
+
+	// In-app notifications live in the notification service's database. Without NOTIFY_DATABASE_URL the
+	// /notifications routes answer 503; nothing else needs it. The connection is lazy, so a database that
+	// comes up after the API is used as soon as it answers.
+	var notificationStore service.NotificationStore
+	if cfg.NotifyDatabaseURL != "" {
+		notifyDB, err := sql.Open("postgres", cfg.NotifyDatabaseURL)
+		if err != nil {
+			log.Fatalf("notify db: %v", err)
+		}
+		defer notifyDB.Close()
+		if err := notifyDB.Ping(); err != nil {
+			log.Printf("notify db: not reachable yet, /notifications tries again on each request: %v", err)
+		}
+		notificationStore = store.NewNotificationStore(notifyDB)
+	} else {
+		log.Print("notify db: NOTIFY_DATABASE_URL not set, /notifications answers 503")
 	}
 
 	store := store.NewStore(database)
@@ -92,6 +111,7 @@ func main() {
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
 	eventH := handlers.NewEventHandlers(eventSvc)
 	lectureFeedbackH := handlers.NewLectureFeedbackHandlers(service.NewLectureFeedbackService(store))
+	notificationH := handlers.NewNotificationHandlers(service.NewNotificationService(notificationStore))
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
@@ -206,6 +226,11 @@ func main() {
 	mux.Handle("POST /lecture-feedback", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Submit)))
 	mux.Handle("GET /lecture-feedback", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.List), "admin"))
 	mux.Handle("GET /lecture-feedback/summary", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.Summary), "admin"))
+
+	// In-app notifications: every signed-in user reads and marks only their own.
+	mux.Handle("GET /notifications", authenticator.Middleware(http.HandlerFunc(notificationH.Unread)))
+	mux.Handle("POST /notifications/read-all", authenticator.Middleware(http.HandlerFunc(notificationH.MarkAllRead)))
+	mux.Handle("POST /notifications/{id}/read", authenticator.Middleware(http.HandlerFunc(notificationH.MarkRead)))
 	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))
 	mux.Handle("PATCH /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.UpdateEvent)))
 	mux.Handle("DELETE /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.DeleteEvent)))

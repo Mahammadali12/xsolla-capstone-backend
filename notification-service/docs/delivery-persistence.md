@@ -5,7 +5,8 @@ reads the LMS database.
 
 ## Table
 
-`schema.sql` creates one table at startup:
+`schema.sql` creates the delivery table at startup (and the `notifications`
+table of the `in_app` channel, see `in-app.md`):
 
 | Column | Meaning |
 | --- | --- |
@@ -14,7 +15,7 @@ reads the LMS database.
 | `event_id` | The event's outbox id. |
 | `event_type` | Envelope type, kept for diagnosis. |
 | `recipient_id` | LMS user id from `data.recipients[]`. |
-| `channel` | Channel name, currently `email`. |
+| `channel` | Channel name: `email` or `in_app`. |
 | `status` | `pending`, `sent`, or `failed`. |
 | `attempts` | How many times this delivery was attempted. |
 | `last_error` | Most recent failure cause. |

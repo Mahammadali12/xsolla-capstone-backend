@@ -9,6 +9,8 @@ import (
 	"fmt"
 
 	_ "github.com/lib/pq"
+
+	"xsolla-notification-service/internal/channel"
 )
 
 //go:embed schema.sql
@@ -73,6 +75,17 @@ func (s *Store) ClaimDelivery(ctx context.Context, producer string, eventID int6
 func (s *Store) MarkDeliverySent(ctx context.Context, id int64) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE deliveries SET status = 'sent', sent_at = now(), last_error = NULL WHERE id = $1`, id)
+	return err
+}
+
+// SaveNotification keeps one in-app notification. A redelivered event finds its
+// row already there and changes nothing, so a read notification stays read.
+func (s *Store) SaveNotification(ctx context.Context, n channel.InAppNotification) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO notifications (producer, event_id, event_type, recipient_id, title, body, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (producer, event_id, recipient_id) DO NOTHING`,
+		n.Producer, n.EventID, n.EventType, n.RecipientID, n.Title, n.Body, n.CreatedAt)
 	return err
 }
 

@@ -19,7 +19,7 @@ func testStore(t *testing.T) *Store {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	if _, err := s.db.ExecContext(ctx, `TRUNCATE deliveries RESTART IDENTITY`); err != nil {
+	if _, err := s.db.ExecContext(ctx, `TRUNCATE deliveries, notifications RESTART IDENTITY`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return s

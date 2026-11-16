@@ -207,9 +207,12 @@ func (s *Set) Render(name string, event events.Envelope, recipient events.Recipi
 	}
 
 	message := channel.Message{
-		EventID: event.ID,
-		Subject: strings.TrimSpace(subject.String()),
-		Body:    body.String(),
+		EventID:    event.ID,
+		Subject:    strings.TrimSpace(subject.String()),
+		Body:       body.String(),
+		Producer:   event.Producer,
+		EventType:  event.Type,
+		OccurredAt: event.OccurredAt,
 	}
 	if p.html != nil {
 		var fragment bytes.Buffer
