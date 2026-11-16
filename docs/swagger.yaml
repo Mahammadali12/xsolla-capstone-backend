@@ -103,6 +103,8 @@ definitions:
         type: string
       due_at:
         type: string
+      due_from:
+        type: string
       file_id:
         type: integer
       id:
@@ -113,6 +115,11 @@ definitions:
         type: integer
       position:
         type: integer
+      task_due_at:
+        description: |-
+          For a student whose deadline follows their 1:1: due_at is their own deadline, task_due_at the one the
+          lecturer set, and due_from says why ("one_on_one" or "no_one_on_one"). Left out otherwise.
+        type: string
       title:
         type: string
       type:
@@ -130,6 +137,8 @@ definitions:
         type: string
       due_at:
         type: string
+      due_from:
+        type: string
       file_id:
         type: integer
       id:
@@ -138,6 +147,9 @@ definitions:
         type: boolean
       position:
         type: integer
+      task_due_at:
+        description: Same as on ContentItemResponse.
+        type: string
       title:
         type: string
       type:
@@ -1382,7 +1394,11 @@ paths:
       tags:
       - content-items
     get:
-      description: Get a single content item by ID
+      description: |-
+        Get a single content item by ID
+        For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+        (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+        and due_from "one_on_one" or "no_one_on_one".
       parameters:
       - description: Content item ID
         in: path
@@ -2072,7 +2088,11 @@ paths:
       - modules
   /modules/{moduleId}/content-items:
     get:
-      description: Get the content tree for a module (files, assignments)
+      description: |-
+        Get the content tree for a module (files, assignments)
+        For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+        (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+        and due_from "one_on_one" or "no_one_on_one".
       parameters:
       - description: Module ID
         in: path
