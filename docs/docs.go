@@ -23,6 +23,311 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/analytics/mentors": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Active mentors matching q, id/name/email only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Mentor selector (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name or email fragment",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, 1-100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/mentors/{mentorId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Averages are over submitted reviews in the period, per dimension, and null when nobody rated it. Weekly standing uses today's team membership (standing_attribution).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "One mentor's feedback averages and students' standing (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Mentor user id",
+                        "name": "mentorId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date, YYYY-MM-DD (inclusive)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, YYYY-MM-DD (inclusive)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MentorAnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Green/yellow/red counts per module (week). Total counts only students with a recorded grade; weeks without grades have zero counts.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Weekly student standing, school-wide (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date, YYYY-MM-DD (inclusive)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, YYYY-MM-DD (inclusive)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsOverviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/students": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Active students matching q, id/name/email only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Student selector (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name or email fragment",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, 1-100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/students/{studentId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assignment deadlines in the period are classified by the student's first submission; quiz accuracy is sum(score)/sum(total) per module.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "One student's submission status and quiz accuracy (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Student user id",
+                        "name": "studentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date, YYYY-MM-DD (inclusive)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, YYYY-MM-DD (inclusive)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Only this module (week)",
+                        "name": "module_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StudentAnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/google/callback": {
             "get": {
                 "description": "Handle Google OAuth redirect, exchange code for tokens, store encrypted refresh token",
@@ -1866,7 +2171,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Set a student's module grade red/yellow/green (mentor/admin only)",
+                "description": "Set a student's module grade red/yellow/green with the mentor's module feedback (required, 1 to 1000\ncharacters). A new grade replaces the old grade and feedback. Mentor of the student or admin only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1923,6 +2228,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2221,6 +2532,91 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.AnalyticsOverviewResponse": {
+            "type": "object",
+            "properties": {
+                "generated_at": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "weeks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AnalyticsWeekResponse"
+                    }
+                }
+            }
+        },
+        "dto.AnalyticsPeriodResponse": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsPersonResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsWeekResponse": {
+            "type": "object",
+            "properties": {
+                "green_count": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "opens_at": {
+                    "type": "string"
+                },
+                "red_count": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "yellow_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.AssignmentStatusResponse": {
+            "type": "object",
+            "properties": {
+                "eligible_count": {
+                    "type": "integer"
+                },
+                "late_count": {
+                    "type": "integer"
+                },
+                "missing_count": {
+                    "type": "integer"
+                },
+                "on_time_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.AuthResponse": {
             "type": "object",
             "properties": {
@@ -2388,7 +2784,14 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "feedback": {
+                    "description": "Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written\n(both left out for a week graded before they were kept, and Feedback for other students' enrollments).",
+                    "type": "string"
+                },
                 "grade": {
+                    "type": "string"
+                },
+                "graded_at": {
                     "type": "string"
                 },
                 "id": {
@@ -2399,6 +2802,20 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.FeedbackDimensionResponse": {
+            "type": "object",
+            "properties": {
+                "average": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "dimension": {
+                    "type": "string"
                 }
             }
         },
@@ -2462,6 +2879,10 @@ const docTemplate = `{
         "dto.GradeEnrollmentRequest": {
             "type": "object",
             "properties": {
+                "feedback": {
+                    "description": "the mentor's module feedback: required, 1 to 1000 characters",
+                    "type": "string"
+                },
                 "grade": {
                     "type": "string"
                 }
@@ -2631,6 +3052,35 @@ const docTemplate = `{
             "properties": {
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.MentorAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "feedback_by_dimension": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.FeedbackDimensionResponse"
+                    }
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "mentor": {
+                    "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "standing_attribution": {
+                    "type": "string"
+                },
+                "student_standing_by_week": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AnalyticsWeekResponse"
+                    }
                 }
             }
         },
@@ -2883,6 +3333,32 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.QuizAccuracyResponse": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "attempt_count": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "opens_at": {
+                    "type": "string"
+                },
+                "possible_total": {
+                    "type": "integer"
+                },
+                "score_total": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.RefreshRequest": {
             "type": "object",
             "properties": {
@@ -2952,6 +3428,29 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "example": "secret123"
+                }
+            }
+        },
+        "dto.StudentAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "assignment_status": {
+                    "$ref": "#/definitions/dto.AssignmentStatusResponse"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "quiz_accuracy_by_module": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.QuizAccuracyResponse"
+                    }
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.AnalyticsPersonResponse"
                 }
             }
         },
