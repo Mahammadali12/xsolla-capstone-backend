@@ -1,0 +1,26 @@
+info:
+  name: AI summary of a mentor (admin)
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: http://localhost:8080/analytics/mentors/3/ai-summary
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "force_refresh": false
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

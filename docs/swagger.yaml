@@ -27,6 +27,28 @@ definitions:
       name:
         type: string
     type: object
+  dto.AnalyticsSummaryRequest:
+    properties:
+      force_refresh:
+        type: boolean
+      from:
+        type: string
+      to:
+        type: string
+    type: object
+  dto.AnalyticsSummaryResponse:
+    properties:
+      cached:
+        type: boolean
+      generated_at:
+        type: string
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      source_count:
+        type: integer
+      summary:
+        type: string
+    type: object
   dto.AnalyticsWeekResponse:
     properties:
       green_count:
@@ -831,6 +853,57 @@ paths:
       summary: One mentor's feedback averages and students' standing (admin)
       tags:
       - analytics
+  /analytics/mentors/{mentorId}/ai-summary:
+    post:
+      consumes:
+      - application/json
+      description: Summarizes the student-submitted reviews about the mentor in the
+        period, comments and structured answers alike. The reviews are read from the
+        database and never returned.
+      parameters:
+      - description: Mentor user id
+        in: path
+        name: mentorId
+        required: true
+        type: integer
+      - description: Period and refresh flag
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AnalyticsSummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AnalyticsSummaryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: AI summary of a mentor's reviews (admin)
+      tags:
+      - analytics
   /analytics/overview:
     get:
       description: Green/yellow/red counts per module (week). Total counts only students
@@ -946,6 +1019,57 @@ paths:
       security:
       - BearerAuth: []
       summary: One student's submission status and quiz accuracy (admin)
+      tags:
+      - analytics
+  /analytics/students/{studentId}/ai-summary:
+    post:
+      consumes:
+      - application/json
+      description: Summarizes the written feedback the student received in the period.
+        The feedback is read from the database and never returned; the response contains
+        only the generated plain-text summary and its metadata.
+      parameters:
+      - description: Student user id
+        in: path
+        name: studentId
+        required: true
+        type: integer
+      - description: Period and refresh flag
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AnalyticsSummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AnalyticsSummaryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: AI summary of a student's feedback (admin)
       tags:
       - analytics
   /auth/google/callback:

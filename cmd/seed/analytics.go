@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
+
 	"xsolla-capstone-api/internal/auth"
 )
 
@@ -29,6 +31,9 @@ var (
 		"Leyla Hasanova", "Murad Guliyev", "Nigar Ismayilova", "Tural Karimov",
 		"Sam Student", "Aynur Babayeva", "Kamran Rzayev", "Sabina Valiyeva",
 		"Orkhan Mustafayev", "Gunel Ahmadova", "Ali Abbasov", "Banu Hajiyeva",
+		"Rauf Mammadov", "Zahra Huseynova", "Elchin Quliyev", "Lala Rahimova",
+		"Nijat Suleymanov", "Aysu Karimova", "Farid Nabiyev", "Turkan Jafarova",
+		"Ramin Abdullayev", "Sevinj Orujova", "Ilgar Bayramov", "Narmin Safarova",
 	}
 	seedWeekTitles = []string{
 		"Foundations", "Go Basics", "HTTP and APIs", "Databases", "React", "Testing",
@@ -80,7 +85,8 @@ func seedAnalytics(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("clear seeded teams: %w", err)
 	}
 
-	// Three teams of four students, one per mentor.
+	// Three teams of eight students, one per mentor.
+	teamSize := len(students) / len(mentors)
 	teamIDs := make([]int64, len(mentors))
 	for i, mentor := range mentors {
 		if err := db.QueryRowContext(ctx, `INSERT INTO teams (name, mentor_id) VALUES ($1, $2) RETURNING id`,
@@ -90,7 +96,7 @@ func seedAnalytics(ctx context.Context, db *sql.DB) error {
 	}
 	for i, student := range students {
 		if _, err := db.ExecContext(ctx, `INSERT INTO team_members (team_id, student_id) VALUES ($1, $2)`,
-			teamIDs[i/4], student.id); err != nil {
+			teamIDs[i/teamSize], student.id); err != nil {
 			return fmt.Errorf("place student %d: %w", i, err)
 		}
 	}
@@ -112,17 +118,21 @@ func seedAnalytics(ctx context.Context, db *sql.DB) error {
 		}
 	}
 
-	// Enrollments carry the weekly standing. Weeks 6 and 12 are left ungraded, so the charts show two empty weeks.
+	// Enrollments carry the weekly standing and the mentor's week feedback. Weeks 6 and 12 are left ungraded, so
+	// the charts show two empty weeks and the student AI summary has weeks without feedback.
 	grades := []string{"green", "green", "yellow", "green", "red", "green", "yellow"}
 	for si, student := range students {
 		for wi, moduleID := range moduleIDs {
-			var grade any
+			var grade, feedback, gradedAt any
 			if wi != 5 && wi != 11 {
 				grade = grades[(si*3+wi*2)%len(grades)]
+				feedback = weekNote(si, wi)
+				gradedAt = opensAt[wi].AddDate(0, 0, 6)
 			}
 			if _, err := db.ExecContext(ctx,
-				`INSERT INTO enrollments (module_id, user_id, grade) VALUES ($1, $2, $3)`,
-				moduleID, student.id, grade); err != nil {
+				`INSERT INTO enrollments (module_id, user_id, grade, grade_feedback, graded_at)
+				 VALUES ($1, $2, $3, $4, $5)`,
+				moduleID, student.id, grade, feedback, gradedAt); err != nil {
 				return fmt.Errorf("enroll student %d in week %d: %w", si, wi, err)
 			}
 		}
@@ -154,8 +164,10 @@ func seedAnalytics(ctx context.Context, db *sql.DB) error {
 					submittedAt = dueAt.AddDate(0, 0, -1) // on time
 				}
 				if _, err := db.ExecContext(ctx,
-					`INSERT INTO submissions (content_item_id, student_id, text_body, submitted_at) VALUES ($1, $2, 'Seeded work', $3)`,
-					itemID, student.id, submittedAt); err != nil {
+					`INSERT INTO submissions (content_item_id, student_id, text_body, submitted_at, feedback, graded_by, graded_at)
+					 VALUES ($1, $2, 'Seeded work', $3, $4, $5, $6)`,
+					itemID, student.id, submittedAt, submissionNote(si, wi, ai), admin.id,
+					submittedAt.AddDate(0, 0, 2)); err != nil {
 					return fmt.Errorf("submission week %d student %d: %w", wi, si, err)
 				}
 			}
@@ -187,30 +199,41 @@ func seedAnalytics(ctx context.Context, db *sql.DB) error {
 		}
 	}
 
-	// Reviews over the first eleven weeks. Mentor C has only "no session" reviews, so all four dimensions read
-	// "No responses"; the other two have rated sessions with counts that differ by week.
+	// Reviews over the first eleven weeks; the last week is still running, so nobody reviews it yet. Mentor C has
+	// only "no session" reviews with varying reasons, so every dimension reads "No responses" for that team, while
+	// the other two teams have rated sessions, several topics and a comment on most reviews.
 	for si, student := range students {
-		mentor := mentors[si/4]
+		mentor := mentors[si/teamSize]
+		teamID := teamIDs[si/teamSize]
+		noSessionTeam := si >= 2*teamSize
 		for wi, moduleID := range moduleIDs[:11] {
-			if (si+wi)%4 == 3 {
-				continue
+			if (si+wi*3)%10 == 0 {
+				continue // a few students skip a week
 			}
 			submittedAt := opensAt[wi].AddDate(0, 0, 4)
+			overall := 2 + (si+wi)%4
+			comment := reviewComment(si, wi, noSessionTeam)
 			var err error
-			if si >= 8 {
+			if noSessionTeam {
 				_, err = db.ExecContext(ctx,
 					`INSERT INTO mentor_reviews
-					 (module_id, student_id, mentor_id, team_id, had_session, no_session_reason, topics, overall, submitted_at)
-					 VALUES ($1, $2, $3, $4, false, 'not-scheduled', '{}', 3, $5)`,
-					moduleID, student.id, mentor.id, teamIDs[si/4], submittedAt)
+					 (module_id, student_id, mentor_id, team_id, had_session, no_session_reason, overall, comment, submitted_at)
+					 VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8)`,
+					moduleID, student.id, mentor.id, teamID,
+					noSessionReasons[(si+wi)%len(noSessionReasons)], overall, comment, submittedAt)
 			} else {
+				topics := reviewTopics(si, wi)
+				var otherTopic any
+				if topics[0] == "other" {
+					otherTopic = otherTopics[(si+wi)%len(otherTopics)]
+				}
 				_, err = db.ExecContext(ctx,
 					`INSERT INTO mentor_reviews
-					 (module_id, student_id, mentor_id, team_id, had_session, topics,
-					  rating_clarity, rating_engagement, rating_comfort, rating_time, overall, submitted_at)
-					 VALUES ($1, $2, $3, $4, true, '{goals}', $5, $6, $7, $8, 4, $9)`,
-					moduleID, student.id, mentor.id, teamIDs[si/4],
-					3+(si+wi)%3, 3+(si*2+wi)%3, 4-(si+wi)%2, 3+(si*2+wi*2)%3, submittedAt)
+					 (module_id, student_id, mentor_id, team_id, had_session, topics, other_topic,
+					  rating_clarity, rating_engagement, rating_comfort, rating_time, overall, comment, submitted_at)
+					 VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+					moduleID, student.id, mentor.id, teamID, pq.Array(topics), otherTopic,
+					3+(si+wi)%3, 3+(si*2+wi)%3, 4-(si+wi)%2, 3+(si*2+wi*2)%3, overall, comment, submittedAt)
 			}
 			if err != nil {
 				return fmt.Errorf("review week %d student %d: %w", wi, si, err)
@@ -253,4 +276,140 @@ func ensureSeedUser(ctx context.Context, db *sql.DB, email, name, hash string, r
 		}
 	}
 	return id, nil
+}
+
+// ---- prose pools -----------------------------------------------------------------------------------------------
+//
+// The seed composes feedback from fragments instead of repeating a handful of sentences, so the AI summaries have
+// real themes to find. Every pick is deterministic from the student and week, so a re-run produces the same data.
+
+var (
+	weekStrengths = []string{
+		"Strong week: the tasks were finished on time and the code reads well.",
+		"The design notes were clear and the implementation matched them.",
+		"Good debugging this week; the fixes were small and targeted.",
+		"The pull requests were easy to review and well described.",
+		"Solid understanding of the lecture material, and it showed in the exercises.",
+		"The database work was careful, with sensible indexes and queries.",
+		"Steady progress: the API endpoints are consistent and predictable.",
+		"Nice recovery after the shaky start; the final version is clean.",
+	}
+	weekConcerns = []string{
+		"Error handling is still thin: most failures are silently ignored.",
+		"Tests cover the happy path only.",
+		"The commit history is hard to follow because the messages are vague.",
+		"Some functions are long enough that the logic is hard to follow.",
+		"Edge cases are skipped, especially empty input and slow responses.",
+		"The work was rushed at the end, and it shows in the naming.",
+		"Indentation and naming are inconsistent between files.",
+		"The explanation of trade-offs is missing, so the choices look arbitrary.",
+	}
+	weekNextSteps = []string{
+		"Next week, add tests for the failure paths before opening the pull request.",
+		"Next time, split the work into smaller commits and describe each one.",
+		"Try to write error messages for the person who will read them.",
+		"Walk through one edge case on paper before writing the code.",
+		"Ask for a review early instead of at the end of the week.",
+		"Write a short README section explaining the design decisions.",
+	}
+
+	taskStrengths = []string{
+		"The solution works and the structure is easy to follow.",
+		"Nicely scoped: the function does one thing and does it well.",
+		"The naming is clear enough that the code needs almost no comments.",
+		"Good use of the standard library instead of a new dependency.",
+		"The output is correct and the formatting matches the spec.",
+		"There is a clear separation between the handler and the business logic.",
+	}
+	taskFixes = []string{
+		"Add tests for the invalid-input cases.",
+		"The error path returns a generic message; make it specific.",
+		"Extract the repeated block into a helper.",
+		"Guard against a missing record before dereferencing it.",
+		"Explain the trade-off in the README.",
+		"Handle the empty list without panicking.",
+	}
+
+	sessionComments = []string{
+		"The explanations were clear and I left with a concrete plan for the week.",
+		"Good session: we walked through the project and the feedback was specific.",
+		"Very approachable, and the code review pointed at real problems instead of style.",
+		"The mentor answered my questions about the database schema patiently.",
+		"Helpful session on the deployment steps; everything worked afterwards.",
+		"Clear structure and honest feedback about what to improve.",
+		"The mentor made time for an extra meeting before the deadline.",
+		"The advice on splitting work into smaller tasks helped the whole team.",
+		"The session was useful, though it started late and we lost about fifteen minutes.",
+		"Clear advice on the project, but the meeting was too short to cover the tests.",
+		"Good technical feedback; the next steps could have been written down.",
+		"The mentor knows the material well, but the sessions are often scheduled last minute.",
+		"Helpful review of the code, although the comments came after the deadline.",
+		"The explanation was clear, but I would have liked a concrete example.",
+		"The mentor is responsive in chat, but the live sessions feel rushed.",
+		"Useful discussion about the goals, but we did not get to the homework questions.",
+		"The session felt rushed and my questions were answered briefly.",
+		"I asked for help with the database task and did not get a clear answer.",
+		"Two sessions were cancelled without a replacement, which hurt the project.",
+		"The feedback was very general and did not say what to change.",
+		"The mentor mostly repeated the lecture slides.",
+		"It is hard to book time; the answers in chat arrive a day later.",
+		"The code review missed the failing test that blocked our submission.",
+		"The mentor seemed unprepared for the questions about deployment.",
+	}
+	noSessionComments = []string{
+		"No session this week; I did not need one.",
+		"The session was not scheduled, so I worked through the material alone.",
+		"We could not find a time that worked for both of us.",
+		"I had to cancel because of the deadline, and we did not reschedule.",
+	}
+	noSessionReasons = []string{"not-scheduled", "student-unavailable", "mentor-unavailable", "other"}
+	sessionTopicSets = [][]string{
+		{"goals"},
+		{"project"},
+		{"homework", "lecture"},
+		{"career"},
+		{"goals", "project"},
+		{"homework"},
+	}
+	otherTopics = []string{"CV review", "University applications", "Interview practice", "Time planning"}
+)
+
+// weekNote is one week's grade feedback: a strength, a concern and a next step.
+func weekNote(student, week int) string {
+	return weekStrengths[(student*3+week)%len(weekStrengths)] + " " +
+		weekConcerns[(student+week*2)%len(weekConcerns)] + " " +
+		weekNextSteps[(student*5+week)%len(weekNextSteps)]
+}
+
+// submissionNote gives most seeded submissions grader feedback and leaves some without, so the student AI
+// summary has both graded and feedback-less records to work with.
+func submissionNote(student, week, task int) any {
+	if (student+week+task)%4 == 0 {
+		return nil
+	}
+	return taskStrengths[(student*2+week+task)%len(taskStrengths)] + " " +
+		taskFixes[(student+week*3+task*2)%len(taskFixes)]
+}
+
+// reviewTopics picks the topics of a session review. Every ninth review uses the free-text "other" topic.
+func reviewTopics(student, week int) []string {
+	if (student+week)%9 == 0 {
+		return []string{"other"}
+	}
+	return sessionTopicSets[(student*2+week)%len(sessionTopicSets)]
+}
+
+// reviewComment leaves roughly two reviews in five without a comment, which keeps the summaries honest about
+// how many students wrote something.
+func reviewComment(student, week int, noSession bool) any {
+	if noSession {
+		if (student+week)%4 != 1 {
+			return nil
+		}
+		return noSessionComments[(student+week)%len(noSessionComments)]
+	}
+	if (student+week*2)%5 >= 3 {
+		return nil
+	}
+	return sessionComments[(student*7+week*3)%len(sessionComments)]
 }

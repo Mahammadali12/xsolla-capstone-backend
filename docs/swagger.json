@@ -141,6 +141,82 @@
                 }
             }
         },
+        "/analytics/mentors/{mentorId}/ai-summary": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Summarizes the student-submitted reviews about the mentor in the period, comments and structured answers alike. The reviews are read from the database and never returned.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "AI summary of a mentor's reviews (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Mentor user id",
+                        "name": "mentorId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Period and refresh flag",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/analytics/overview": {
             "get": {
                 "security": [
@@ -315,6 +391,82 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/students/{studentId}/ai-summary": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Summarizes the written feedback the student received in the period. The feedback is read from the database and never returned; the response contains only the generated plain-text summary and its metadata.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "AI summary of a student's feedback (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Student user id",
+                        "name": "studentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Period and refresh flag",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2707,6 +2859,40 @@
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsSummaryRequest": {
+            "type": "object",
+            "properties": {
+                "force_refresh": {
+                    "type": "boolean"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "cached": {
+                    "type": "boolean"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "source_count": {
+                    "type": "integer"
+                },
+                "summary": {
                     "type": "string"
                 }
             }
