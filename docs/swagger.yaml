@@ -189,6 +189,15 @@ definitions:
       title:
         type: string
     type: object
+  dto.DeletedUsersResponse:
+    properties:
+      by_role:
+        additionalProperties:
+          type: integer
+        type: object
+      deleted:
+        type: integer
+    type: object
   dto.EnrollRequest:
     properties:
       user_id:
@@ -2716,6 +2725,43 @@ paths:
       summary: Report counts
       tags:
       - reports
+  /users:
+    delete:
+      description: |-
+        Permanently deletes every student, mentor and lecturer at once (admin only). With role, only the
+        non-admins holding that role. Admins and the caller are never deleted. Modules, files and quizzes
+        they created are handed to the caller; their hand-ins, bookings, reviews and other personal data are
+        erased. Nothing happens without confirm=true. Files stay in storage.
+      parameters:
+      - description: 'student, mentor or lecturer (default: all three)'
+        in: query
+        name: role
+        type: string
+      - description: must be true
+        in: query
+        name: confirm
+        required: true
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DeletedUsersResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all non-admin users
+      tags:
+      - users
   /users/{id}/profile:
     get:
       description: 'As the caller may see it: a "staff_only" profile comes back empty

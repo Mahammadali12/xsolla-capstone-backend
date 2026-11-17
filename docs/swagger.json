@@ -2858,6 +2858,58 @@
                 }
             }
         },
+        "/users": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes every student, mentor and lecturer at once (admin only). With role, only the\nnon-admins holding that role. Admins and the caller are never deleted. Modules, files and quizzes\nthey created are handed to the caller; their hand-ins, bookings, reviews and other personal data are\nerased. Nothing happens without confirm=true. Files stay in storage.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Delete all non-admin users",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "student, mentor or lecturer (default: all three)",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "must be true",
+                        "name": "confirm",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DeletedUsersResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "get": {
                 "security": [
@@ -3432,6 +3484,20 @@
                 },
                 "title": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.DeletedUsersResponse": {
+            "type": "object",
+            "properties": {
+                "by_role": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "deleted": {
+                    "type": "integer"
                 }
             }
         },
