@@ -136,8 +136,20 @@ func main() {
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/signup", authH.Signup)
-	mux.HandleFunc("POST /auth/login", authH.Login)
+	// Rate limits on sign-in and sign-up (AUTH_RATE_LIMIT=off turns them off, e.g. for test scripts):
+	//   - sign-in: 20 at once per client address, then one every 3 seconds;
+	//   - wrong passwords: 5 at once per account, then one a minute, from any address;
+	//   - sign-up: 10 at once per client address, then one every 30 seconds.
+	signupHandler, loginHandler := http.Handler(http.HandlerFunc(authH.Signup)), http.Handler(http.HandlerFunc(authH.Login))
+	if cfg.AuthRateLimit {
+		loginHandler = middleware.LimitByIP(middleware.NewLimiter(20, 3*time.Second), cfg.TrustProxyHeaders, "sign-in attempts",
+			middleware.LimitFailedLogins(middleware.NewLimiter(5, time.Minute), loginHandler))
+		signupHandler = middleware.LimitByIP(middleware.NewLimiter(10, 30*time.Second), cfg.TrustProxyHeaders, "sign-ups", signupHandler)
+	} else {
+		log.Print("auth: AUTH_RATE_LIMIT=off, sign-in and sign-up are not rate limited")
+	}
+	mux.Handle("POST /auth/signup", signupHandler)
+	mux.Handle("POST /auth/login", loginHandler)
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
 	mux.Handle("POST /auth/password-reset", authenticator.Middleware(http.HandlerFunc(authH.PasswordReset)))
