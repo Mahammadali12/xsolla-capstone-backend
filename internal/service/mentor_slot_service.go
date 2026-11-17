@@ -132,13 +132,13 @@ func (s *MentorSlotService) attachAttendees(ctx context.Context, slots []MentorS
 }
 
 // CreateAvailability cuts a time window into 30-minute slots for the caller (mentor or admin).
-func (s *MentorSlotService) CreateAvailability(ctx context.Context, userID int64, roles []string, date, start, end string) ([]MentorSlot, error) {
+func (s *MentorSlotService) CreateAvailability(ctx context.Context, userID int64, roles []string, startsAt, endsAt time.Time) ([]MentorSlot, error) {
 	if !auth.HasRole(roles, "mentor") && !auth.HasRole(roles, "admin") {
 		return nil, ErrOnlyMentorCanManageSlots
 	}
 
-	// Parse local date + HH:MM into UTC timestamps.
-	startsAt, endsAt, err := parseWindow(date, start, end)
+	// Validate the timezone-bearing instants supplied by the caller.
+	startsAt, endsAt, err := parseWindow(startsAt, endsAt)
 	if err != nil {
 		return nil, err
 	}
@@ -157,17 +157,13 @@ func (s *MentorSlotService) CreateAvailability(ctx context.Context, userID int64
 	return slots, nil
 }
 
-// parseWindow converts a local date + HH:MM range into UTC time.Time values.
-// The backend stores whatever ISO it receives; timezone interpretation is the caller's concern.
-func parseWindow(date, start, end string) (time.Time, time.Time, error) {
-	layout := "2006-01-02 15:04"
-	startsAt, err := time.Parse(layout, date+" "+start)
-	if err != nil {
-		return time.Time{}, time.Time{}, errors.New("invalid date or start time")
+// parseWindow validates a timezone-bearing availability range.
+func parseWindow(startsAt, endsAt time.Time) (time.Time, time.Time, error) {
+	if startsAt.IsZero() {
+		return time.Time{}, time.Time{}, errors.New("starts_at is required")
 	}
-	endsAt, err := time.Parse(layout, date+" "+end)
-	if err != nil {
-		return time.Time{}, time.Time{}, errors.New("invalid date or end time")
+	if endsAt.IsZero() {
+		return time.Time{}, time.Time{}, errors.New("ends_at is required")
 	}
 	if !endsAt.After(startsAt) {
 		return time.Time{}, time.Time{}, errors.New("end time must be after start time")

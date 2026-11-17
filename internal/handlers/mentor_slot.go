@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"xsolla-capstone-api/internal/dto"
 	"xsolla-capstone-api/internal/middleware"
@@ -16,7 +17,7 @@ import (
 // MentorSlotService is the interface that mentor slot handlers depend on.
 type MentorSlotService interface {
 	ListSlots(ctx context.Context, userID int64, roles []string) ([]service.MentorSlot, error)
-	CreateAvailability(ctx context.Context, userID int64, roles []string, date, start, end string) ([]service.MentorSlot, error)
+	CreateAvailability(ctx context.Context, userID int64, roles []string, startsAt, endsAt time.Time) ([]service.MentorSlot, error)
 	RemoveSlot(ctx context.Context, userID int64, roles []string, id int64) error
 	BookSlot(ctx context.Context, userID int64, roles []string, slotID int64) (*service.MentorSlot, error)
 	CancelBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*service.MentorSlot, error)
@@ -80,7 +81,7 @@ func (h *MentorSlotHandlers) ListSlots(w http.ResponseWriter, r *http.Request) {
 	h.writeSlots(w, r, slots)
 }
 
-// POST /mentor-slots  body: {date, start, end}
+// POST /mentor-slots  body: {starts_at, ends_at} (RFC3339 timestamps with an explicit timezone)
 func (h *MentorSlotHandlers) CreateAvailability(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.CtxUserID(r.Context())
 	roles := middleware.CtxRoles(r.Context())
@@ -90,9 +91,13 @@ func (h *MentorSlotHandlers) CreateAvailability(w http.ResponseWriter, r *http.R
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
+	if req.StartsAt == nil || req.EndsAt == nil {
+		writeError(w, 400, "bad_request", "starts_at and ends_at are required", nil)
+		return
+	}
 
 	// Create the slots.
-	if _, err := h.svc.CreateAvailability(r.Context(), userID, roles, req.Date, req.Start, req.End); err != nil {
+	if _, err := h.svc.CreateAvailability(r.Context(), userID, roles, *req.StartsAt, *req.EndsAt); err != nil {
 		log.Printf("mentor slot handler: CreateAvailability error: %v", err)
 		switch {
 		case errors.Is(err, service.ErrOnlyMentorCanManageSlots):

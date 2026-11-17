@@ -18,7 +18,6 @@ type MentorSlotResponse struct {
 
 // CreateAvailabilityRequest is the payload for POST /mentor-slots.
 type CreateAvailabilityRequest struct {
-	Date  string `json:"date"`
-	Start string `json:"start"`
-	End   string `json:"end"`
+	StartsAt *time.Time `json:"starts_at"`
+	EndsAt   *time.Time `json:"ends_at"`
 }
