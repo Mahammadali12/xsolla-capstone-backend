@@ -2447,6 +2447,97 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications/broadcast": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The admin sends a short message to everyone (students, mentors and lecturers) or to one group. It\nreaches each of them as an in-app notification (GET /notifications, type announcement.created) and\nan email. Admins are not in any audience. With nobody in the audience it is saved with 0 recipients.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Send an announcement",
+                "parameters": [
+                    {
+                        "description": "message, link and audience",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SendBroadcastRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BroadcastResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "every problem, in details",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/broadcasts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every announcement sent, newest first (admin only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "List announcements",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.BroadcastResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/notifications/read-all": {
             "post": {
                 "security": [
@@ -2857,6 +2948,52 @@ const docTemplate = `{
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/teams/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes one team (admin only). Its students and its mentor stay; they are just no longer in a team.\nPast mentor reviews are kept.",
+                "tags": [
+                    "teams"
+                ],
+                "summary": "Delete a team",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Team ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -4435,6 +4572,34 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.BroadcastResponse": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "recipients": {
+                    "description": "how many people it was sent to",
+                    "type": "integer"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "sent_by": {
+                    "description": "the admin's name (\"\" once their account is deleted)",
+                    "type": "string"
+                }
+            }
+        },
         "handlers.ErrorDetail": {
             "type": "object",
             "properties": {
@@ -4463,6 +4628,23 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.SendBroadcastRequest": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "description": "all, students, mentors or lecturers",
+                    "type": "string"
+                },
+                "link": {
+                    "description": "an LMS page such as /calendar, or \"\"",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "1 to 500 characters",
+                    "type": "string"
                 }
             }
         },
