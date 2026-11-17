@@ -207,6 +207,8 @@ definitions:
     properties:
       created_at:
         type: string
+      email:
+        type: string
       feedback:
         description: |-
           Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written
@@ -222,6 +224,14 @@ definitions:
         type: integer
       module_id:
         type: integer
+      name:
+        description: 'Who is enrolled (on GET /modules/{id}/enrollments): an enrolled
+          user with the lecturer role teaches the week.'
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
       user_id:
         type: integer
     type: object
@@ -611,6 +621,25 @@ definitions:
       possible_total:
         type: integer
       score_total:
+        type: integer
+    type: object
+  dto.QuizAttemptResponse:
+    properties:
+      answers:
+        items:
+          type: integer
+        type: array
+      id:
+        type: integer
+      quiz_id:
+        type: integer
+      score:
+        type: integer
+      student_id:
+        type: integer
+      submitted_at:
+        type: string
+      total:
         type: integer
     type: object
   dto.RefreshRequest:
@@ -2847,6 +2876,38 @@ paths:
       summary: Delete a team
       tags:
       - teams
+  /teams/me/quiz-attempts:
+    get:
+      description: |-
+        Every quiz attempt of the students in the caller's team (mentor), or of every student (admin), oldest
+        first. A student who has not taken a quiz has no row. Anyone else gets 403.
+      parameters:
+      - description: only this module's quizzes
+        in: query
+        name: module_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.QuizAttemptResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My team's quiz results
+      tags:
+      - quizzes
   /users:
     delete:
       description: |-

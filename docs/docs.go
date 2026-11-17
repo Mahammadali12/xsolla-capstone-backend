@@ -2955,6 +2955,54 @@ const docTemplate = `{
                 }
             }
         },
+        "/teams/me/quiz-attempts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every quiz attempt of the students in the caller's team (mentor), or of every student (admin), oldest\nfirst. A student who has not taken a quiz has no row. Anyone else gets 403.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quizzes"
+                ],
+                "summary": "My team's quiz results",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "only this module's quizzes",
+                        "name": "module_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.QuizAttemptResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/teams/{id}": {
             "delete": {
                 "security": [
@@ -3658,6 +3706,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "email": {
+                    "type": "string"
+                },
                 "feedback": {
                     "description": "Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written\n(both left out for a week graded before they were kept, and Feedback for other students' enrollments).",
                     "type": "string"
@@ -3676,6 +3727,16 @@ const docTemplate = `{
                 },
                 "module_id": {
                     "type": "integer"
+                },
+                "name": {
+                    "description": "Who is enrolled (on GET /modules/{id}/enrollments): an enrolled user with the lecturer role teaches the week.",
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "user_id": {
                     "type": "integer"
@@ -4264,6 +4325,35 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "score_total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.QuizAttemptResponse": {
+            "type": "object",
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "quiz_id": {
+                    "type": "integer"
+                },
+                "score": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "total": {
                     "type": "integer"
                 }
             }
