@@ -162,13 +162,21 @@ func (s *AnalyticsSummaryService) generate(ctx context.Context, subjectType stri
 
 	flightKey := fmt.Sprintf("%s:%d:%s:%s", subjectType, subjectID, key.PeriodFrom, key.PeriodTo)
 	v, err, _ := s.inflight.Do(flightKey, func() (any, error) {
-		return s.generateAndStore(ctx, key, force, instruction, recordsKey, records, extra, payloadJSON, p)
+		// A summary is slow and paid for: it is written and cached even if the admin's request is cut meanwhile (a proxy
+		// that gives up after a minute, a closed tab), so the next ask finds it in the cache instead of starting over.
+		gctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), summaryGenerationBudget)
+		defer cancel()
+		return s.generateAndStore(gctx, key, force, instruction, recordsKey, records, extra, payloadJSON, p)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return v.(*SummaryResult), nil
 }
+
+// summaryGenerationBudget is the most the whole writing of one summary may take (a long feedback list is written in
+// several calls, each bounded by the provider's own budget).
+const summaryGenerationBudget = 5 * time.Minute
 
 func (s *AnalyticsSummaryService) generateAndStore(ctx context.Context, key store.SummaryCacheKey, force bool,
 	instruction, recordsKey string, records []any, extra map[string]any, payloadJSON []byte, p AnalyticsPeriod,

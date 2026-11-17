@@ -155,3 +155,66 @@ func TestGeminiSummaryProviderFailures(t *testing.T) {
 		}
 	})
 }
+
+// A provider that never answers ends in one error after the budget, not after every model and retry has timed out.
+func TestSummarizeStopsAfterOneBudget(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		select {
+		case <-r.Context().Done():
+		case <-time.After(1 * time.Second):
+		}
+	}))
+	defer srv.Close()
+
+	p := newTestSummaryProvider(srv.URL, 300*time.Millisecond)
+	started := time.Now()
+	_, err := p.Summarize(context.Background(), "instruction", "data")
+	if !errors.Is(err, ErrSummaryProviderUnavailable) {
+		t.Fatalf("err = %v, want ErrSummaryProviderUnavailable", err)
+	}
+	if took := time.Since(started); took > 1500*time.Millisecond {
+		t.Errorf("took %v for a 300ms budget: the models and retries each waited their own timeout", took)
+	}
+	if n := calls.Load(); n > 2 {
+		t.Errorf("%d calls for one budget, want at most 2 (the first model and its retry)", n)
+	}
+}
+
+// The models are different from each other (a deprecated name Google routes to another entry would be asked twice), the
+// summary starts with its own cheaper model, and the quiz model order starts with the configured one.
+func TestGeminiModelOrder(t *testing.T) {
+	seen := map[string]bool{}
+	for _, m := range geminiFallbackModels {
+		if seen[m] {
+			t.Errorf("%s is listed twice", m)
+		}
+		seen[m] = true
+	}
+	for _, old := range []string{"gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"} {
+		if seen[old] {
+			t.Errorf("%s is deprecated or shuts down soon and must not be a fallback", old)
+		}
+	}
+
+	summary := NewGeminiSummaryProvider("key", "", 0).orderedModels()
+	if summary[0] != "gemini-3.5-flash-lite" {
+		t.Errorf("summary starts with %s, want gemini-3.5-flash-lite", summary[0])
+	}
+	if got := NewGeminiSummaryProvider("key", "", 0).budget; got != 30*time.Second {
+		t.Errorf("default budget %v, want 30s", got)
+	}
+	seenSummary := map[string]bool{}
+	for _, m := range summary {
+		if seenSummary[m] {
+			t.Errorf("summary asks %s twice: %v", m, summary)
+		}
+		seenSummary[m] = true
+	}
+
+	quiz := NewGeminiQuizGenerator("key", "").orderedModels()
+	if quiz[0] != "gemini-3.6-flash" {
+		t.Errorf("quiz starts with %s, want gemini-3.6-flash", quiz[0])
+	}
+}

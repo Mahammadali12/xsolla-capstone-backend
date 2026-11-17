@@ -85,7 +85,7 @@ func main() {
 	teamSvc := service.NewTeamService(store, mentorSlotSvc)
 	mentorReviewSvc := service.NewMentorReviewService(store)
 	analyticsSvc := service.NewAnalyticsService(store)
-	summaryProvider := service.NewGeminiSummaryProvider(cfg.GeminiAPIKey, cfg.GeminiModel,
+	summaryProvider := service.NewGeminiSummaryProvider(cfg.GeminiAPIKey, cfg.GeminiSummaryModel,
 		time.Duration(cfg.AISummaryTimeoutSeconds)*time.Second)
 	analyticsSummarySvc := service.NewAnalyticsSummaryService(store, summaryProvider,
 		cfg.AISummaryMaxInputChars, cfg.AISummaryMaxOutputChars)

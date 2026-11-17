@@ -23,13 +23,18 @@ import (
 
 const defaultGeminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 
+// geminiFallbackModels are tried in this order after the configured model fails. Every entry is a different model: Google
+// routes gemini-3.7-flash to 3.8 and gemini-3.5-flash to 3.6, so listing them would ask the same model twice and wait a
+// second timeout for nothing; gemini-3.1-flash-lite is listed to shut down on 2027-05-07.
 var geminiFallbackModels = []string{
 	"gemini-3.6-flash",
 	"gemini-3.8-flash",
-	"gemini-3.7-flash",
-	"gemini-3.5-flash",
-	"gemini-3.1-flash-lite",
+	"gemini-3.5-flash-lite",
 }
+
+// geminiSummaryDefaultModel writes the AI summaries: short rule-based prose over small inputs, so the cheaper and faster
+// Flash-Lite is enough. Quizzes use GEMINI_MODEL (Flash): a wrong "correct" answer costs more than the price difference.
+const geminiSummaryDefaultModel = "gemini-3.5-flash-lite"
 
 type QuizSource struct {
 	Title       string

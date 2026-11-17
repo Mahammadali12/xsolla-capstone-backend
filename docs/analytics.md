@@ -149,11 +149,17 @@ The two system instructions are versioned: `student-feedback-v1` and `mentor-rev
 invalidates every cached summary of that type. Feedback is passed as delimited untrusted data, and the instruction
 tells the model to ignore directions inside it.
 
-The provider is Gemini, via the same `GEMINI_API_KEY` and `GEMINI_MODEL` as quiz generation. Optional settings:
+The provider is Gemini, with the same `GEMINI_API_KEY` as quiz generation but its own model: summaries are short,
+rule-based prose, so they use the cheaper, faster Flash-Lite (`GEMINI_SUMMARY_MODEL`), while quizzes use `GEMINI_MODEL`
+(Flash, `gemini-3.6-flash`). After a failure the other models are tried in turn (`gemini-3.6-flash`, `gemini-3.8-flash`,
+`gemini-3.5-flash-lite`). Each is a different model: `gemini-3.7-flash` and `gemini-3.5-flash` are deprecated and Google routes
+them to 3.8 and 3.6, and `gemini-3.1-flash-lite` is listed to shut down on 2027-05-07, so none of them is used.
+Check the names against the deprecations page of the Gemini API before changing them. Optional settings:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AI_SUMMARY_TIMEOUT_SECONDS` | `60` | One provider request's timeout. |
+| `GEMINI_SUMMARY_MODEL` | `gemini-3.5-flash-lite` | The model that writes summaries first. |
+| `AI_SUMMARY_TIMEOUT_SECONDS` | `30` | The most one provider call may take, all models and retries together. A dead AI answers `503` after this long. |
 | `AI_SUMMARY_MAX_INPUT_CHARS` | `60000` | Input budget; larger sets are summarized in chronological chunks and combined. |
 | `AI_SUMMARY_MAX_OUTPUT_CHARS` | `4000` | Longest accepted summary; longer answers are rejected. |
 

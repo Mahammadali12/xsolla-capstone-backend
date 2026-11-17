@@ -45,21 +45,26 @@ type GeminiSummaryProvider struct {
 	model      string
 	baseURL    string
 	httpClient *http.Client
+	// budget is the most one Summarize call may take in all: every model and retry shares it, so a provider that cannot be
+	// reached ends in an error after this long, not after (models x retries x timeout) minutes.
+	budget time.Duration
 }
 
-// NewGeminiSummaryProvider creates the provider. A non-positive timeout falls back to 60 seconds.
+// NewGeminiSummaryProvider creates the provider. An empty model means geminiSummaryDefaultModel; a non-positive timeout
+// falls back to 30 seconds (the most one summary call may take, all models and retries together).
 func NewGeminiSummaryProvider(apiKey, model string, timeout time.Duration) *GeminiSummaryProvider {
 	if strings.TrimSpace(model) == "" {
-		model = geminiFallbackModels[0]
+		model = geminiSummaryDefaultModel
 	}
 	if timeout <= 0 {
-		timeout = 60 * time.Second
+		timeout = 30 * time.Second
 	}
 	return &GeminiSummaryProvider{
 		apiKey:     strings.TrimSpace(apiKey),
 		model:      strings.TrimSpace(model),
 		baseURL:    defaultGeminiBaseURL,
 		httpClient: &http.Client{Timeout: timeout},
+		budget:     timeout,
 	}
 }
 
@@ -84,8 +89,17 @@ func (g *GeminiSummaryProvider) Summarize(ctx context.Context, systemInstruction
 		return SummaryOutput{}, fmt.Errorf("%w: %v", ErrSummaryProviderInvalid, err)
 	}
 
+	if g.budget > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, g.budget)
+		defer cancel()
+	}
+
 	var lastErr error
 	for _, model := range g.orderedModels() {
+		if ctx.Err() != nil {
+			break // the budget is spent: stop trying other models
+		}
 		for attempt := 0; attempt < 2; attempt++ {
 			text, statusCode, retryable, callErr := g.call(ctx, model, body)
 			if callErr == nil {
@@ -99,6 +113,9 @@ func (g *GeminiSummaryProvider) Summarize(ctx context.Context, systemInstruction
 				break
 			}
 		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("%w: timed out", ErrSummaryProviderUnavailable)
 	}
 	return SummaryOutput{}, lastErr
 }

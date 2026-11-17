@@ -41,6 +41,8 @@ type Config struct {
 
 	GeminiAPIKey string
 	GeminiModel  string
+	// GeminiSummaryModel writes the AI summaries (GeminiModel writes the quizzes).
+	GeminiSummaryModel string
 
 	// AI feedback summaries (the API key and model above are shared with quiz generation).
 	AISummaryTimeoutSeconds int
@@ -67,7 +69,8 @@ var defaults = map[string]string{
 	"S3_SECRET_KEY":               "",
 	"GEMINI_API_KEY":              "",
 	"GEMINI_MODEL":                "gemini-3.6-flash",
-	"AI_SUMMARY_TIMEOUT_SECONDS":  "60",
+	"GEMINI_SUMMARY_MODEL":        "gemini-3.5-flash-lite",
+	"AI_SUMMARY_TIMEOUT_SECONDS":  "30",
 	"AI_SUMMARY_MAX_INPUT_CHARS":  "60000",
 	"AI_SUMMARY_MAX_OUTPUT_CHARS": "4000",
 	"PUBLIC_API_URL":              "",
@@ -99,7 +102,8 @@ func Load() (*Config, error) {
 
 		GeminiAPIKey:            getenv("GEMINI_API_KEY", defaults["GEMINI_API_KEY"]),
 		GeminiModel:             getenv("GEMINI_MODEL", defaults["GEMINI_MODEL"]),
-		AISummaryTimeoutSeconds: getenvInt("AI_SUMMARY_TIMEOUT_SECONDS", 60),
+		GeminiSummaryModel:      getenv("GEMINI_SUMMARY_MODEL", defaults["GEMINI_SUMMARY_MODEL"]),
+		AISummaryTimeoutSeconds: getenvInt("AI_SUMMARY_TIMEOUT_SECONDS", 30),
 		AISummaryMaxInputChars:  getenvInt("AI_SUMMARY_MAX_INPUT_CHARS", 60000),
 		AISummaryMaxOutputChars: getenvInt("AI_SUMMARY_MAX_OUTPUT_CHARS", 4000),
 		PublicAPIURL:            getenv("PUBLIC_API_URL", defaults["PUBLIC_API_URL"]),
