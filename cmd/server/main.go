@@ -165,6 +165,8 @@ func main() {
 	mux.Handle("PATCH /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.UpdateUser), "admin"))
 	mux.Handle("PUT /users/{id}/password", authenticator.RequireRole(http.HandlerFunc(userH.UpdatePassword), "admin"))
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
+	// every non-admin user at once (optionally one role), with ?confirm=true
+	mux.Handle("DELETE /users", authenticator.RequireRole(http.HandlerFunc(userH.DeleteAllUsers), "admin"))
 	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
 
 	// Profile page: about me, picture, look and accessibility settings (every signed-in user)

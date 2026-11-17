@@ -23,6 +23,7 @@ type UserService interface {
 	UpdateUser(ctx context.Context, id int64, name, email *string, active *bool) (*store.User, error)
 	UpdatePassword(ctx context.Context, id int64, password string) error
 	DeleteUser(ctx context.Context, id, actorID int64) error
+	DeleteAllUsers(ctx context.Context, actorID int64, role string, confirm bool) (*service.DeletedUsers, error)
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
 }
 
@@ -237,6 +238,39 @@ func (h *UserHandlers) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+// @Summary     Delete all non-admin users
+// @Description Permanently deletes every student, mentor and lecturer at once (admin only). With role, only the
+// @Description non-admins holding that role. Admins and the caller are never deleted. Modules, files and quizzes
+// @Description they created are handed to the caller; their hand-ins, bookings, reviews and other personal data are
+// @Description erased. Nothing happens without confirm=true. Files stay in storage.
+// @Tags        users
+// @Produce     json
+// @Security    BearerAuth
+// @Param       role    query string false "student, mentor or lecturer (default: all three)"
+// @Param       confirm query bool   true  "must be true"
+// @Success     200 {object} dto.DeletedUsersResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     422 {object} handlers.ErrorResponse
+// @Router      /users [delete]
+func (h *UserHandlers) DeleteAllUsers(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	confirm, _ := strconv.ParseBool(q.Get("confirm"))
+	res, err := h.svc.DeleteAllUsers(r.Context(), middleware.CtxUserID(r.Context()), q.Get("role"), confirm)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrDeleteUsersNotConfirmed):
+			writeError(w, 422, "validation_failed", err.Error(), []ErrorDetail{{Field: "confirm", Message: err.Error()}})
+		case errors.Is(err, service.ErrDeleteUsersRole):
+			writeError(w, 422, "validation_failed", err.Error(), []ErrorDetail{{Field: "role", Message: err.Error()}})
+		default:
+			log.Printf("user handler: DeleteAllUsers error: %v", err)
+			writeError(w, 500, "server_error", "could not delete the users", nil)
+		}
+		return
+	}
+	writeJSON(w, 200, dto.DeletedUsersResponse{Deleted: res.Deleted, ByRole: res.ByRole})
 }
 
 // PUT /users/:id/roles

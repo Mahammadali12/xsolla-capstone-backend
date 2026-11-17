@@ -21,6 +21,7 @@ type Store interface {
 	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)
 	SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error)
 	HardDeleteUser(ctx context.Context, id int64, transferTo int64) error
+	DeleteNonAdminUsers(ctx context.Context, roles []string, keep, transferTo int64) (int, map[string]int, error)
 	CountAdmins(ctx context.Context) (int, error)
 	DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, error)
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
