@@ -206,6 +206,7 @@ func main() {
 
 	// Team read side (student/mentor)
 	mux.Handle("GET /teams/me", authenticator.Middleware(http.HandlerFunc(teamH.GetMyTeam)))
+	mux.Handle("GET /teams/me/quiz-attempts", authenticator.Middleware(http.HandlerFunc(quizH.TeamQuizAttempts)))
 	mux.Handle("GET /mentors/me/team", authenticator.Middleware(http.HandlerFunc(teamH.GetMentorTeam)))
 
 	// Admin-only analytics (read-only reporting layer)

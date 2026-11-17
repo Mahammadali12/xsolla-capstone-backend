@@ -223,14 +223,10 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 		return nil, err
 	}
 
-	if !auth.HasRole(roles, "admin") {
-		teacher, err := s.store.IsUserTeacherOfModule(ctx, ci.ModuleID, userID)
-		if err != nil {
-			return nil, err
-		}
-		if !teacher && (ci.CreatedBy == nil || *ci.CreatedBy != userID) {
-			return nil, store.ErrNotModuleTeacher
-		}
+	// only the week's current teachers (and admins): a lecturer taken off the week loses its content, even what they
+	// wrote themselves
+	if err := s.canWriteModule(ctx, userID, roles, ci.ModuleID); err != nil {
+		return nil, err
 	}
 	if parentID != nil {
 		return nil, invalidContent("parent_id is not supported; sections have been removed")

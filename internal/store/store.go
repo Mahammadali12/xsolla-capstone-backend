@@ -146,6 +146,7 @@ type Store interface {
 	UpsertQuizAttempt(ctx context.Context, quizID, studentID int64, answers []int, score, total int) (*QuizAttempt, error)
 	GetQuizAttempt(ctx context.Context, quizID, studentID int64) (*QuizAttempt, error)
 	ListQuizAttemptsForStudent(ctx context.Context, studentID int64, quizIDs []int64) (map[int64]QuizAttempt, error)
+	ListTeamQuizAttempts(ctx context.Context, mentorID, moduleID int64, everyone bool) ([]QuizAttempt, error)
 }
 
 // Store wraps the database connection and provides access to queries.
