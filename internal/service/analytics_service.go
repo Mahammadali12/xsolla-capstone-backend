@@ -90,6 +90,7 @@ type analyticsStore interface {
 	MentorFeedback(ctx context.Context, mentorID int64, from, to time.Time) (store.MentorFeedback, error)
 	SearchAnalyticsPeople(ctx context.Context, role, q string, limit, offset int) ([]store.AnalyticsPerson, error)
 	GetAnalyticsPerson(ctx context.Context, id int64, role string) (*store.AnalyticsPerson, error)
+	ListStudentWeekGrades(ctx context.Context, studentIDs []int64) (map[int64][]string, error)
 	GetModuleByID(ctx context.Context, id int64) (*store.Module, error)
 }
 
@@ -212,9 +213,27 @@ func (s *AnalyticsService) Mentor(ctx context.Context, mentorID int64, from, to 
 	}, nil
 }
 
-// SearchStudents returns active students matching q.
+// SearchStudents returns active students matching q, each with the average of their week grades.
 func (s *AnalyticsService) SearchStudents(ctx context.Context, q string, limit, offset int) ([]store.AnalyticsPerson, error) {
-	return s.store.SearchAnalyticsPeople(ctx, "student", strings.TrimSpace(q), limit, offset)
+	people, err := s.store.SearchAnalyticsPeople(ctx, "student", strings.TrimSpace(q), limit, offset)
+	if err != nil || len(people) == 0 {
+		return people, err
+	}
+	ids := make([]int64, len(people))
+	for i, p := range people {
+		ids[i] = p.ID
+	}
+	grades, err := s.store.ListStudentWeekGrades(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range people {
+		if avg := AverageGrade(grades[people[i].ID]); avg != nil {
+			value := avg.Average
+			people[i].GradeAverage, people[i].GradeLevel, people[i].GradedWeeks = &value, avg.Level, avg.GradedWeeks
+		}
+	}
+	return people, nil
 }
 
 // SearchMentors returns active mentors matching q.

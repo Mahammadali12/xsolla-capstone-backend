@@ -62,7 +62,9 @@ func (h *AnalyticsHandlers) Overview(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary     Student selector (admin)
-// @Description Active students matching q, id/name/email only.
+// @Description Active students matching q: id, name, email and, once a week is graded, the average of their week
+// @Description grades (grade_average, red 1 / yellow 2 / green 3), the level it rounds to (grade_level, .5 up) and
+// @Description graded_weeks.
 // @Tags        analytics
 // @Produce     json
 // @Security    BearerAuth
@@ -106,7 +108,8 @@ func (h *AnalyticsHandlers) listPeople(w http.ResponseWriter, r *http.Request,
 	}
 	resp := make([]dto.AnalyticsPersonResponse, len(people))
 	for i, p := range people {
-		resp[i] = dto.AnalyticsPersonResponse{ID: p.ID, Name: p.Name, Email: p.Email}
+		resp[i] = dto.AnalyticsPersonResponse{ID: p.ID, Name: p.Name, Email: p.Email,
+			GradeAverage: p.GradeAverage, GradeLevel: p.GradeLevel, GradedWeeks: p.GradedWeeks}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
