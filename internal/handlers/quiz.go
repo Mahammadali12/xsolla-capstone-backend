@@ -21,6 +21,7 @@ type QuizService interface {
 	UpdateQuiz(ctx context.Context, userID int64, roles []string, quizID int64, req dto.UpdateQuizRequest) (*dto.QuizResponse, error)
 	DeleteQuiz(ctx context.Context, userID int64, roles []string, quizID int64) error
 	SubmitAttempt(ctx context.Context, userID int64, roles []string, quizID int64, req dto.SubmitQuizAttemptRequest) (*dto.QuizResponse, error)
+	TeamQuizAttempts(ctx context.Context, userID int64, roles []string, moduleID int64) ([]dto.QuizAttemptResponse, error)
 }
 
 type QuizHandlers struct {
@@ -178,6 +179,35 @@ func (h *QuizHandlers) SubmitAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, quiz)
+}
+
+// @Summary     My team's quiz results
+// @Description Every quiz attempt of the students in the caller's team (mentor), or of every student (admin), oldest
+// @Description first. A student who has not taken a quiz has no row. Anyone else gets 403.
+// @Tags        quizzes
+// @Produce     json
+// @Security    BearerAuth
+// @Param       module_id query int false "only this module's quizzes"
+// @Success     200 {array} dto.QuizAttemptResponse
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Router      /teams/me/quiz-attempts [get]
+func (h *QuizHandlers) TeamQuizAttempts(w http.ResponseWriter, r *http.Request) {
+	var moduleID int64
+	if raw := r.URL.Query().Get("module_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id < 1 {
+			writeError(w, 400, "bad_request", "module_id must be a module ID", nil)
+			return
+		}
+		moduleID = id
+	}
+	attempts, err := h.svc.TeamQuizAttempts(r.Context(), middleware.CtxUserID(r.Context()), middleware.CtxRoles(r.Context()), moduleID)
+	if err != nil {
+		handleQuizError(w, err)
+		return
+	}
+	writeJSON(w, 200, attempts)
 }
 
 func handleQuizError(w http.ResponseWriter, err error) {

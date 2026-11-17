@@ -43,6 +43,7 @@ type Enrollment struct {
 	Email     string
 	Name      string
 	Role      string
+	Roles     []string // the user's current roles (GetEnrollmentsForModule)
 
 	// GradeFeedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last
 	// written (both nil for a week graded before they were kept).
@@ -263,7 +264,7 @@ func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64)
 	var enrollments []Enrollment
 	for rows.Next() {
 		var e Enrollment
-		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.GradedBy, &e.Email, &e.Name); err != nil {
+		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.GradedBy, &e.Email, &e.Name, pq.Array(&e.Roles)); err != nil {
 			return nil, err
 		}
 		enrollments = append(enrollments, e)

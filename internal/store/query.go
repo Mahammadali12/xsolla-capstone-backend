@@ -347,7 +347,9 @@ func (q *Query) DeleteEnrollment(ctx context.Context, moduleID int64, userID int
 
 func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, e.grade_feedback, e.graded_at, e.graded_by, u.email, u.name
+		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, e.grade_feedback, e.graded_at, e.graded_by, u.email, u.name,
+		        ARRAY(SELECT ur.role FROM user_roles ur WHERE ur.user_id = e.user_id
+		              AND (ur.expires_at IS NULL OR ur.expires_at > NOW()) ORDER BY ur.role)
 		 FROM enrollments e
 		 JOIN users u ON u.id = e.user_id
 		 WHERE e.module_id = $1`,
