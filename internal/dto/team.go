@@ -62,4 +62,6 @@ type UserBrief struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+	// AvatarURL is the profile picture as the caller may see it; null when none or hidden.
+	AvatarURL *string `json:"avatar_url"`
 }

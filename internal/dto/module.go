@@ -46,10 +46,17 @@ type EnrollmentResponse struct {
 	ModuleID  int64     `json:"module_id"`
 	UserID    int64     `json:"user_id"`
 	Grade     *string   `json:"grade,omitempty"`
+	GradedBy  *int64    `json:"graded_by,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+
+	// Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written
+	// (both left out for a week graded before they were kept, and Feedback for other students' enrollments).
+	Feedback *string    `json:"feedback,omitempty"`
+	GradedAt *time.Time `json:"graded_at,omitempty"`
 }
 
 // GradeEnrollmentRequest is the payload for PATCH /modules/:moduleId/enrollments/:userId/grade.
 type GradeEnrollmentRequest struct {
-	Grade string `json:"grade"`
+	Grade    string `json:"grade"`
+	Feedback string `json:"feedback"` // the mentor's module feedback: required, 1 to 1000 characters
 }

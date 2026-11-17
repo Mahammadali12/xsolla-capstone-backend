@@ -1,0 +1,32 @@
+info:
+  name: Review module 1, with a session (student)
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:8080/mentor-reviews
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "module_id": 1,
+        "had_session": true,
+        "topics": ["goals", "other"],
+        "other_topic": "CV review",
+        "ratings": { "clarity": 5, "engagement": 4, "comfort": 5, "time": 3 },
+        "overall": 4,
+        "comment": "More code reviews please"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

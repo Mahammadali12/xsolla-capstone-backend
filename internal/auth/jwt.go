@@ -5,8 +5,10 @@ package auth
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,8 @@ type Claims struct {
 	UserID int64    `json:"sub"`
 	Roles  []string `json:"roles"`
 	Exp    int64    `json:"exp"`
+	// ID makes every refresh token unique (two refreshes in the same second would otherwise match).
+	ID string `json:"jti,omitempty"`
 }
 
 // accessSecret and refreshSecret are set from environment at startup.
@@ -60,7 +64,13 @@ func AccessToken(userID int64, roles []string, secret []byte, ttl time.Duration)
 
 // RefreshToken signs a long-lived refresh token (7 days default).
 func RefreshToken(userID int64, secret []byte, ttl time.Duration) (string, error) {
-	return AccessToken(userID, nil, secret, ttl) // roles unused for refresh
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return "", err
+	}
+	header, _ := json.Marshal(map[string]any{"alg": "HS256", "typ": "JWT"})
+	payload, _ := json.Marshal(Claims{UserID: userID, Exp: time.Now().Add(ttl).Unix(), ID: hex.EncodeToString(id)}) // roles unused for refresh
+	return sign(secret, header, payload)
 }
 
 // Verify parses and verifies a token, returning its claims.

@@ -3,15 +3,15 @@ services:
     image: postgres:16-alpine
     container_name: lms-db
     environment:
-      POSTGRES_USER: lms
-      POSTGRES_PASSWORD: lms
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: lms
     ports:
       - "5432:5432"
     volumes:
       - lms_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lms -d lms"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lms"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,11 +29,13 @@ services:
     env_file: .env
     environment:
       # the container reaches Postgres by service name, not by 127.0.0.1
-      DATABASE_URL: host=db port=5432 user=lms password=lms dbname=lms sslmode=disable
+      DATABASE_URL: host=db port=5432 user=postgres password=postgres dbname=lms sslmode=disable
       PORT: ":8080"
       CORS_ORIGIN: http://localhost:5173
       # The notification stack's broker is published on the host, not in this compose file.
       RABBITMQ_URL: amqp://lms:lms@host.docker.internal:5672/
+      NOTIFY_DATABASE_URL: host=host.docker.internal port=5433 user=notify password=notify dbname=notify sslmode=disable
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

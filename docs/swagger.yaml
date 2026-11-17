@@ -1,5 +1,82 @@
 basePath: /
 definitions:
+  dto.AnalyticsOverviewResponse:
+    properties:
+      generated_at:
+        type: string
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      weeks:
+        items:
+          $ref: '#/definitions/dto.AnalyticsWeekResponse'
+        type: array
+    type: object
+  dto.AnalyticsPeriodResponse:
+    properties:
+      from:
+        type: string
+      to:
+        type: string
+    type: object
+  dto.AnalyticsPersonResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.AnalyticsSummaryRequest:
+    properties:
+      force_refresh:
+        type: boolean
+      from:
+        type: string
+      to:
+        type: string
+    type: object
+  dto.AnalyticsSummaryResponse:
+    properties:
+      cached:
+        type: boolean
+      generated_at:
+        type: string
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      source_count:
+        type: integer
+      summary:
+        type: string
+    type: object
+  dto.AnalyticsWeekResponse:
+    properties:
+      green_count:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      opens_at:
+        type: string
+      red_count:
+        type: integer
+      total_count:
+        type: integer
+      yellow_count:
+        type: integer
+    type: object
+  dto.AssignmentStatusResponse:
+    properties:
+      eligible_count:
+        type: integer
+      late_count:
+        type: integer
+      missing_count:
+        type: integer
+      on_time_count:
+        type: integer
+    type: object
   dto.AuthResponse:
     properties:
       access_token:
@@ -8,6 +85,11 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.AvatarResponse:
+    properties:
+      avatar_url:
+        type: string
     type: object
   dto.ContentItemResponse:
     properties:
@@ -21,6 +103,8 @@ definitions:
         type: string
       due_at:
         type: string
+      due_from:
+        type: string
       file_id:
         type: integer
       id:
@@ -31,6 +115,11 @@ definitions:
         type: integer
       position:
         type: integer
+      task_due_at:
+        description: |-
+          For a student whose deadline follows their 1:1: due_at is their own deadline, task_due_at the one the
+          lecturer set, and due_from says why ("one_on_one" or "no_one_on_one"). Left out otherwise.
+        type: string
       title:
         type: string
       type:
@@ -48,6 +137,8 @@ definitions:
         type: string
       due_at:
         type: string
+      due_from:
+        type: string
       file_id:
         type: integer
       id:
@@ -56,6 +147,9 @@ definitions:
         type: boolean
       position:
         type: integer
+      task_due_at:
+        description: Same as on ContentItemResponse.
+        type: string
       title:
         type: string
       type:
@@ -104,14 +198,32 @@ definitions:
     properties:
       created_at:
         type: string
+      feedback:
+        description: |-
+          Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written
+          (both left out for a week graded before they were kept, and Feedback for other students' enrollments).
+        type: string
       grade:
         type: string
+      graded_at:
+        type: string
+      graded_by:
+        type: integer
       id:
         type: integer
       module_id:
         type: integer
       user_id:
         type: integer
+    type: object
+  dto.FeedbackDimensionResponse:
+    properties:
+      average:
+        type: number
+      count:
+        type: integer
+      dimension:
+        type: string
     type: object
   dto.FileResponse:
     properties:
@@ -155,7 +267,106 @@ definitions:
     type: object
   dto.GradeEnrollmentRequest:
     properties:
+      feedback:
+        description: 'the mentor''s module feedback: required, 1 to 1000 characters'
+        type: string
       grade:
+        type: string
+    type: object
+  dto.LectureFeedbackPersonResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.LectureFeedbackRequest:
+    properties:
+      clarity:
+        type: integer
+      confidence:
+        type: integer
+      event_id:
+        type: integer
+      improve:
+        type: string
+      liked:
+        type: string
+      overall:
+        type: integer
+      pace:
+        type: string
+      practice:
+        type: integer
+    type: object
+  dto.LectureFeedbackResponse:
+    properties:
+      clarity:
+        type: integer
+      confidence:
+        type: integer
+      id:
+        type: integer
+      improve:
+        type: string
+      lecture:
+        $ref: '#/definitions/dto.LectureRef'
+      lecturers:
+        items:
+          $ref: '#/definitions/dto.LectureFeedbackPersonResponse'
+        type: array
+      liked:
+        type: string
+      overall:
+        type: integer
+      pace:
+        type: string
+      practice:
+        type: integer
+      student:
+        $ref: '#/definitions/dto.LectureFeedbackPersonResponse'
+      submitted_at:
+        type: string
+    type: object
+  dto.LectureFeedbackSummaryResponse:
+    properties:
+      averages:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      expected:
+        type: integer
+      lecture:
+        $ref: '#/definitions/dto.LectureRef'
+      lecturers:
+        items:
+          $ref: '#/definitions/dto.LectureFeedbackPersonResponse'
+        type: array
+      pace:
+        additionalProperties:
+          type: integer
+        type: object
+      responses:
+        type: integer
+      with_comments:
+        type: integer
+    type: object
+  dto.LectureRef:
+    properties:
+      ends_at:
+        type: string
+      event_id:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      starts_at:
+        type: string
+      title:
         type: string
     type: object
   dto.LoginRequest:
@@ -171,6 +382,136 @@ definitions:
     properties:
       refresh_token:
         type: string
+    type: object
+  dto.MarkAllNotificationsReadResponse:
+    properties:
+      marked:
+        type: integer
+    type: object
+  dto.MentorAnalyticsResponse:
+    properties:
+      feedback_by_dimension:
+        items:
+          $ref: '#/definitions/dto.FeedbackDimensionResponse'
+        type: array
+      generated_at:
+        type: string
+      mentor:
+        $ref: '#/definitions/dto.AnalyticsPersonResponse'
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      standing_attribution:
+        type: string
+      student_standing_by_week:
+        items:
+          $ref: '#/definitions/dto.AnalyticsWeekResponse'
+        type: array
+    type: object
+  dto.MentorReviewRatingsResponse:
+    properties:
+      clarity:
+        type: integer
+      comfort:
+        type: integer
+      engagement:
+        type: integer
+      time:
+        type: integer
+    type: object
+  dto.MentorReviewRequest:
+    properties:
+      comment:
+        type: string
+      had_session:
+        type: boolean
+      module_id:
+        type: integer
+      no_session_reason:
+        type: string
+      other_topic:
+        type: string
+      overall:
+        type: integer
+      ratings:
+        additionalProperties:
+          type: integer
+        type: object
+      topics:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.MentorReviewResponse:
+    properties:
+      comment:
+        type: string
+      had_session:
+        type: boolean
+      id:
+        type: integer
+      mentor:
+        $ref: '#/definitions/dto.ReviewPerson'
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      no_session_reason:
+        type: string
+      other_topic:
+        type: string
+      overall:
+        type: integer
+      ratings:
+        $ref: '#/definitions/dto.MentorReviewRatingsResponse'
+      student:
+        $ref: '#/definitions/dto.ReviewPerson'
+      submitted_at:
+        type: string
+      team:
+        $ref: '#/definitions/dto.ReviewTeam'
+      topics:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.MentorReviewSummaryResponse:
+    properties:
+      averages:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      expected:
+        type: integer
+      mentor:
+        $ref: '#/definitions/dto.ReviewPerson'
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      no_session:
+        type: integer
+      no_session_reasons:
+        additionalProperties:
+          type: integer
+        type: object
+      reviews:
+        type: integer
+      sessions_held:
+        type: integer
+      topics:
+        additionalProperties:
+          type: integer
+        type: object
+    type: object
+  dto.MissingReviewResponse:
+    properties:
+      mentor:
+        $ref: '#/definitions/dto.ReviewPerson'
+      student:
+        $ref: '#/definitions/dto.ReviewPerson'
+      team:
+        $ref: '#/definitions/dto.ReviewTeam'
     type: object
   dto.ModuleResponse:
     properties:
@@ -191,6 +532,22 @@ definitions:
       title:
         type: string
     type: object
+  dto.NotificationResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      read_at:
+        type: string
+      title:
+        type: string
+      type:
+        description: the event, e.g. enrollment.graded, module.created, mentor_slot.booked
+        type: string
+    type: object
   dto.PasswordResetRequest:
     properties:
       new_password:
@@ -200,9 +557,152 @@ definitions:
         example: secret123
         type: string
     type: object
+  dto.PendingLectureResponse:
+    properties:
+      closes_at:
+        type: string
+      ends_at:
+        type: string
+      event_id:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      starts_at:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.ProfileResponse:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      gitlab_handle:
+        type: string
+      slack_handle:
+        type: string
+      visibility:
+        type: string
+    type: object
+  dto.QuizAccuracyResponse:
+    properties:
+      accuracy:
+        type: number
+      attempt_count:
+        type: integer
+      module_id:
+        type: integer
+      module_title:
+        type: string
+      opens_at:
+        type: string
+      possible_total:
+        type: integer
+      score_total:
+        type: integer
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
+        type: string
+    type: object
+  dto.ReportCountsResponse:
+    properties:
+      open:
+        type: integer
+      resolved:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.ReportPerson:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.ReportResponse:
+    properties:
+      admin_note:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      reporter:
+        allOf:
+        - $ref: '#/definitions/dto.ReportPerson'
+        description: null once the reporter's account is deleted
+      resolved_at:
+        type: string
+      resolved_by:
+        $ref: '#/definitions/dto.ReportPerson'
+      status:
+        description: open or resolved
+        type: string
+      subject:
+        type: string
+    type: object
+  dto.ReviewPerson:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.ReviewTeam:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.ReviewedWeekResponse:
+    properties:
+      module_id:
+        type: integer
+      submitted_at:
+        type: string
+    type: object
+  dto.SendReportRequest:
+    properties:
+      message:
+        description: 1 to 5000 characters
+        type: string
+      subject:
+        description: 1 to 200 characters
+        type: string
+    type: object
+  dto.SentLectureFeedbackResponse:
+    properties:
+      event_id:
+        type: integer
+      submitted_at:
+        type: string
+    type: object
+  dto.SentReportResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      subject:
         type: string
     type: object
   dto.SignupRequest:
@@ -216,6 +716,21 @@ definitions:
       password:
         example: secret123
         type: string
+    type: object
+  dto.StudentAnalyticsResponse:
+    properties:
+      assignment_status:
+        $ref: '#/definitions/dto.AssignmentStatusResponse'
+      generated_at:
+        type: string
+      period:
+        $ref: '#/definitions/dto.AnalyticsPeriodResponse'
+      quiz_accuracy_by_module:
+        items:
+          $ref: '#/definitions/dto.QuizAccuracyResponse'
+        type: array
+      student:
+        $ref: '#/definitions/dto.AnalyticsPersonResponse'
     type: object
   dto.TokenResponse:
     properties:
@@ -239,6 +754,7 @@ definitions:
       position:
         type: integer
       title:
+        description: 'nil = not sent: the stored value stays'
         type: string
       url:
         type: string
@@ -254,8 +770,21 @@ definitions:
       title:
         type: string
     type: object
+  dto.UpdateReportRequest:
+    properties:
+      admin_note:
+        description: up to 2000 characters; "" removes the note
+        type: string
+      status:
+        description: open or resolved
+        type: string
+    type: object
   dto.UserResponse:
     properties:
+      avatar_url:
+        description: AvatarURL is the profile picture as the caller may see it; null
+          when none or hidden.
+        type: string
       created_at:
         type: string
       email:
@@ -330,6 +859,306 @@ info:
   title: Xsolla School LMS API
   version: "1.0"
 paths:
+  /analytics/mentors:
+    get:
+      description: Active mentors matching q, id/name/email only.
+      parameters:
+      - description: Name or email fragment
+        in: query
+        name: q
+        type: string
+      - description: Page size, 1-100 (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Rows to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AnalyticsPersonResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mentor selector (admin)
+      tags:
+      - analytics
+  /analytics/mentors/{mentorId}:
+    get:
+      description: Averages are over submitted reviews in the period, per dimension,
+        and null when nobody rated it. Weekly standing uses today's team membership
+        (standing_attribution).
+      parameters:
+      - description: Mentor user id
+        in: path
+        name: mentorId
+        required: true
+        type: integer
+      - description: Start date, YYYY-MM-DD (inclusive)
+        in: query
+        name: from
+        type: string
+      - description: End date, YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MentorAnalyticsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: One mentor's feedback averages and students' standing (admin)
+      tags:
+      - analytics
+  /analytics/mentors/{mentorId}/ai-summary:
+    post:
+      consumes:
+      - application/json
+      description: Summarizes the student-submitted reviews about the mentor in the
+        period, comments and structured answers alike. The reviews are read from the
+        database and never returned.
+      parameters:
+      - description: Mentor user id
+        in: path
+        name: mentorId
+        required: true
+        type: integer
+      - description: Period and refresh flag
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AnalyticsSummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AnalyticsSummaryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: AI summary of a mentor's reviews (admin)
+      tags:
+      - analytics
+  /analytics/overview:
+    get:
+      description: Green/yellow/red counts per module (week). Total counts only students
+        with a recorded grade; weeks without grades have zero counts.
+      parameters:
+      - description: Start date, YYYY-MM-DD (inclusive)
+        in: query
+        name: from
+        type: string
+      - description: End date, YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AnalyticsOverviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Weekly student standing, school-wide (admin)
+      tags:
+      - analytics
+  /analytics/students:
+    get:
+      description: Active students matching q, id/name/email only.
+      parameters:
+      - description: Name or email fragment
+        in: query
+        name: q
+        type: string
+      - description: Page size, 1-100 (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Rows to skip (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AnalyticsPersonResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Student selector (admin)
+      tags:
+      - analytics
+  /analytics/students/{studentId}:
+    get:
+      description: Assignment deadlines in the period are classified by the student's
+        first submission; quiz accuracy is sum(score)/sum(total) per module.
+      parameters:
+      - description: Student user id
+        in: path
+        name: studentId
+        required: true
+        type: integer
+      - description: Start date, YYYY-MM-DD (inclusive)
+        in: query
+        name: from
+        type: string
+      - description: End date, YYYY-MM-DD (inclusive)
+        in: query
+        name: to
+        type: string
+      - description: Only this module (week)
+        in: query
+        name: module_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StudentAnalyticsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: One student's submission status and quiz accuracy (admin)
+      tags:
+      - analytics
+  /analytics/students/{studentId}/ai-summary:
+    post:
+      consumes:
+      - application/json
+      description: Summarizes the written feedback the student received in the period.
+        The feedback is read from the database and never returned; the response contains
+        only the generated plain-text summary and its metadata.
+      parameters:
+      - description: Student user id
+        in: path
+        name: studentId
+        required: true
+        type: integer
+      - description: Period and refresh flag
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AnalyticsSummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AnalyticsSummaryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: AI summary of a student's feedback (admin)
+      tags:
+      - analytics
   /auth/google/callback:
     get:
       description: Handle Google OAuth redirect, exchange code for tokens, store encrypted
@@ -582,6 +1411,32 @@ paths:
       summary: Sign up
       tags:
       - auth
+  /avatars/{name}:
+    get:
+      description: 'No sign-in: this is the avatar_url an <img> tag loads. Only current
+        pictures are served.'
+      parameters:
+      - description: File name from avatar_url
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - image/jpeg
+      - image/png
+      - image/webp
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: A profile picture
+      tags:
+      - profile
   /content-items/{id}:
     delete:
       description: Soft-delete a content item (lecturer or admin only)
@@ -614,7 +1469,11 @@ paths:
       tags:
       - content-items
     get:
-      description: Get a single content item by ID
+      description: |-
+        Get a single content item by ID
+        For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+        (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+        and due_from "one_on_one" or "no_one_on_one".
       parameters:
       - description: Content item ID
         in: path
@@ -771,6 +1630,372 @@ paths:
       summary: List my Google Calendar events
       tags:
       - google
+  /lecture-feedback:
+    get:
+      description: 'Filters are optional: event_id, module_id, and from/to as dates
+        (YYYY-MM-DD, Baku time, both included) on the lecture''s start.'
+      parameters:
+      - description: Lecture (event) id
+        in: query
+        name: event_id
+        type: integer
+      - description: Week (module) id
+        in: query
+        name: module_id
+        type: integer
+      - description: First day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: Last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.LectureFeedbackResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lecture feedback with every answer (admin)
+      tags:
+      - lecture-feedback
+    post:
+      consumes:
+      - application/json
+      description: See docs/lecture_feedback.md for the questions, the rules and every
+        answer.
+      parameters:
+      - description: The form
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LectureFeedbackRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.SentLectureFeedbackResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send feedback on a lecture (student)
+      tags:
+      - lecture-feedback
+  /lecture-feedback/form:
+    get:
+      description: The questions in order; their ids are the fields of POST /lecture-feedback.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: The lecture feedback form
+      tags:
+      - lecture-feedback
+  /lecture-feedback/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.SentLectureFeedbackResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lectures I have given feedback on (student)
+      tags:
+      - lecture-feedback
+  /lecture-feedback/pending:
+    get:
+      description: Lectures whose form is open (10 minutes before the end until 7
+        days after) and not yet sent.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.PendingLectureResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lectures I can give feedback on now (student)
+      tags:
+      - lecture-feedback
+  /lecture-feedback/summary:
+    get:
+      description: 'Every lecture in the filter, also those without feedback: responses,
+        students expected, averages, pace counts.'
+      parameters:
+      - description: Lecture (event) id
+        in: query
+        name: event_id
+        type: integer
+      - description: Week (module) id
+        in: query
+        name: module_id
+        type: integer
+      - description: First day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: Last day, YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.LectureFeedbackSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lecture feedback numbers per lecture (admin)
+      tags:
+      - lecture-feedback
+  /mentor-reviews:
+    get:
+      description: Filter by week, mentor and team; every filter is optional. Ordered
+        by week, mentor, student.
+      parameters:
+      - description: Week (module) id
+        in: query
+        name: module_id
+        type: integer
+      - description: Mentor user id
+        in: query
+        name: mentor_id
+        type: integer
+      - description: Team id
+        in: query
+        name: team_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.MentorReviewResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mentor reviews with every answer (admin)
+      tags:
+      - mentor-reviews
+    post:
+      consumes:
+      - application/json
+      description: See docs/mentor_reviews.md for the form rules and every answer.
+      parameters:
+      - description: The review
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MentorReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ReviewedWeekResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send this week's mentor review (student)
+      tags:
+      - mentor-reviews
+  /mentor-reviews/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.ReviewedWeekResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: The weeks I have reviewed (student)
+      tags:
+      - mentor-reviews
+  /mentor-reviews/missing:
+    get:
+      description: Students in a team with a mentor (today's teams), enrolled in the
+        week, without a review for it.
+      parameters:
+      - description: Week (module) id
+        in: query
+        name: module_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.MissingReviewResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Students who have not sent the week's review (admin)
+      tags:
+      - mentor-reviews
+  /mentor-reviews/summary:
+    get:
+      description: Reviews, expected students (today's teams), sessions held, averages,
+        topic counts and no-session reasons for the weeks from from_module to to_module
+        (by opening date, both optional and included).
+      parameters:
+      - description: First week (module) id
+        in: query
+        name: from_module
+        type: integer
+      - description: Last week (module) id
+        in: query
+        name: to_module
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.MentorReviewSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mentor review numbers per week and mentor (admin)
+      tags:
+      - mentor-reviews
   /modules:
     get:
       description: Get modules the user is enrolled in (student), teaching (teacher),
@@ -938,7 +2163,11 @@ paths:
       - modules
   /modules/{moduleId}/content-items:
     get:
-      description: Get the content tree for a module (files, assignments)
+      description: |-
+        Get the content tree for a module (files, assignments)
+        For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+        (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+        and due_from "one_on_one" or "no_one_on_one".
       parameters:
       - description: Module ID
         in: path
@@ -1131,7 +2360,9 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Set a student's module grade red/yellow/green (mentor/admin only)
+      description: |-
+        Set a student's module grade red/yellow/green with the mentor's module feedback (required, 1 to 1000
+        characters). A new grade replaces the old grade and feedback. Mentor of the student or admin only.
       parameters:
       - description: Module ID
         in: path
@@ -1168,11 +2399,353 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Grade enrollment
       tags:
       - enrollments
+  /notifications:
+    get:
+      description: |-
+        The signed-in user's unread in-app notifications, newest first. They are made by the notification
+        service from the same events, policies and templates as the emails. Read ones are not listed.
+      parameters:
+      - description: How many, 1 to 100 (default 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.NotificationResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: NOTIFY_DATABASE_URL is not set
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My unread notifications
+      tags:
+      - notifications
+  /notifications/{id}/read:
+    post:
+      description: |-
+        Marks one of the signed-in user's notifications read, so it is no longer listed. Marking it again is
+        fine. Someone else's notification answers 404.
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark a notification read
+      tags:
+      - notifications
+  /notifications/read-all:
+    post:
+      description: Marks every unread notification of the signed-in user read.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MarkAllNotificationsReadResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark all notifications read
+      tags:
+      - notifications
+  /reports:
+    get:
+      description: Every report, newest first, with who sent it (admin only).
+      parameters:
+      - description: open or resolved
+        in: query
+        name: status
+        type: string
+      - description: 'the sender has this role: student, mentor, lecturer or admin'
+        in: query
+        name: role
+        type: string
+      - description: sent by this user
+        in: query
+        name: reporter_id
+        type: integer
+      - description: words in the subject or the message
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.ReportResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List reports
+      tags:
+      - reports
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Report a problem to the admins, e.g. a student's behaviour. Anyone signed in (student, mentor,
+        lecturer, admin) can send one. Only admins can read reports; the sender gets their own report back.
+      parameters:
+      - description: subject (1-200 characters) and message (1-5000)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendReportRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.SentReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: every problem with the form, in details
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send a report
+      tags:
+      - reports
+  /reports/{id}:
+    delete:
+      description: Removes a report for good (admin only).
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a report
+      tags:
+      - reports
+    get:
+      description: One report with who sent it and how it was handled (admin only).
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a report
+      tags:
+      - reports
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Mark a report resolved or open again, and/or write a note on it (admin only). Resolving records who
+        resolved it and when; reopening clears that. An empty admin_note removes the note.
+      parameters:
+      - description: Report ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: status and/or admin_note
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateReportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Handle a report
+      tags:
+      - reports
+  /reports/summary:
+    get:
+      description: How many reports are open and how many resolved, e.g. for a badge
+        (admin only).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReportCountsResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Report counts
+      tags:
+      - reports
+  /users/{id}/profile:
+    get:
+      description: 'As the caller may see it: a "staff_only" profile comes back empty
+        (avatar_url null) to students'
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Someone's profile
+      tags:
+      - profile
   /users/me:
     get:
       description: Get the currently authenticated user profile
@@ -1196,6 +2769,139 @@ paths:
       summary: Get current user
       tags:
       - users
+  /users/me/avatar:
+    delete:
+      responses:
+        "204":
+          description: No content
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Remove my picture
+      tags:
+      - profile
+    put:
+      consumes:
+      - multipart/form-data
+      description: JPG, PNG or WebP up to 2 MB (content is checked). Replaces and
+        deletes the old picture.
+      parameters:
+      - description: The picture
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AvatarResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload my picture
+      tags:
+      - profile
+  /users/me/preferences:
+    get:
+      description: Every setting; defaults for a person who never saved any
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: My look and accessibility settings
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      description: text_size (normal, large, xlarge), theme (system, light, dark),
+        font (default, dyslexia), spacing (normal, relaxed), density (comfortable,
+        compact), high_contrast, colorblind_safe, reduce_motion, strong_focus (true/false)
+      parameters:
+      - description: Settings to change
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change my look and accessibility settings
+      tags:
+      - profile
+  /users/me/profile:
+    get:
+      description: 'The signed-in person''s "about me": picture, bio, contact handles
+        and who may see them'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My profile
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      description: Any of bio (max 300), slack_handle, gitlab_handle (max 40, no spaces),
+        visibility (everyone, staff_only). Only sent fields change.
+      parameters:
+      - description: Fields to change
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change my profile
+      tags:
+      - profile
 securityDefinitions:
   ApiKeyAuth:
     description: 'Enter your JWT token as: Bearer <token>'

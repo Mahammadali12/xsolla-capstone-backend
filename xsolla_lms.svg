@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="305" height="91.2" viewBox="0 0 305 91.2" role="img" aria-labelledby="title desc">
+  <title id="title">LMS</title>
+  <desc id="desc">The original Xsolla cyan symbol followed by custom geometric LMS lettering.</desc>
+  <g fill="#80eaff">
+    <!-- Original Xsolla symbol, preserved from the supplied SVG. -->
+    <path d="M77.9,25.4c-6.4-1.6-8.4-3.3-10.2-8.9C64.3,5.7,57.4,0,47.7,0s-16.6,5.7-20,16.5c-1.8,5.6-3.8,7.3-10.2,8.9C6.6,28.1-.1,35.6-.1,45.6s6.7,17.5,17.6,20.2c6.4,1.6,8.4,3.3,10.2,8.9,3.4,10.8,10.3,16.5,20,16.5s16.6-5.7,20-16.5c1.8-5.6,3.8-7.3,10.2-8.9,10.9-2.7,17.6-10.2,17.6-20.2s-6.7-17.5-17.6-20.2ZM63.4,61c-6.6,0-12.4-4.8-13.8-10.7h-3.6c-1.5,5.8-7.3,10.7-13.9,10.7s-14.3-6.5-14.3-14.4,6.4-14.3,14.3-14.3,12.4,4.8,13.9,10.6h3.6c1.5-5.9,7.3-10.6,13.8-10.6s14.4,6.4,14.4,14.3-6.5,14.4-14.4,14.4Z"/>
+    <rect x="57.7" y="40.9" width="11.5" height="11.5"/>
+    <rect x="26.4" y="40.9" width="11.5" height="11.5"/>
+
+    <!-- L: square, solid strokes with the original wordmark's proportions. -->
+    <path d="M108.5 10.6H123.5V65.6H153.5V80.6H108.5Z"/>
+
+    <!-- M: bold diagonal construction with the same stroke weight. -->
+    <path d="M169.5 73.1V18.1L199.5 57.1L229.5 18.1V73.1" fill="none" stroke="#80eaff" stroke-width="15" stroke-linecap="butt" stroke-linejoin="bevel"/>
+
+    <!-- S: reuse the original custom Xsolla S glyph, preserving its exact contours. -->
+    <path transform="translate(91 0)" d="M178.8,30.7l16.9-20.1h-17.4l-9,10.6c-2.9,3.5-4.3,7-4.3,10.8s1.4,7.2,4.3,10.8l13.7,17.2-16.1,20.6h17.8l7.9-10c3-3.8,4.4-7.4,4.4-11.3s-1.4-7.5-4.4-11.3l-13.8-17.3Z"/>
+  </g>
+</svg>

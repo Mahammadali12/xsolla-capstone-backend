@@ -1,0 +1,29 @@
+info:
+  name: Review module 2, no session (student)
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: http://localhost:8080/mentor-reviews
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "module_id": 2,
+        "had_session": false,
+        "no_session_reason": "not-scheduled",
+        "overall": 2
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

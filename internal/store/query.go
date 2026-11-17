@@ -75,6 +75,15 @@ func (q *Query) FindRefreshTokenByHash(ctx context.Context, tokenHash string) *s
 	)
 }
 
+// RetireRefreshToken lets a refresh token that was just replaced live at most `grace` longer (never longer than it
+// already would).
+func (q *Query) RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) (sql.Result, error) {
+	return q.DBTX.ExecContext(ctx,
+		`UPDATE refresh_tokens SET expires_at = LEAST(expires_at, NOW() + make_interval(secs => $2)) WHERE token_hash = $1`,
+		tokenHash, grace.Seconds(),
+	)
+}
+
 func (q *Query) DeleteRefreshToken(ctx context.Context, tokenHash string) (sql.Result, error) {
 	return q.DBTX.ExecContext(ctx,
 		`DELETE FROM refresh_tokens WHERE token_hash = $1`,
@@ -338,7 +347,7 @@ func (q *Query) DeleteEnrollment(ctx context.Context, moduleID int64, userID int
 
 func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, u.email, u.name
+		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, e.grade_feedback, e.graded_at, e.graded_by, u.email, u.name
 		 FROM enrollments e
 		 JOIN users u ON u.id = e.user_id
 		 WHERE e.module_id = $1`,
@@ -346,13 +355,13 @@ func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*s
 	)
 }
 
-func (q *Query) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string) *sql.Row {
+func (q *Query) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, feedback string, gradedBy int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE enrollments
-		 SET grade = $3
+		 SET grade = $3, grade_feedback = $4, graded_at = NOW(), graded_by = $5
 		 WHERE module_id = $1 AND user_id = $2
-		 RETURNING id, module_id, user_id, grade, created_at`,
-		moduleID, userID, grade,
+		 RETURNING id, module_id, user_id, grade, grade_feedback, graded_at, graded_by, created_at`,
+		moduleID, userID, grade, feedback, gradedBy,
 	)
 }
 
@@ -487,7 +496,7 @@ func (q *Query) GetContentItemChildren(ctx context.Context, parentID int64, visi
 	)
 }
 
-func (q *Query) UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) *sql.Row {
+func (q *Query) UpdateContentItem(ctx context.Context, id int64, title *string, description *string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
 		`UPDATE content_items AS ci
 		 SET title = COALESCE($2, title),

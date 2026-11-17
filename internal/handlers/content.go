@@ -20,7 +20,7 @@ type ContentService interface {
 	CreateContentItem(ctx context.Context, userID int64, roles []string, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
 	GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error)
 	GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error)
-	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
+	UpdateContentItem(ctx context.Context, userID int64, roles []string, itemID int64, title *string, description *string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*store.ContentItem, error)
 	DeleteContentItem(ctx context.Context, userID int64, roles []string, itemID int64) error
 }
 
@@ -35,6 +35,9 @@ func NewContentHandlers(svc ContentService) *ContentHandlers {
 
 // @Summary     List content items
 // @Description Get the content tree for a module (files, assignments)
+// @Description For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+// @Description (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+// @Description and due_from "one_on_one" or "no_one_on_one".
 // @Tags        content-items
 // @Produce     json
 // @Security    BearerAuth
@@ -128,7 +131,7 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, service.ErrUnsupportedContentType) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
-		} else if errors.Is(err, service.ErrAssignmentMissingDueAt) {
+		} else if errors.Is(err, service.ErrAssignmentMissingDueAt) || errors.Is(err, service.ErrInvalidContentItem) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongModule) {
 			writeError(w, 404, "not_found", "parent item not found", nil)
@@ -157,6 +160,9 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 
 // @Summary     Get content item
 // @Description Get a single content item by ID
+// @Description For a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1
+// @Description (Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's
+// @Description and due_from "one_on_one" or "no_one_on_one".
 // @Tags        content-items
 // @Produce     json
 // @Security    BearerAuth
@@ -200,6 +206,8 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 		ParentID:    ci.ParentID,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
+		TaskDueAt:   ci.TaskDueAt,
+		DueFrom:     ci.DueFrom,
 	})
 }
 
@@ -244,6 +252,8 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) {
 			writeError(w, 404, "not_found", "content item not found", nil)
+		} else if errors.Is(err, service.ErrInvalidContentItem) {
+			writeError(w, 400, "bad_request", err.Error(), nil)
 		} else {
 			writeError(w, 500, "server_error", "could not update content item", nil)
 		}
@@ -315,6 +325,8 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			FileID:      ci.FileID,
 			Url:         ci.Url,
 			DueAt:       ci.DueAt,
+			TaskDueAt:   ci.TaskDueAt,
+			DueFrom:     ci.DueFrom,
 		}
 	}
 	return result

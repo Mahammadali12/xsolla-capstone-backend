@@ -1,0 +1,29 @@
+info:
+  name: Change my profile
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: http://localhost:8080/users/me/profile
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer {{accessToken}}
+  body:
+    type: json
+    data: |-
+      {
+        "bio": "Go and cats.",
+        "slack_handle": "rashad.a",
+        "gitlab_handle": "rashad-a",
+        "visibility": "everyone"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

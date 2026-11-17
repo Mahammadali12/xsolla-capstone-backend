@@ -28,6 +28,7 @@ type UserService interface {
 
 type UserHandlers struct {
 	svc UserService
+	avatarSupport
 }
 
 // NewUserHandlers creates user handlers backed by the given service.
@@ -51,6 +52,11 @@ func (h *UserHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ids := make([]int64, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+	}
+	avatars := h.avatarURLs(r, ids...)
 	resp := make([]dto.UserResponse, len(users))
 	for i, u := range users {
 		resp[i] = dto.UserResponse{
@@ -61,6 +67,7 @@ func (h *UserHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 			RoleExpiresAt: u.RoleExpiresAt,
 			LeftAt:        u.LeftAt,
 			CreatedAt:     u.CreatedAt,
+			AvatarURL:     avatars[u.ID],
 		}
 	}
 	writeJSON(w, 200, resp)
@@ -169,6 +176,7 @@ func (h *UserHandlers) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		RoleExpiresAt: u.RoleExpiresAt,
 		LeftAt:        u.LeftAt,
 		CreatedAt:     u.CreatedAt,
+		AvatarURL:     h.avatarURLs(r, u.ID)[u.ID],
 	})
 }
 

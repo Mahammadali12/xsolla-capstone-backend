@@ -1,0 +1,353 @@
+# ==============================================================================
+# 1. LMS API (xsolla-capstone)
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: lms-api
+  namespace: xsolla
+  labels:
+    app: lms-api
+spec:
+  ports:
+    - port: 8080
+      name: http
+      targetPort: 8080
+  selector:
+    app: lms-api
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lms-api
+  namespace: xsolla
+  labels:
+    app: lms-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lms-api
+  template:
+    metadata:
+      labels:
+        app: lms-api
+    spec:
+      containers:
+        - name: lms-api
+          image: xsolla-capstone-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: lms-api-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: DATABASE_URL
+            - name: NOTIFY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: NOTIFY_DATABASE_URL
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: RABBITMQ_URL
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: JWT_ACCESS_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: JWT_REFRESH_SECRET
+            - name: S3_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: S3_ENDPOINT
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: S3_BUCKET
+            - name: S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: S3_REGION
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: S3_SECRET_KEY
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GOOGLE_OAUTH_CLIENT_ID
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GOOGLE_OAUTH_CLIENT_SECRET
+            - name: GOOGLE_OAUTH_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GOOGLE_OAUTH_REDIRECT_URI
+            - name: GOOGLE_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GOOGLE_TOKEN_ENCRYPTION_KEY
+            - name: GOOGLE_OAUTH_FRONTEND_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GOOGLE_OAUTH_FRONTEND_REDIRECT_URI
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GEMINI_API_KEY
+            - name: GEMINI_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: GEMINI_MODEL
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+
+---
+# ==============================================================================
+# 2. NOTIFICATION WORKER (xsolla-capstone/notification-service)
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-worker
+  namespace: xsolla
+  labels:
+    app: notification-worker
+spec:
+  ports:
+    - port: 8081
+      name: http
+      targetPort: 8081
+  selector:
+    app: notification-worker
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-worker
+  namespace: xsolla
+  labels:
+    app: notification-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-worker
+  template:
+    metadata:
+      labels:
+        app: notification-worker
+    spec:
+      containers:
+        - name: notification-worker
+          image: xsolla-notification-worker:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+              name: http
+          envFrom:
+            - configMapRef:
+                name: notification-worker-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: NOTIFY_DATABASE_URL
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: RABBITMQ_URL
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: SMTP_PORT
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: SMTP_USERNAME
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: SMTP_PASSWORD
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: SMTP_FROM
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# ==============================================================================
+# 3. OFFICE EXPLORER API (xsolla-office-explorer-backend)
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: xsolla-explorer-api
+  namespace: xsolla
+  labels:
+    app: office-api
+spec:
+  ports:
+    - port: 8080
+      name: http
+      targetPort: 8080
+  selector:
+    app: office-api
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: office-api
+  namespace: xsolla
+  labels:
+    app: office-api
+spec:
+  ports:
+    - port: 8080
+      name: http
+      targetPort: 8080
+  selector:
+    app: office-api
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: office-api
+  namespace: xsolla
+  labels:
+    app: office-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: office-api
+  template:
+    metadata:
+      labels:
+        app: office-api
+    spec:
+      containers:
+        - name: office-api
+          image: xsolla-office-explorer-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: office-api-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: xsolla-secrets
+                  key: EXPLORER_DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /api/v1/explorer/init
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/explorer/init
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

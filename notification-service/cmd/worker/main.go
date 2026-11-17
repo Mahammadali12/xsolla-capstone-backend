@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -58,6 +59,15 @@ func main() {
 		log.Print("notification worker: SMTP_HOST not set, email channel logs instead of sending")
 		email = channel.NewLogSender("email")
 	} else {
+		// The logo travels with the mounted templates directory; without it the
+		// HTML layout falls back to the text wordmark.
+		logoPath := ""
+		if cfg.TemplatesPath != "" {
+			candidate := filepath.Join(cfg.TemplatesPath, "xsolla_lms.png")
+			if _, err := os.Stat(candidate); err == nil {
+				logoPath = candidate
+			}
+		}
 		sender, err := channel.NewSMTPSender(channel.SMTPConfig{
 			Host:     cfg.SMTPHost,
 			Port:     cfg.SMTPPort,
@@ -66,14 +76,21 @@ func main() {
 			From:     cfg.SMTPFrom,
 			TLSMode:  cfg.SMTPTLSMode,
 			Timeout:  cfg.SMTPTimeout,
+			LogoPath: logoPath,
 		})
 		if err != nil {
 			log.Fatalf("notification worker: email sender: %v", err)
 		}
+		if sender.HasLogo() {
+			templates.UseLogo()
+		} else {
+			log.Print("notification worker: xsolla_lms.png not found in TEMPLATES_PATH, HTML emails use the text wordmark")
+		}
 		log.Printf("notification worker: email channel sends via %s:%s", cfg.SMTPHost, cfg.SMTPPort)
 		email = sender
 	}
-	channels := map[string]channel.Channel{"email": email}
+	// in_app keeps each notification in the notifications table for the LMS to show.
+	channels := map[string]channel.Channel{"email": email, "in_app": channel.NewInApp(db)}
 	dispatch := notification.NewDispatcher(registry, templates, db, channels)
 	cons := consumer.New(dispatch.Handle)
 	mgr := broker.NewManager(cfg.RabbitMQURL, cons.Session)

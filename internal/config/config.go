@@ -8,45 +8,63 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
 // Config holds all runtime configuration for the backend.
 type Config struct {
-	DatabaseURL     string
-	Port            string
-	JWTAccessSecret []byte
+	DatabaseURL      string
+	Port             string
+	JWTAccessSecret  []byte
 	JWTRefreshSecret []byte
-	CORSOrigin      string
-	MigrationsDir   string
-	RabbitMQURL     string
+	CORSOrigin       string
+	MigrationsDir    string
+	RabbitMQURL      string
+
+	// NotifyDatabaseURL is the notification service's database, which holds the in-app notifications
+	// (optional: without it the /notifications routes answer 503).
+	NotifyDatabaseURL string
 
 	// S3 object storage
-	S3Endpoint     string
-	S3Bucket       string
-	S3Region       string
-	S3AccessKey    string
-	S3SecretKey    string
+	S3Endpoint  string
+	S3Bucket    string
+	S3Region    string
+	S3AccessKey string
+	S3SecretKey string
 
-	GeminiAPIKey   string
-	GeminiModel    string
+	GeminiAPIKey string
+	GeminiModel  string
+
+	// AI feedback summaries (the API key and model above are shared with quiz generation).
+	AISummaryTimeoutSeconds int
+	AISummaryMaxInputChars  int
+	AISummaryMaxOutputChars int
+
+	// PublicAPIURL is the API's address as browsers reach it, used to build picture URLs
+	// (optional: when empty, each request's own scheme and host are used).
+	PublicAPIURL string
 }
 
 // defaults for optional values when not set in .env or environment.
 var defaults = map[string]string{
-	"PORT":             ":8080",
-	"CORS_ORIGIN":      "*",
-	"MIGRATIONS_DIR":   "internal/db/migrations",
-	"RABBITMQ_URL":     "amqp://lms:lms@localhost:5672/",
-	"JWT_ACCESS_SECRET": "dev-access-secret-change-me-in-production",
-	"JWT_REFRESH_SECRET": "dev-refresh-secret-change-me-in-production",
-	"S3_ENDPOINT":      "",
-	"S3_BUCKET":        "",
-	"S3_REGION":        "us-east-1",
-	"S3_ACCESS_KEY":    "",
-	"S3_SECRET_KEY":    "",
-	"GEMINI_API_KEY":   "",
-	"GEMINI_MODEL":     "gemini-3.6-flash",
+	"PORT":                        ":8080",
+	"CORS_ORIGIN":                 "*",
+	"MIGRATIONS_DIR":              "internal/db/migrations",
+	"RABBITMQ_URL":                "amqp://lms:lms@localhost:5672/",
+	"JWT_ACCESS_SECRET":           "dev-access-secret-change-me-in-production",
+	"JWT_REFRESH_SECRET":          "dev-refresh-secret-change-me-in-production",
+	"S3_ENDPOINT":                 "",
+	"S3_BUCKET":                   "",
+	"S3_REGION":                   "us-east-1",
+	"S3_ACCESS_KEY":               "",
+	"S3_SECRET_KEY":               "",
+	"GEMINI_API_KEY":              "",
+	"GEMINI_MODEL":                "gemini-3.6-flash",
+	"AI_SUMMARY_TIMEOUT_SECONDS":  "60",
+	"AI_SUMMARY_MAX_INPUT_CHARS":  "60000",
+	"AI_SUMMARY_MAX_OUTPUT_CHARS": "4000",
+	"PUBLIC_API_URL":              "",
 }
 
 // Load reads .env (if present), applies environment variables, and returns a Config.
@@ -55,23 +73,28 @@ func Load() (*Config, error) {
 	_ = loadEnvFile(".env")
 
 	cfg := &Config{
-		DatabaseURL:     getenv("DATABASE_URL", ""),
-		Port:            getenv("PORT", defaults["PORT"]),
-		JWTAccessSecret: []byte(getenv("JWT_ACCESS_SECRET", defaults["JWT_ACCESS_SECRET"])),
-		JWTRefreshSecret: []byte(getenv("JWT_REFRESH_SECRET", defaults["JWT_REFRESH_SECRET"])),
-		CORSOrigin:      getenv("CORS_ORIGIN", defaults["CORS_ORIGIN"]),
-		MigrationsDir:   getenv("MIGRATIONS_DIR", defaults["MIGRATIONS_DIR"]),
-		RabbitMQURL:     getenv("RABBITMQ_URL", defaults["RABBITMQ_URL"]),
+		DatabaseURL:       getenv("DATABASE_URL", ""),
+		Port:              getenv("PORT", defaults["PORT"]),
+		JWTAccessSecret:   []byte(getenv("JWT_ACCESS_SECRET", defaults["JWT_ACCESS_SECRET"])),
+		JWTRefreshSecret:  []byte(getenv("JWT_REFRESH_SECRET", defaults["JWT_REFRESH_SECRET"])),
+		CORSOrigin:        getenv("CORS_ORIGIN", defaults["CORS_ORIGIN"]),
+		MigrationsDir:     getenv("MIGRATIONS_DIR", defaults["MIGRATIONS_DIR"]),
+		RabbitMQURL:       getenv("RABBITMQ_URL", defaults["RABBITMQ_URL"]),
+		NotifyDatabaseURL: getenv("NOTIFY_DATABASE_URL", ""),
 
 		// S3 object storage
-		S3Endpoint:     getenv("S3_ENDPOINT", defaults["S3_ENDPOINT"]),
-		S3Bucket:       getenv("S3_BUCKET", defaults["S3_BUCKET"]),
-		S3Region:       getenv("S3_REGION", defaults["S3_REGION"]),
-		S3AccessKey:    getenv("S3_ACCESS_KEY", defaults["S3_ACCESS_KEY"]),
-		S3SecretKey:    getenv("S3_SECRET_KEY", defaults["S3_SECRET_KEY"]),
+		S3Endpoint:  getenv("S3_ENDPOINT", defaults["S3_ENDPOINT"]),
+		S3Bucket:    getenv("S3_BUCKET", defaults["S3_BUCKET"]),
+		S3Region:    getenv("S3_REGION", defaults["S3_REGION"]),
+		S3AccessKey: getenv("S3_ACCESS_KEY", defaults["S3_ACCESS_KEY"]),
+		S3SecretKey: getenv("S3_SECRET_KEY", defaults["S3_SECRET_KEY"]),
 
-		GeminiAPIKey:   getenv("GEMINI_API_KEY", defaults["GEMINI_API_KEY"]),
-		GeminiModel:    getenv("GEMINI_MODEL", defaults["GEMINI_MODEL"]),
+		GeminiAPIKey:            getenv("GEMINI_API_KEY", defaults["GEMINI_API_KEY"]),
+		GeminiModel:             getenv("GEMINI_MODEL", defaults["GEMINI_MODEL"]),
+		AISummaryTimeoutSeconds: getenvInt("AI_SUMMARY_TIMEOUT_SECONDS", 60),
+		AISummaryMaxInputChars:  getenvInt("AI_SUMMARY_MAX_INPUT_CHARS", 60000),
+		AISummaryMaxOutputChars: getenvInt("AI_SUMMARY_MAX_OUTPUT_CHARS", 4000),
+		PublicAPIURL:            getenv("PUBLIC_API_URL", defaults["PUBLIC_API_URL"]),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -125,4 +148,18 @@ func getenv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// getenvInt reads a positive integer, falling back to def when the value is missing or invalid.
+func getenvInt(key string, def int) int {
+	raw, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return def
+	}
+	v, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || v <= 0 {
+		log.Printf("config: %s=%q is not a positive integer, using %d", key, raw, def)
+		return def
+	}
+	return v
 }

@@ -78,8 +78,9 @@ func NewGeminiQuizGenerator(apiKey, model string) *GeminiQuizGenerator {
 }
 
 type geminiGenerateRequest struct {
-	Contents         []geminiContent        `json:"contents"`
-	GenerationConfig geminiGenerationConfig `json:"generationConfig"`
+	SystemInstruction *geminiContent         `json:"systemInstruction,omitempty"`
+	Contents          []geminiContent        `json:"contents"`
+	GenerationConfig  geminiGenerationConfig `json:"generationConfig"`
 }
 
 type geminiContent struct {
@@ -100,6 +101,7 @@ type geminiInlineData struct {
 type geminiGenerationConfig struct {
 	ResponseMimeType string  `json:"responseMimeType"`
 	Temperature      float64 `json:"temperature"`
+	MaxOutputTokens  int     `json:"maxOutputTokens,omitempty"`
 }
 
 type geminiGenerateResponse struct {

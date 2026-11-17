@@ -7,8 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
-	"strings"
 	"time"
+	"unicode/utf8"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/service/google"
@@ -48,6 +48,7 @@ type RefreshTokenStore interface {
 	DeleteRefreshTokensForUser(ctx context.Context, userID int64) error
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error
 }
 
 // AuthService coordinates auth operations between handlers and the store.
@@ -77,11 +78,14 @@ func (s *AuthService) Signup(ctx context.Context, email string, name string, pas
 		return 0, nil, err
 	}
 
+	if utf8.RuneCountInString(password) < 8 {
+		return 0, nil, ErrPasswordTooShort
+	}
+
+	// staff accounts are made by an admin (POST /users); a sign-up is a student, except the very first account
 	roles := []string{"student"}
 	if count == 0 {
 		roles = []string{"admin"}
-	} else if strings.HasSuffix(email, "@xsolla.com") {
-		roles = []string{"lecturer"}
 	}
 
 	hash, err := auth.Hash(password)
@@ -198,6 +202,11 @@ func hashRefreshToken(token string) string {
 func (s *AuthService) FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error) {
 	hashed := hashRefreshToken(tokenHash)
 	return s.refreshTokenStore.FindRefreshTokenByHash(ctx, hashed)
+}
+
+// RetireRefreshToken keeps a refresh token that a refresh just replaced valid for at most `grace`.
+func (s *AuthService) RetireRefreshToken(ctx context.Context, token string, grace time.Duration) error {
+	return s.refreshTokenStore.RetireRefreshToken(ctx, hashRefreshToken(token), grace)
 }
 
 // DeleteRefreshToken removes a refresh token by hash.

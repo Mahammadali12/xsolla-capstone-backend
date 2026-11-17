@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lms-api-config
+  namespace: xsolla
+data:
+  PORT: ":8080"
+  CORS_ORIGIN: "http://lms.minikube.local"
+  MIGRATIONS_DIR: "internal/db/migrations"
+  GEMINI_MODEL: "gemini-3.6-flash"
+  AI_SUMMARY_TIMEOUT_SECONDS: "60"
+  AI_SUMMARY_MAX_INPUT_CHARS: "60000"
+  AI_SUMMARY_MAX_OUTPUT_CHARS: "4000"
+  PUBLIC_API_URL: "http://api.lms.minikube.local"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-worker-config
+  namespace: xsolla
+data:
+  HEALTH_ADDR: ":8081"
+  POLICIES_PATH: "/app/config/policies.json"
+  TEMPLATES_PATH: "/app/config/templates"
+  SMTP_TLS_MODE: "starttls"
+  SMTP_TIMEOUT: "30s"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: office-api-config
+  namespace: xsolla
+data:
+  HTTP_PORT: "8080"
+  ALLOWED_ORIGIN: "http://office.minikube.local"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lms-frontend-config
+  namespace: xsolla
+data:
+  VITE_API_URL: "http://api.lms.minikube.local"
+  VITE_SLACK_URL: "https://xsolla-school.slack.com"
+  VITE_GITLAB_URL: "https://gitlab.com/xsolla-school"
+  VITE_OFFICE_TOUR_URL: "http://office.minikube.local"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: office-frontend-config
+  namespace: xsolla
+data:
+  VITE_API_BASE_URL: "/api/v1"
+  VITE_LMS_APP_URL: "http://lms.minikube.local"
+  VITE_LMS_API_URL: "http://api.lms.minikube.local"

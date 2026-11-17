@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"xsolla-capstone-api/internal/store"
 )
@@ -152,6 +153,10 @@ func removedMentors(old []store.Team, inputs []store.TeamInput) []int64 {
 // name must be non-empty. Mentor must have 'mentor' role, students 'student' role.
 // No student may already belong to another team (no auto-removal).
 func (s *TeamService) CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*store.Team, error) {
+	if name != nil {
+		trimmed := strings.TrimSpace(*name)
+		name = &trimmed
+	}
 	if name == nil || *name == "" {
 		return nil, ErrInvalidTeamConfig
 	}
@@ -245,6 +250,13 @@ func (s *TeamService) AddTeamStudents(ctx context.Context, teamID int64, student
 // Validates: team exists; if mentor_id changes, mentor must exist, be active,
 // have 'mentor' role, and not lead another team.
 func (s *TeamService) PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*store.Team, error) {
+	if name != nil {
+		trimmed := strings.TrimSpace(*name)
+		if trimmed == "" {
+			return nil, ErrInvalidTeamConfig
+		}
+		name = &trimmed
+	}
 	// Validate team exists.
 	teams, err := s.store.GetAllTeams(ctx)
 	if err != nil {

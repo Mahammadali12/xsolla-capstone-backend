@@ -2,8 +2,8 @@ package channel
 
 import (
 	"bufio"
+	"bytes"
 	"context"
-	"errors"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,10 +12,15 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"io"
 	"math/big"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/mail"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,8 +33,8 @@ import (
 // fakeSMTP is a minimal in-process SMTP server for one message.
 type fakeSMTP struct {
 	ln         net.Listener
-	rejectRcpt bool   // RCPT TO returns 550 (permanent)
-	tempFail   bool   // RCPT TO returns 450 (temporary)
+	rejectRcpt bool // RCPT TO returns 550 (permanent)
+	tempFail   bool // RCPT TO returns 450 (temporary)
 	startTLS   bool
 	authMode   string // "", "ok", or "fail"
 	cert       tls.Certificate
@@ -495,7 +500,7 @@ func TestBuildMessageEncodesHeaderInjection(t *testing.T) {
 	_, err := buildMessage(from, to, Message{
 		Subject: "hello\r\nBcc: attacker@example.com",
 		Body:    "line one\nline two",
-	})
+	}, nil)
 	if err == nil {
 		t.Fatalf("want an error for newline in subject, got nil")
 	}
@@ -507,7 +512,7 @@ func TestBuildMessageEncodesHeaderInjection(t *testing.T) {
 	msgBytes, err := buildMessage(from, to, Message{
 		Subject: "hello",
 		Body:    "line one\nline two",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("buildMessage: %v", err)
 	}
@@ -517,82 +522,81 @@ func TestBuildMessageEncodesHeaderInjection(t *testing.T) {
 	}
 }
 
-
 // TestSMTPSenderClassifiesAuthFailure tests that wrong credentials produce
 // a permanent error (not retried).
 func TestSMTPSenderClassifiesAuthFailure(t *testing.T) {
-fake, roots := newFakeSMTP(t, "starttls", false, "fail")
-host, port := fake.hostPort(t)
-sender, err := NewSMTPSender(SMTPConfig{
-Host:     host,
-Port:     port,
-Username: "user@example.com",
-Password: "wrong-password",
-From:     "no-reply@example.com",
-TLSMode:  "starttls",
-Timeout:  5 * time.Second,
-rootCAs:  roots,
-})
-if err != nil {
-t.Fatalf("new sender: %v", err)
-}
+	fake, roots := newFakeSMTP(t, "starttls", false, "fail")
+	host, port := fake.hostPort(t)
+	sender, err := NewSMTPSender(SMTPConfig{
+		Host:     host,
+		Port:     port,
+		Username: "user@example.com",
+		Password: "wrong-password",
+		From:     "no-reply@example.com",
+		TLSMode:  "starttls",
+		Timeout:  5 * time.Second,
+		rootCAs:  roots,
+	})
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
 
-err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
-if err == nil {
-t.Fatal("want an auth failure error, got nil")
-}
-if IsTemporary(err) {
-t.Fatalf("auth failure should be permanent, got temporary error: %v", err)
-}
+	err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+	if err == nil {
+		t.Fatal("want an auth failure error, got nil")
+	}
+	if IsTemporary(err) {
+		t.Fatalf("auth failure should be permanent, got temporary error: %v", err)
+	}
 }
 
 // TestSMTPSenderClassifiesUnreachableHost tests that an unreachable SMTP
 // host produces a temporary error (retried).
 func TestSMTPSenderClassifiesUnreachableHost(t *testing.T) {
-sender, err := NewSMTPSender(SMTPConfig{
-Host:     "10.255.255.1",
-Port:     "25",
-From:     "no-reply@example.com",
-TLSMode:  "starttls",
-Timeout:  200 * time.Millisecond,
-})
-if err != nil {
-t.Fatalf("new sender: %v", err)
-}
+	sender, err := NewSMTPSender(SMTPConfig{
+		Host:    "10.255.255.1",
+		Port:    "25",
+		From:    "no-reply@example.com",
+		TLSMode: "starttls",
+		Timeout: 200 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
 
-err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
-if err == nil {
-t.Fatal("want a dial error, got nil")
-}
-if !IsTemporary(err) {
-t.Fatalf("unreachable host should be temporary, got permanent error: %v", err)
-}
+	err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+	if err == nil {
+		t.Fatal("want a dial error, got nil")
+	}
+	if !IsTemporary(err) {
+		t.Fatalf("unreachable host should be temporary, got permanent error: %v", err)
+	}
 }
 
 // TestSMTPSenderClassifiesInvalidRecipient tests that an invalid recipient
 // address produces a permanent error.
 func TestSMTPSenderClassifiesInvalidRecipient(t *testing.T) {
-fake, roots := newFakeSMTP(t, "starttls", false, "")
-host, port := fake.hostPort(t)
-sender, err := NewSMTPSender(SMTPConfig{
-Host:    host,
-Port:    port,
-From:    "no-reply@example.com",
-TLSMode: "starttls",
-Timeout: 5 * time.Second,
-rootCAs: roots,
-})
-if err != nil {
-t.Fatalf("new sender: %v", err)
-}
+	fake, roots := newFakeSMTP(t, "starttls", false, "")
+	host, port := fake.hostPort(t)
+	sender, err := NewSMTPSender(SMTPConfig{
+		Host:    host,
+		Port:    port,
+		From:    "no-reply@example.com",
+		TLSMode: "starttls",
+		Timeout: 5 * time.Second,
+		rootCAs: roots,
+	})
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
 
-err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "not-an-email"}, Message{Subject: "hi", Body: "body"})
-if err == nil {
-t.Fatal("want an invalid recipient error, got nil")
-}
-if IsTemporary(err) {
-t.Fatalf("invalid recipient should be permanent, got temporary error: %v", err)
-}
+	err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "not-an-email"}, Message{Subject: "hi", Body: "body"})
+	if err == nil {
+		t.Fatal("want an invalid recipient error, got nil")
+	}
+	if IsTemporary(err) {
+		t.Fatalf("invalid recipient should be permanent, got temporary error: %v", err)
+	}
 }
 
 // TestSMTPSenderClassifiesTemporaryFailure tests that an SMTP 4xx response
@@ -600,65 +604,285 @@ t.Fatalf("invalid recipient should be permanent, got temporary error: %v", err)
 func TestSMTPSenderClassifiesTemporaryFailure(t *testing.T) {
 	cert, roots := testCertificate(t)
 	fake, _ := newFakeSMTPWithCert(t, "starttls", false, false, "", cert, roots)
-host, port := fake.hostPort(t)
-sender, err := NewSMTPSender(SMTPConfig{
-Host:    host,
-Port:    port,
-From:    "no-reply@example.com",
-TLSMode: "starttls",
-Timeout: 5 * time.Second,
-rootCAs: roots,
-})
-if err != nil {
-t.Fatalf("new sender: %v", err)
-}
+	host, port := fake.hostPort(t)
+	sender, err := NewSMTPSender(SMTPConfig{
+		Host:    host,
+		Port:    port,
+		From:    "no-reply@example.com",
+		TLSMode: "starttls",
+		Timeout: 5 * time.Second,
+		rootCAs: roots,
+	})
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
 
-// Enable tempFail after creating the sender so RCPT TO returns 450.
-fake.tempFail = true
+	// Enable tempFail after creating the sender so RCPT TO returns 450.
+	fake.tempFail = true
 
-err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
-if err == nil {
-t.Fatal("want a temporary failure error, got nil")
-}
-if !IsTemporary(err) {
-t.Fatalf("4xx response should be temporary, got permanent error: %v", err)
-}
+	err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+	if err == nil {
+		t.Fatal("want a temporary failure error, got nil")
+	}
+	if !IsTemporary(err) {
+		t.Fatalf("4xx response should be temporary, got permanent error: %v", err)
+	}
 }
 
 // TestSMTPSenderClassifiesPermanentFailure tests that an SMTP 5xx response
 // produces a permanent error (not retried).
 func TestSMTPSenderClassifiesPermanentFailure(t *testing.T) {
-fake, roots := newFakeSMTP(t, "starttls", true, "")
-host, port := fake.hostPort(t)
-sender, err := NewSMTPSender(SMTPConfig{
-Host:    host,
-Port:    port,
-From:    "no-reply@example.com",
-TLSMode: "starttls",
-Timeout: 5 * time.Second,
-rootCAs: roots,
-})
-if err != nil {
-t.Fatalf("new sender: %v", err)
-}
+	fake, roots := newFakeSMTP(t, "starttls", true, "")
+	host, port := fake.hostPort(t)
+	sender, err := NewSMTPSender(SMTPConfig{
+		Host:    host,
+		Port:    port,
+		From:    "no-reply@example.com",
+		TLSMode: "starttls",
+		Timeout: 5 * time.Second,
+		rootCAs: roots,
+	})
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
 
-err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
-if err == nil {
-t.Fatal("want a permanent failure error, got nil")
-}
-if IsTemporary(err) {
-t.Fatalf("5xx response should be permanent, got temporary error: %v", err)
-}
+	err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{Subject: "hi", Body: "body"})
+	if err == nil {
+		t.Fatal("want a permanent failure error, got nil")
+	}
+	if IsTemporary(err) {
+		t.Fatalf("5xx response should be permanent, got temporary error: %v", err)
+	}
 }
 
 // TestIsTemporaryWithNonSendError reports that non-sendError errors are
 // treated as temporary (conservative default for unknown failures).
 func TestIsTemporaryWithNonSendError(t *testing.T) {
-if IsTemporary(errors.New("some random error")) {
-t.Fatal("unknown error should not be classified as temporary")
-}
+	if IsTemporary(errors.New("some random error")) {
+		t.Fatal("unknown error should not be classified as temporary")
+	}
 }
 
+func TestBuildMessageMultipartAlternative(t *testing.T) {
+	from := mustAddress(t, "no-reply@example.com")
+	to := mustAddress(t, "student@example.com")
+
+	raw, err := buildMessage(from, to, Message{
+		Subject:  "hi",
+		Body:     "plain body\n",
+		HTMLBody: "<p>html body</p>",
+	}, nil)
+	if err != nil {
+		t.Fatalf("buildMessage: %v", err)
+	}
+
+	msg, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("read message: %v", err)
+	}
+	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("content type: %v", err)
+	}
+	if mediaType != "multipart/alternative" {
+		t.Fatalf("content type = %q, want multipart/alternative", mediaType)
+	}
+	if encoding := msg.Header.Get("Content-Transfer-Encoding"); encoding != "" {
+		t.Fatalf("top-level encoding = %q, want none for multipart", encoding)
+	}
+
+	reader := multipart.NewReader(msg.Body, params["boundary"])
+	plain := nextPart(t, reader)
+	assertPartType(t, plain, "text/plain; charset=UTF-8")
+	if got := readPart(t, plain); got != "plain body\r\n" {
+		t.Fatalf("plain part = %q", got)
+	}
+	html := nextPart(t, reader)
+	assertPartType(t, html, "text/html; charset=UTF-8")
+	if got := readPart(t, html); got != "<p>html body</p>" {
+		t.Fatalf("html part = %q", got)
+	}
+	if _, err := reader.NextPart(); err != io.EOF {
+		t.Fatalf("unexpected trailing part: %v", err)
+	}
+}
+
+func TestBuildMessageMultipartRelatedWithLogo(t *testing.T) {
+	from := mustAddress(t, "no-reply@example.com")
+	to := mustAddress(t, "student@example.com")
+	logo := append(append([]byte{}, pngSignature...), []byte("fake image")...)
+
+	raw, err := buildMessage(from, to, Message{
+		Subject:  "hi",
+		Body:     "plain body",
+		HTMLBody: `<p><img src="cid:xsolla-lms-logo"></p>`,
+	}, logo)
+	if err != nil {
+		t.Fatalf("buildMessage: %v", err)
+	}
+
+	msg, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("read message: %v", err)
+	}
+	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("content type: %v", err)
+	}
+	if mediaType != "multipart/related" {
+		t.Fatalf("content type = %q, want multipart/related", mediaType)
+	}
+
+	outer := multipart.NewReader(msg.Body, params["boundary"])
+	alternative := nextPart(t, outer)
+	altType, altParams, err := mime.ParseMediaType(alternative.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("alternative content type: %v", err)
+	}
+	if altType != "multipart/alternative" {
+		t.Fatalf("first related part = %q, want multipart/alternative", altType)
+	}
+	inner := multipart.NewReader(alternative, altParams["boundary"])
+	assertPartType(t, nextPart(t, inner), "text/plain; charset=UTF-8")
+	assertPartType(t, nextPart(t, inner), "text/html; charset=UTF-8")
+
+	image := nextPart(t, outer)
+	if got := image.Header.Get("Content-ID"); got != "<"+logoCID+">" {
+		t.Fatalf("content id = %q, want %q", got, "<"+logoCID+">")
+	}
+	if got := image.Header.Get("Content-Type"); !strings.HasPrefix(got, "image/png") {
+		t.Fatalf("logo part type = %q, want image/png", got)
+	}
+	encoded, err := io.ReadAll(image)
+	if err != nil {
+		t.Fatalf("read logo: %v", err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(string(encoded), "\r\n", ""))
+	if err != nil {
+		t.Fatalf("decode logo: %v", err)
+	}
+	if !bytes.Equal(decoded, logo) {
+		t.Fatalf("logo bytes changed: got %d bytes, want %d", len(decoded), len(logo))
+	}
+	if _, err := outer.NextPart(); err != io.EOF {
+		t.Fatalf("unexpected trailing part: %v", err)
+	}
+}
+
+func nextPart(t *testing.T, reader *multipart.Reader) *multipart.Part {
+	t.Helper()
+	part, err := reader.NextPart()
+	if err != nil {
+		t.Fatalf("next part: %v", err)
+	}
+	return part
+}
+
+func assertPartType(t *testing.T, part *multipart.Part, want string) {
+	t.Helper()
+	if got := part.Header.Get("Content-Type"); got != want {
+		t.Fatalf("part type = %q, want %q", got, want)
+	}
+}
+
+// readPart reads a multipart part; the reader has already decoded
+// quoted-printable and removed that header.
+func readPart(t *testing.T, part *multipart.Part) string {
+	t.Helper()
+	body, err := io.ReadAll(part)
+	if err != nil {
+		t.Fatalf("read part: %v", err)
+	}
+	return string(body)
+}
+
+func TestSMTPSenderDeliversHTMLWithLogo(t *testing.T) {
+	fake, roots := newFakeSMTP(t, "tls", false, "")
+	host, port := fake.hostPort(t)
+	logoPath := filepath.Join(t.TempDir(), "xsolla_lms.png")
+	if err := os.WriteFile(logoPath, append(append([]byte{}, pngSignature...), []byte("fake image")...), 0o600); err != nil {
+		t.Fatalf("write logo: %v", err)
+	}
+	sender, err := NewSMTPSender(SMTPConfig{
+		Host:     host,
+		Port:     port,
+		From:     "Xsolla School <no-reply@example.com>",
+		TLSMode:  "tls",
+		Timeout:  5 * time.Second,
+		rootCAs:  roots,
+		LogoPath: logoPath,
+	})
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
+
+	err = sender.Send(context.Background(), events.Recipient{ID: 7, Email: "student@example.com"}, Message{
+		EventID:  4,
+		Subject:  "Mentor slot booked",
+		Body:     "Hi Student,\n\nYour slot is booked.\n",
+		HTMLBody: `<html><body><img src="cid:xsolla-lms-logo"><p>Hi Student,</p></body></html>`,
+	})
+	if err != nil {
+		t.Fatalf("send: %v", err)
+	}
+
+	message := fake.lastMessage()
+	for _, want := range []string{
+		"Content-Type: multipart/related; boundary=",
+		"Content-Type: multipart/alternative; boundary=",
+		"Content-Type: text/plain; charset=UTF-8",
+		"Content-Type: text/html; charset=UTF-8",
+		"Content-ID: <" + logoCID + ">",
+		"Content-Type: image/png",
+		"cid:xsolla-lms-logo",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message does not contain %q: %q", want, message)
+		}
+	}
+	if regexp.MustCompile(`[^\r]\n`).MatchString(message) {
+		t.Fatalf("message has a bare LF line ending")
+	}
+}
+
+func TestNewSMTPSenderValidatesLogo(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "logo.png")
+	if err := os.WriteFile(good, append(append([]byte{}, pngSignature...), []byte("fake image")...), 0o600); err != nil {
+		t.Fatalf("write logo: %v", err)
+	}
+	notPNG := filepath.Join(dir, "logo.txt")
+	if err := os.WriteFile(notPNG, []byte("not a png"), 0o600); err != nil {
+		t.Fatalf("write bad logo: %v", err)
+	}
+
+	base := SMTPConfig{
+		Host:    "smtp.example.com",
+		From:    "no-reply@example.com",
+		TLSMode: "starttls",
+		Timeout: time.Second,
+	}
+	withGood := base
+	withGood.LogoPath = good
+	sender, err := NewSMTPSender(withGood)
+	if err != nil {
+		t.Fatalf("new sender: %v", err)
+	}
+	if !sender.HasLogo() {
+		t.Fatal("HasLogo = false, want true")
+	}
+
+	for name, path := range map[string]string{
+		"not a png": notPNG,
+		"not found": filepath.Join(dir, "missing.png"),
+	} {
+		cfg := base
+		cfg.LogoPath = path
+		if _, err := NewSMTPSender(cfg); err == nil {
+			t.Fatalf("%s: want an error", name)
+		}
+	}
+}
 
 func mustAddress(t *testing.T, value string) *mail.Address {
 	t.Helper()

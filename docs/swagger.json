@@ -17,6 +17,463 @@
     "host": "localhost:8080",
     "basePath": "/",
     "paths": {
+        "/analytics/mentors": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Active mentors matching q, id/name/email only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Mentor selector (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name or email fragment",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, 1-100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/mentors/{mentorId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Averages are over submitted reviews in the period, per dimension, and null when nobody rated it. Weekly standing uses today's team membership (standing_attribution).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "One mentor's feedback averages and students' standing (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Mentor user id",
+                        "name": "mentorId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date, YYYY-MM-DD (inclusive)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, YYYY-MM-DD (inclusive)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MentorAnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/mentors/{mentorId}/ai-summary": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Summarizes the student-submitted reviews about the mentor in the period, comments and structured answers alike. The reviews are read from the database and never returned.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "AI summary of a mentor's reviews (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Mentor user id",
+                        "name": "mentorId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Period and refresh flag",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/overview": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Green/yellow/red counts per module (week). Total counts only students with a recorded grade; weeks without grades have zero counts.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Weekly student standing, school-wide (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date, YYYY-MM-DD (inclusive)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, YYYY-MM-DD (inclusive)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsOverviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/students": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Active students matching q, id/name/email only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "Student selector (admin)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Name or email fragment",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, 1-100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Rows to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/students/{studentId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Assignment deadlines in the period are classified by the student's first submission; quiz accuracy is sum(score)/sum(total) per module.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "One student's submission status and quiz accuracy (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Student user id",
+                        "name": "studentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date, YYYY-MM-DD (inclusive)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date, YYYY-MM-DD (inclusive)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Only this module (week)",
+                        "name": "module_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StudentAnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/students/{studentId}/ai-summary": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Summarizes the written feedback the student received in the period. The feedback is read from the database and never returned; the response contains only the generated plain-text summary and its metadata.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "AI summary of a student's feedback (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Student user id",
+                        "name": "studentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Period and refresh flag",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AnalyticsSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/google/callback": {
             "get": {
                 "description": "Handle Google OAuth redirect, exchange code for tokens, store encrypted refresh token",
@@ -403,6 +860,43 @@
                 }
             }
         },
+        "/avatars/{name}": {
+            "get": {
+                "description": "No sign-in: this is the avatar_url an \u003cimg\u003e tag loads. Only current pictures are served.",
+                "produces": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "A profile picture",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File name from avatar_url",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/content-items/{id}": {
             "get": {
                 "security": [
@@ -410,7 +904,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a single content item by ID",
+                "description": "Get a single content item by ID\nFor a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1\n(Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's\nand due_from \"one_on_one\" or \"no_one_on_one\".",
                 "produces": [
                     "application/json"
                 ],
@@ -697,6 +1191,573 @@
                 }
             }
         },
+        "/lecture-feedback": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Filters are optional: event_id, module_id, and from/to as dates (YYYY-MM-DD, Baku time, both included) on the lecture's start.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lecture feedback with every answer (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Lecture (event) id",
+                        "name": "event_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First day, YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last day, YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.LectureFeedbackResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "See docs/lecture_feedback.md for the questions, the rules and every answer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Send feedback on a lecture (student)",
+                "parameters": [
+                    {
+                        "description": "The form",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LectureFeedbackRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SentLectureFeedbackResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/form": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The questions in order; their ids are the fields of POST /lecture-feedback.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "The lecture feedback form",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lectures I have given feedback on (student)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.SentLectureFeedbackResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lectures whose form is open (10 minutes before the end until 7 days after) and not yet sent.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lectures I can give feedback on now (student)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.PendingLectureResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/lecture-feedback/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every lecture in the filter, also those without feedback: responses, students expected, averages, pace counts.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "lecture-feedback"
+                ],
+                "summary": "Lecture feedback numbers per lecture (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Lecture (event) id",
+                        "name": "event_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First day, YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last day, YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.LectureFeedbackSummaryResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Filter by week, mentor and team; every filter is optional. Ordered by week, mentor, student.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Mentor reviews with every answer (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Mentor user id",
+                        "name": "mentor_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Team id",
+                        "name": "team_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.MentorReviewResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "See docs/mentor_reviews.md for the form rules and every answer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Send this week's mentor review (student)",
+                "parameters": [
+                    {
+                        "description": "The review",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MentorReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReviewedWeekResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "The weeks I have reviewed (student)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.ReviewedWeekResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews/missing": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Students in a team with a mentor (today's teams), enrolled in the week, without a review for it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Students who have not sent the week's review (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Week (module) id",
+                        "name": "module_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.MissingReviewResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mentor-reviews/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reviews, expected students (today's teams), sessions held, averages, topic counts and no-session reasons for the weeks from from_module to to_module (by opening date, both optional and included).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mentor-reviews"
+                ],
+                "summary": "Mentor review numbers per week and mentor (admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "First week (module) id",
+                        "name": "from_module",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Last week (module) id",
+                        "name": "to_module",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.MentorReviewSummaryResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/modules": {
             "get": {
                 "security": [
@@ -960,7 +2021,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get the content tree for a module (files, assignments)",
+                "description": "Get the content tree for a module (files, assignments)\nFor a student, a task due Friday to Monday is due at 08:00 on the day of their booked 1:1\n(Monday 08:00 while none is booked): due_at is then their own deadline, task_due_at the lecturer's\nand due_from \"one_on_one\" or \"no_one_on_one\".",
                 "produces": [
                     "application/json"
                 ],
@@ -1256,7 +2317,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Set a student's module grade red/yellow/green (mentor/admin only)",
+                "description": "Set a student's module grade red/yellow/green with the mentor's module feedback (required, 1 to 1000\ncharacters). A new grade replaces the old grade and feedback. Mentor of the student or admin only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1316,6 +2377,483 @@
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The signed-in user's unread in-app notifications, newest first. They are made by the notification\nservice from the same events, policies and templates as the emails. Read ones are not listed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "My unread notifications",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "How many, 1 to 100 (default 50)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.NotificationResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "NOTIFY_DATABASE_URL is not set",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/read-all": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Marks every unread notification of the signed-in user read.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Mark all notifications read",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.MarkAllNotificationsReadResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}/read": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Marks one of the signed-in user's notifications read, so it is no longer listed. Marking it again is\nfine. Someone else's notification answers 404.",
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Mark a notification read",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Notification ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every report, newest first, with who sent it (admin only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "List reports",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "open or resolved",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "the sender has this role: student, mentor, lecturer or admin",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "sent by this user",
+                        "name": "reporter_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "words in the subject or the message",
+                        "name": "q",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.ReportResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Report a problem to the admins, e.g. a student's behaviour. Anyone signed in (student, mentor,\nlecturer, admin) can send one. Only admins can read reports; the sender gets their own report back.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Send a report",
+                "parameters": [
+                    {
+                        "description": "subject (1-200 characters) and message (1-5000)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SendReportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SentReportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "every problem with the form, in details",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "How many reports are open and how many resolved, e.g. for a badge (admin only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Report counts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReportCountsResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One report with who sent it and how it was handled (admin only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Get a report",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Report ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes a report for good (admin only).",
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Delete a report",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Report ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mark a report resolved or open again, and/or write a note on it (admin only). Resolving records who\nresolved it and when; reopening clears that. An empty admin_note removes the note.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Handle a report",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Report ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "status and/or admin_note",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateReportRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReportResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -1356,9 +2894,380 @@
                     }
                 }
             }
+        },
+        "/users/me/avatar": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "JPG, PNG or WebP up to 2 MB (content is checked). Replaces and deletes the old picture.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Upload my picture",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "The picture",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AvatarResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Remove my picture",
+                "responses": {
+                    "204": {
+                        "description": "No content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/preferences": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every setting; defaults for a person who never saved any",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "My look and accessibility settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "text_size (normal, large, xlarge), theme (system, light, dark), font (default, dyslexia), spacing (normal, relaxed), density (comfortable, compact), high_contrast, colorblind_safe, reduce_motion, strong_focus (true/false)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Change my look and accessibility settings",
+                "parameters": [
+                    {
+                        "description": "Settings to change",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The signed-in person's \"about me\": picture, bio, contact handles and who may see them",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "My profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ProfileResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Any of bio (max 300), slack_handle, gitlab_handle (max 40, no spaces), visibility (everyone, staff_only). Only sent fields change.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Change my profile",
+                "parameters": [
+                    {
+                        "description": "Fields to change",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "As the caller may see it: a \"staff_only\" profile comes back empty (avatar_url null) to students",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Someone's profile",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "dto.AnalyticsOverviewResponse": {
+            "type": "object",
+            "properties": {
+                "generated_at": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "weeks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AnalyticsWeekResponse"
+                    }
+                }
+            }
+        },
+        "dto.AnalyticsPeriodResponse": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsPersonResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsSummaryRequest": {
+            "type": "object",
+            "properties": {
+                "force_refresh": {
+                    "type": "boolean"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "cached": {
+                    "type": "boolean"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "source_count": {
+                    "type": "integer"
+                },
+                "summary": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AnalyticsWeekResponse": {
+            "type": "object",
+            "properties": {
+                "green_count": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "opens_at": {
+                    "type": "string"
+                },
+                "red_count": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                },
+                "yellow_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.AssignmentStatusResponse": {
+            "type": "object",
+            "properties": {
+                "eligible_count": {
+                    "type": "integer"
+                },
+                "late_count": {
+                    "type": "integer"
+                },
+                "missing_count": {
+                    "type": "integer"
+                },
+                "on_time_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.AuthResponse": {
             "type": "object",
             "properties": {
@@ -1370,6 +3279,14 @@
                 },
                 "user": {
                     "$ref": "#/definitions/dto.UserResponse"
+                }
+            }
+        },
+        "dto.AvatarResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
                 }
             }
         },
@@ -1391,6 +3308,9 @@
                 "due_at": {
                     "type": "string"
                 },
+                "due_from": {
+                    "type": "string"
+                },
                 "file_id": {
                     "type": "integer"
                 },
@@ -1405,6 +3325,10 @@
                 },
                 "position": {
                     "type": "integer"
+                },
+                "task_due_at": {
+                    "description": "For a student whose deadline follows their 1:1: due_at is their own deadline, task_due_at the one the\nlecturer set, and due_from says why (\"one_on_one\" or \"no_one_on_one\"). Left out otherwise.",
+                    "type": "string"
                 },
                 "title": {
                     "type": "string"
@@ -1432,6 +3356,9 @@
                 "due_at": {
                     "type": "string"
                 },
+                "due_from": {
+                    "type": "string"
+                },
                 "file_id": {
                     "type": "integer"
                 },
@@ -1443,6 +3370,10 @@
                 },
                 "position": {
                     "type": "integer"
+                },
+                "task_due_at": {
+                    "description": "Same as on ContentItemResponse.",
+                    "type": "string"
                 },
                 "title": {
                     "type": "string"
@@ -1518,8 +3449,18 @@
                 "created_at": {
                     "type": "string"
                 },
+                "feedback": {
+                    "description": "Feedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last written\n(both left out for a week graded before they were kept, and Feedback for other students' enrollments).",
+                    "type": "string"
+                },
                 "grade": {
                     "type": "string"
+                },
+                "graded_at": {
+                    "type": "string"
+                },
+                "graded_by": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer"
@@ -1529,6 +3470,20 @@
                 },
                 "user_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.FeedbackDimensionResponse": {
+            "type": "object",
+            "properties": {
+                "average": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "dimension": {
+                    "type": "string"
                 }
             }
         },
@@ -1592,7 +3547,157 @@
         "dto.GradeEnrollmentRequest": {
             "type": "object",
             "properties": {
+                "feedback": {
+                    "description": "the mentor's module feedback: required, 1 to 1000 characters",
+                    "type": "string"
+                },
                 "grade": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LectureFeedbackPersonResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LectureFeedbackRequest": {
+            "type": "object",
+            "properties": {
+                "clarity": {
+                    "type": "integer"
+                },
+                "confidence": {
+                    "type": "integer"
+                },
+                "event_id": {
+                    "type": "integer"
+                },
+                "improve": {
+                    "type": "string"
+                },
+                "liked": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "pace": {
+                    "type": "string"
+                },
+                "practice": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.LectureFeedbackResponse": {
+            "type": "object",
+            "properties": {
+                "clarity": {
+                    "type": "integer"
+                },
+                "confidence": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "improve": {
+                    "type": "string"
+                },
+                "lecture": {
+                    "$ref": "#/definitions/dto.LectureRef"
+                },
+                "lecturers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.LectureFeedbackPersonResponse"
+                    }
+                },
+                "liked": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "pace": {
+                    "type": "string"
+                },
+                "practice": {
+                    "type": "integer"
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.LectureFeedbackPersonResponse"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LectureFeedbackSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "averages": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "expected": {
+                    "type": "integer"
+                },
+                "lecture": {
+                    "$ref": "#/definitions/dto.LectureRef"
+                },
+                "lecturers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.LectureFeedbackPersonResponse"
+                    }
+                },
+                "pace": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "responses": {
+                    "type": "integer"
+                },
+                "with_comments": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.LectureRef": {
+            "type": "object",
+            "properties": {
+                "ends_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "starts_at": {
+                    "type": "string"
+                },
+                "title": {
                     "type": "string"
                 }
             }
@@ -1615,6 +3720,204 @@
             "properties": {
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.MarkAllNotificationsReadResponse": {
+            "type": "object",
+            "properties": {
+                "marked": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.MentorAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "feedback_by_dimension": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.FeedbackDimensionResponse"
+                    }
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "mentor": {
+                    "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "standing_attribution": {
+                    "type": "string"
+                },
+                "student_standing_by_week": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AnalyticsWeekResponse"
+                    }
+                }
+            }
+        },
+        "dto.MentorReviewRatingsResponse": {
+            "type": "object",
+            "properties": {
+                "clarity": {
+                    "type": "integer"
+                },
+                "comfort": {
+                    "type": "integer"
+                },
+                "engagement": {
+                    "type": "integer"
+                },
+                "time": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.MentorReviewRequest": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "had_session": {
+                    "type": "boolean"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "no_session_reason": {
+                    "type": "string"
+                },
+                "other_topic": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "ratings": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.MentorReviewResponse": {
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "had_session": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mentor": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "no_session_reason": {
+                    "type": "string"
+                },
+                "other_topic": {
+                    "type": "string"
+                },
+                "overall": {
+                    "type": "integer"
+                },
+                "ratings": {
+                    "$ref": "#/definitions/dto.MentorReviewRatingsResponse"
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "team": {
+                    "$ref": "#/definitions/dto.ReviewTeam"
+                },
+                "topics": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.MentorReviewSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "averages": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "expected": {
+                    "type": "integer"
+                },
+                "mentor": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "no_session": {
+                    "type": "integer"
+                },
+                "no_session_reasons": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "reviews": {
+                    "type": "integer"
+                },
+                "sessions_held": {
+                    "type": "integer"
+                },
+                "topics": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "dto.MissingReviewResponse": {
+            "type": "object",
+            "properties": {
+                "mentor": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.ReviewPerson"
+                },
+                "team": {
+                    "$ref": "#/definitions/dto.ReviewTeam"
                 }
             }
         },
@@ -1647,6 +3950,30 @@
                 }
             }
         },
+        "dto.NotificationResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "read_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "the event, e.g. enrollment.graded, module.created, mentor_slot.booked",
+                    "type": "string"
+                }
+            }
+        },
         "dto.PasswordResetRequest": {
             "type": "object",
             "properties": {
@@ -1660,10 +3987,231 @@
                 }
             }
         },
+        "dto.PendingLectureResponse": {
+            "type": "object",
+            "properties": {
+                "closes_at": {
+                    "type": "string"
+                },
+                "ends_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "starts_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ProfileResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "bio": {
+                    "type": "string"
+                },
+                "gitlab_handle": {
+                    "type": "string"
+                },
+                "slack_handle": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.QuizAccuracyResponse": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "attempt_count": {
+                    "type": "integer"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "module_title": {
+                    "type": "string"
+                },
+                "opens_at": {
+                    "type": "string"
+                },
+                "possible_total": {
+                    "type": "integer"
+                },
+                "score_total": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.RefreshRequest": {
             "type": "object",
             "properties": {
                 "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReportCountsResponse": {
+            "type": "object",
+            "properties": {
+                "open": {
+                    "type": "integer"
+                },
+                "resolved": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.ReportPerson": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.ReportResponse": {
+            "type": "object",
+            "properties": {
+                "admin_note": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "reporter": {
+                    "description": "null once the reporter's account is deleted",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ReportPerson"
+                        }
+                    ]
+                },
+                "resolved_at": {
+                    "type": "string"
+                },
+                "resolved_by": {
+                    "$ref": "#/definitions/dto.ReportPerson"
+                },
+                "status": {
+                    "description": "open or resolved",
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReviewPerson": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReviewTeam": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ReviewedWeekResponse": {
+            "type": "object",
+            "properties": {
+                "module_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SendReportRequest": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "1 to 5000 characters",
+                    "type": "string"
+                },
+                "subject": {
+                    "description": "1 to 200 characters",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SentLectureFeedbackResponse": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SentReportResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "subject": {
                     "type": "string"
                 }
             }
@@ -1682,6 +4230,29 @@
                 "password": {
                     "type": "string",
                     "example": "secret123"
+                }
+            }
+        },
+        "dto.StudentAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "assignment_status": {
+                    "$ref": "#/definitions/dto.AssignmentStatusResponse"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "period": {
+                    "$ref": "#/definitions/dto.AnalyticsPeriodResponse"
+                },
+                "quiz_accuracy_by_module": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.QuizAccuracyResponse"
+                    }
+                },
+                "student": {
+                    "$ref": "#/definitions/dto.AnalyticsPersonResponse"
                 }
             }
         },
@@ -1718,6 +4289,7 @@
                     "type": "integer"
                 },
                 "title": {
+                    "description": "nil = not sent: the stored value stays",
                     "type": "string"
                 },
                 "url": {
@@ -1742,9 +4314,26 @@
                 }
             }
         },
+        "dto.UpdateReportRequest": {
+            "type": "object",
+            "properties": {
+                "admin_note": {
+                    "description": "up to 2000 characters; \"\" removes the note",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "open or resolved",
+                    "type": "string"
+                }
+            }
+        },
         "dto.UserResponse": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "description": "AvatarURL is the profile picture as the caller may see it; null when none or hidden.",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },

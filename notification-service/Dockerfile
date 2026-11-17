@@ -9,5 +9,6 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates wget
 WORKDIR /app
 COPY --from=build /out/worker ./worker
+COPY config ./config
 EXPOSE 8081
 CMD ["./worker"]

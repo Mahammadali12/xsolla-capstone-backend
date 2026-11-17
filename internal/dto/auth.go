@@ -34,6 +34,8 @@ type UserResponse struct {
 	RoleExpiresAt map[string]time.Time `json:"role_expires_at,omitempty"`
 	LeftAt        *time.Time           `json:"left_at,omitempty"`
 	CreatedAt     time.Time            `json:"created_at"`
+	// AvatarURL is the profile picture as the caller may see it; null when none or hidden.
+	AvatarURL *string `json:"avatar_url"`
 }
 
 // AuthResponse is the payload for successful signup/login.

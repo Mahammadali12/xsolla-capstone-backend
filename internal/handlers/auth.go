@@ -29,6 +29,7 @@ type AuthService interface {
 	Login(ctx context.Context, email string, password string) (*store.User, error)
 	SaveRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error
 	GetUserByID(ctx context.Context, id int64) (*store.User, error)
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 	SaveGoogleRefreshToken(ctx context.Context, userID int64, encryptedToken string, expiresAt time.Time) error
@@ -43,6 +44,7 @@ type AuthHandlers struct {
 	refreshSecret []byte
 	accessTTL     time.Duration
 	refreshTTL    time.Duration
+	avatarSupport
 }
 
 // NewAuthHandlers creates auth handlers backed by the given service.
@@ -84,6 +86,8 @@ func (h *AuthHandlers) Signup(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, service.ErrInvalidEmail):
 			writeError(w, 400, "bad_request", "enter a valid email address", nil)
+		case errors.Is(err, service.ErrPasswordTooShort):
+			writeError(w, 400, "bad_request", "password must be at least 8 characters", nil)
 		case errors.Is(err, service.ErrEmailTaken):
 			writeError(w, 409, "conflict", "email already exists", nil)
 		default:
@@ -179,6 +183,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 			Roles:         user.Roles,
 			RoleExpiresAt: user.RoleExpiresAt,
 			CreatedAt:     user.CreatedAt,
+			AvatarURL:     h.avatarURLsFor(r, user.ID, user.Roles, user.ID)[user.ID],
 		},
 		AccessToken:  access,
 		RefreshToken: refresh,
@@ -321,7 +326,8 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeleteRefreshToken(r.Context(), req.RefreshToken); err != nil {
+	// the old token is not deleted at once: another tab (or a retry after a lost reply) may still send it
+	if err := h.svc.RetireRefreshToken(r.Context(), req.RefreshToken, refreshReuseGrace); err != nil {
 		writeError(w, 500, "server_error", "could not rotate refresh token", nil)
 		return
 	}
@@ -462,6 +468,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 		Roles:         user.Roles,
 		RoleExpiresAt: user.RoleExpiresAt,
 		CreatedAt:     user.CreatedAt,
+		AvatarURL:     h.avatarURLs(r, user.ID)[user.ID],
 	})
 }
 
@@ -667,3 +674,8 @@ func (h *AuthHandlers) GoogleMe(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, 200, info)
 }
+
+// refreshReuseGrace is how long a refresh token stays valid after a refresh replaced it. Several tabs share one
+// stored session: when they refresh one after the other with the same token, the later ones get their own new pair
+// instead of a 401 that would sign every tab out.
+const refreshReuseGrace = 2 * time.Minute

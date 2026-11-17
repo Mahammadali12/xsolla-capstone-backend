@@ -30,6 +30,7 @@ type Store interface {
 	DeleteRefreshTokensForUser(ctx context.Context, userID int64) error
 	FindRefreshTokenByHash(ctx context.Context, tokenHash string) (int64, string, time.Time, error)
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	RetireRefreshToken(ctx context.Context, tokenHash string, grace time.Duration) error
 	CountRefreshTokens(ctx context.Context) *sql.Row
 
 	// Module methods
@@ -49,13 +50,13 @@ type Store interface {
 	IsUserTeacherOfModule(ctx context.Context, moduleID int64, userID int64) (bool, error)
 	GetActiveStudentIDs(ctx context.Context) ([]int64, error)
 	EnrollStudentsInModule(ctx context.Context, moduleID int64, studentIDs []int64) error
-	UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, gradedBy int64) (*Enrollment, error)
+	UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, feedback string, gradedBy int64) (*Enrollment, error)
 
 	// Content item methods
 	CreateContentItem(ctx context.Context, moduleID int64, parentID *int64, itemType string, title string, description string, position int, isVisible bool, fileID *int64, url *string) (*ContentItem, error)
 	GetContentItemByID(ctx context.Context, id int64) (*ContentItem, error)
 	GetContentItemsForModule(ctx context.Context, moduleID int64, visibleOnly bool) ([]ContentItem, error)
-	UpdateContentItem(ctx context.Context, id int64, title string, description string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*ContentItem, error)
+	UpdateContentItem(ctx context.Context, id int64, title *string, description *string, position *int, isVisible *bool, parentID *int64, fileID *int64, dueAt *time.Time, url *string) (*ContentItem, error)
 	DeleteContentItem(ctx context.Context, id int64) error
 
 	// Assignment methods
@@ -126,6 +127,12 @@ type Store interface {
 	BookMentorSlot(ctx context.Context, studentID int64, slotID int64) (*MentorSlot, error)
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
 	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)
+	ListBookedSlotStarts(ctx context.Context, studentID int64, from, to time.Time) ([]time.Time, error)
+
+	// Mentor review methods
+	HasMentorReview(ctx context.Context, moduleID, studentID int64) (bool, error)
+	CreateMentorReview(ctx context.Context, in MentorReviewInput) (*MentorReview, error)
+	ListReviewedModules(ctx context.Context, studentID int64) ([]ReviewedModule, error)
 
 	CreateQuiz(ctx context.Context, moduleID int64, sourceContentItemID *int64, title, description string, dueAt *time.Time, status string, isAI bool, createdBy int64, questions []QuizQuestionInput) (*Quiz, error)
 	GetQuizByID(ctx context.Context, id int64) (*Quiz, error)

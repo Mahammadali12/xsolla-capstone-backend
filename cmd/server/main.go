@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"time"
@@ -50,6 +51,24 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 
+	// In-app notifications live in the notification service's database. Without NOTIFY_DATABASE_URL the
+	// /notifications routes answer 503; nothing else needs it. The connection is lazy, so a database that
+	// comes up after the API is used as soon as it answers.
+	var notificationStore service.NotificationStore
+	if cfg.NotifyDatabaseURL != "" {
+		notifyDB, err := sql.Open("postgres", cfg.NotifyDatabaseURL)
+		if err != nil {
+			log.Fatalf("notify db: %v", err)
+		}
+		defer notifyDB.Close()
+		if err := notifyDB.Ping(); err != nil {
+			log.Printf("notify db: not reachable yet, /notifications tries again on each request: %v", err)
+		}
+		notificationStore = store.NewNotificationStore(notifyDB)
+	} else {
+		log.Print("notify db: NOTIFY_DATABASE_URL not set, /notifications answers 503")
+	}
+
 	store := store.NewStore(database)
 
 	// Background publisher drains the transactional outbox written by bookings.
@@ -64,6 +83,12 @@ func main() {
 	userSvc := service.NewUserService(store)
 	mentorSlotSvc := service.NewMentorSlotServiceWithGoogle(store, authSvc)
 	teamSvc := service.NewTeamService(store, mentorSlotSvc)
+	mentorReviewSvc := service.NewMentorReviewService(store)
+	analyticsSvc := service.NewAnalyticsService(store)
+	summaryProvider := service.NewGeminiSummaryProvider(cfg.GeminiAPIKey, cfg.GeminiModel,
+		time.Duration(cfg.AISummaryTimeoutSeconds)*time.Second)
+	analyticsSummarySvc := service.NewAnalyticsSummaryService(store, summaryProvider,
+		cfg.AISummaryMaxInputChars, cfg.AISummaryMaxOutputChars)
 	googleCalendarSvc := service.NewGoogleCalendarService(authSvc)
 
 	// S3 object storage
@@ -74,6 +99,8 @@ func main() {
 	fileSvc := service.NewFileService(store, s3Storage)
 	aiQuizGen := service.NewGeminiQuizGenerator(cfg.GeminiAPIKey, cfg.GeminiModel)
 	quizSvc := service.NewQuizService(store, fileSvc, aiQuizGen)
+	profileSvc := service.NewProfileService(store, s3Storage)
+	preferencesSvc := service.NewPreferencesService(store)
 
 	authH := handlers.NewAuthHandlers(
 		authSvc,
@@ -87,11 +114,24 @@ func main() {
 	fileH := handlers.NewFileHandlers(fileSvc)
 	submissionH := handlers.NewSubmissionHandlers(submissionSvc)
 	eventH := handlers.NewEventHandlers(eventSvc)
+	lectureFeedbackH := handlers.NewLectureFeedbackHandlers(service.NewLectureFeedbackService(store))
+	reportH := handlers.NewReportHandlers(service.NewReportService(store))
+	notificationH := handlers.NewNotificationHandlers(service.NewNotificationService(notificationStore))
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
+	mentorReviewH := handlers.NewMentorReviewHandlers(mentorReviewSvc)
+	analyticsH := handlers.NewAnalyticsHandlers(analyticsSvc)
+	analyticsSummaryH := handlers.NewAnalyticsSummaryHandlers(analyticsSummarySvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
 	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
+	profileH := handlers.NewProfileHandlers(profileSvc, preferencesSvc, cfg.PublicAPIURL)
+	// avatar_url on the people in user, team, event and 1:1 slot responses
+	for _, h := range []interface {
+		SetAvatars(handlers.AvatarSource, string)
+	}{authH, userH, teamH, eventH, mentorSlotH} {
+		h.SetAvatars(profileSvc, cfg.PublicAPIURL)
+	}
 
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
@@ -127,6 +167,17 @@ func main() {
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
 	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
 
+	// Profile page: about me, picture, look and accessibility settings (every signed-in user)
+	mux.Handle("GET /users/me/profile", authenticator.Middleware(http.HandlerFunc(profileH.GetMyProfile)))
+	mux.Handle("PATCH /users/me/profile", authenticator.Middleware(http.HandlerFunc(profileH.UpdateMyProfile)))
+	mux.Handle("GET /users/{id}/profile", authenticator.Middleware(http.HandlerFunc(profileH.GetProfile)))
+	mux.Handle("PUT /users/me/avatar", authenticator.Middleware(http.HandlerFunc(profileH.PutMyAvatar)))
+	mux.Handle("DELETE /users/me/avatar", authenticator.Middleware(http.HandlerFunc(profileH.DeleteMyAvatar)))
+	mux.Handle("GET /users/me/preferences", authenticator.Middleware(http.HandlerFunc(profileH.GetMyPreferences)))
+	mux.Handle("PATCH /users/me/preferences", authenticator.Middleware(http.HandlerFunc(profileH.UpdateMyPreferences)))
+	// <img> tags cannot send a token, so pictures are public behind long random names
+	mux.HandleFunc("GET /avatars/{name}", profileH.ServeAvatar)
+
 	// Admin-only teams (4.2)
 	mux.Handle("GET /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ListTeams), "admin"))
 	mux.Handle("PUT /teams", authenticator.RequireRole(http.HandlerFunc(teamH.ReplaceTeams), "admin"))
@@ -140,6 +191,15 @@ func main() {
 	// Team read side (student/mentor)
 	mux.Handle("GET /teams/me", authenticator.Middleware(http.HandlerFunc(teamH.GetMyTeam)))
 	mux.Handle("GET /mentors/me/team", authenticator.Middleware(http.HandlerFunc(teamH.GetMentorTeam)))
+
+	// Admin-only analytics (read-only reporting layer)
+	mux.Handle("GET /analytics/overview", authenticator.RequireRole(http.HandlerFunc(analyticsH.Overview), "admin"))
+	mux.Handle("GET /analytics/students", authenticator.RequireRole(http.HandlerFunc(analyticsH.ListStudents), "admin"))
+	mux.Handle("GET /analytics/students/{studentId}", authenticator.RequireRole(http.HandlerFunc(analyticsH.Student), "admin"))
+	mux.Handle("GET /analytics/mentors", authenticator.RequireRole(http.HandlerFunc(analyticsH.ListMentors), "admin"))
+	mux.Handle("GET /analytics/mentors/{mentorId}", authenticator.RequireRole(http.HandlerFunc(analyticsH.Mentor), "admin"))
+	mux.Handle("POST /analytics/students/{studentId}/ai-summary", authenticator.RequireRole(http.HandlerFunc(analyticsSummaryH.Student), "admin"))
+	mux.Handle("POST /analytics/mentors/{mentorId}/ai-summary", authenticator.RequireRole(http.HandlerFunc(analyticsSummaryH.Mentor), "admin"))
 
 	mux.Handle("POST /modules", authenticator.Middleware(http.HandlerFunc(moduleH.CreateModule)))
 	mux.Handle("GET /modules", authenticator.Middleware(http.HandlerFunc(moduleH.ListModules)))
@@ -167,6 +227,26 @@ func main() {
 	mux.Handle("PATCH /modules/{id}/grade", authenticator.Middleware(http.HandlerFunc(submissionH.GradeModule)))
 
 	mux.Handle("GET /events", authenticator.Middleware(http.HandlerFunc(eventH.ListEvents)))
+	// Lecture feedback: students fill the form after a lecture; only admins read the answers
+	mux.Handle("GET /lecture-feedback/form", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Form)))
+	mux.Handle("GET /lecture-feedback/pending", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Pending)))
+	mux.Handle("GET /lecture-feedback/me", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Mine)))
+	mux.Handle("POST /lecture-feedback", authenticator.Middleware(http.HandlerFunc(lectureFeedbackH.Submit)))
+	mux.Handle("GET /lecture-feedback", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.List), "admin"))
+	mux.Handle("GET /lecture-feedback/summary", authenticator.RequireRole(http.HandlerFunc(lectureFeedbackH.Summary), "admin"))
+
+	// Reports: anyone signed in sends one; only admins read and handle them.
+	mux.Handle("POST /reports", authenticator.Middleware(http.HandlerFunc(reportH.Send)))
+	mux.Handle("GET /reports", authenticator.RequireRole(http.HandlerFunc(reportH.List), "admin"))
+	mux.Handle("GET /reports/summary", authenticator.RequireRole(http.HandlerFunc(reportH.Summary), "admin"))
+	mux.Handle("GET /reports/{id}", authenticator.RequireRole(http.HandlerFunc(reportH.Get), "admin"))
+	mux.Handle("PATCH /reports/{id}", authenticator.RequireRole(http.HandlerFunc(reportH.Update), "admin"))
+	mux.Handle("DELETE /reports/{id}", authenticator.RequireRole(http.HandlerFunc(reportH.Delete), "admin"))
+
+	// In-app notifications: every signed-in user reads and marks only their own.
+	mux.Handle("GET /notifications", authenticator.Middleware(http.HandlerFunc(notificationH.Unread)))
+	mux.Handle("POST /notifications/read-all", authenticator.Middleware(http.HandlerFunc(notificationH.MarkAllRead)))
+	mux.Handle("POST /notifications/{id}/read", authenticator.Middleware(http.HandlerFunc(notificationH.MarkRead)))
 	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))
 	mux.Handle("PATCH /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.UpdateEvent)))
 	mux.Handle("DELETE /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.DeleteEvent)))
@@ -177,6 +257,14 @@ func main() {
 	mux.Handle("DELETE /mentor-slots/{id}", authenticator.Middleware(http.HandlerFunc(mentorSlotH.RemoveSlot)))
 	mux.Handle("POST /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.BookSlot)))
 	mux.Handle("DELETE /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.CancelBooking)))
+
+	// Weekly mentor reviews (students only; the service answers 403 to everyone else)
+	mux.Handle("GET /mentor-reviews/me", authenticator.Middleware(http.HandlerFunc(mentorReviewH.ListMine)))
+	mux.Handle("POST /mentor-reviews", authenticator.Middleware(http.HandlerFunc(mentorReviewH.Submit)))
+	// reading the answers: admins only (mentors never see the reviews about them)
+	mux.Handle("GET /mentor-reviews", authenticator.RequireRole(http.HandlerFunc(mentorReviewH.List), "admin"))
+	mux.Handle("GET /mentor-reviews/summary", authenticator.RequireRole(http.HandlerFunc(mentorReviewH.Summary), "admin"))
+	mux.Handle("GET /mentor-reviews/missing", authenticator.RequireRole(http.HandlerFunc(mentorReviewH.Missing), "admin"))
 
 	mux.Handle("POST /files", authenticator.Middleware(http.HandlerFunc(fileH.UploadFile)))
 	mux.Handle("GET /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.GetFile)))

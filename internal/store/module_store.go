@@ -39,9 +39,15 @@ type Enrollment struct {
 	UserID    int64
 	CreatedAt time.Time
 	Grade     *string
+	GradedBy  *int64
 	Email     string
 	Name      string
 	Role      string
+
+	// GradeFeedback is the mentor's module feedback that came with the grade, GradedAt when the grade was last
+	// written (both nil for a week graded before they were kept).
+	GradeFeedback *string
+	GradedAt      *time.Time
 }
 
 // CreateModule inserts a new module and its outbox event in one transaction.
@@ -194,8 +200,9 @@ func (s *StoreImpl) DeleteEnrollment(ctx context.Context, moduleID int64, userID
 	return nil
 }
 
-// UpdateEnrollmentGrade sets a student's module grade (red/yellow/green).
-func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, gradedBy int64) (*Enrollment, error) {
+// UpdateEnrollmentGrade sets a student's module grade (red/yellow/green) and the mentor's module feedback. A new grade
+// replaces the old grade and the old feedback.
+func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, userID int64, grade *string, feedback string, gradedBy int64) (*Enrollment, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -204,7 +211,7 @@ func (s *StoreImpl) UpdateEnrollmentGrade(ctx context.Context, moduleID int64, u
 	q := WithTx(tx)
 
 	var e Enrollment
-	err = q.UpdateEnrollmentGrade(ctx, moduleID, userID, grade).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.CreatedAt)
+	err = q.UpdateEnrollmentGrade(ctx, moduleID, userID, grade, feedback, gradedBy).Scan(&e.ID, &e.ModuleID, &e.UserID, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.GradedBy, &e.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotEnrolled
@@ -256,7 +263,7 @@ func (s *StoreImpl) GetEnrollmentsForModule(ctx context.Context, moduleID int64)
 	var enrollments []Enrollment
 	for rows.Next() {
 		var e Enrollment
-		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.Email, &e.Name); err != nil {
+		if err := rows.Scan(&e.ID, &e.ModuleID, &e.UserID, &e.CreatedAt, &e.Grade, &e.GradeFeedback, &e.GradedAt, &e.GradedBy, &e.Email, &e.Name); err != nil {
 			return nil, err
 		}
 		enrollments = append(enrollments, e)
