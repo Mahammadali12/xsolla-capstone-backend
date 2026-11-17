@@ -32,12 +32,17 @@ Each template is executed with:
 | `.Recipient` | The recipient snapshot: `ID`, `Role`, `Name`, `Email`. |
 | `.Payload` | The event's `data` object, e.g. `.Payload.starts_at`. |
 
+Timestamp fields should be rendered with `formatTime`, for example
+`{{formatTime .Payload.starts_at}}`. The worker displays RFC3339 timestamps in
+Baku time (`UTC+04:00`) and fails rendering when the value is not a valid
+timestamp.
+
 Example plain body:
 
 ```text
 Hi {{.Recipient.Name}},
 
-Your mentor slot is booked from {{.Payload.starts_at}} to {{.Payload.ends_at}}.
+Your mentor slot is booked from {{formatTime .Payload.starts_at}} to {{formatTime .Payload.ends_at}}.
 ```
 
 Missing data is an error, not an empty string: rendering fails with the

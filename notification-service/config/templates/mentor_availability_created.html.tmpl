@@ -11,8 +11,8 @@
         </tr>
         {{range .Payload.slots}}
         <tr>
-          <td class="detail-label text-ink" valign="top" style="padding:0 0 6px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; color:#1B1A22;">{{.starts_at}}</td>
-          <td class="detail-value text-ink" valign="top" style="padding:0 0 6px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; color:#1B1A22;">{{.ends_at}}</td>
+          <td class="detail-label text-ink" valign="top" style="padding:0 0 6px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; color:#1B1A22;">{{formatTime .starts_at}}</td>
+          <td class="detail-value text-ink" valign="top" style="padding:0 0 6px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:20px; color:#1B1A22;">{{formatTime .ends_at}}</td>
         </tr>
         {{end}}
       </table>

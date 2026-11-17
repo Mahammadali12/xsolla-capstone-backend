@@ -1,6 +1,6 @@
 Hi {{.Recipient.Name}},
 
-Your mentor slot from {{.Payload.starts_at}} to {{.Payload.ends_at}} has been cancelled.
+Your mentor slot from {{formatTime .Payload.starts_at}} to {{formatTime .Payload.ends_at}} has been cancelled.
 Event {{.Event.ID}} ({{.Event.Type}}) occurred at {{.Event.OccurredAt}}.
 
 This is a temporary template used to exercise the notification pipeline.

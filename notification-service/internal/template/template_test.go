@@ -34,6 +34,24 @@ func testEvent(data string) events.Envelope {
 	}
 }
 
+func TestFormatTimeUsesBakuTime(t *testing.T) {
+	dir := newDir(t)
+	writeTemplate(t, dir, "booking.subject.tmpl", "{{formatTime .Payload.starts_at}}")
+	writeTemplate(t, dir, "booking.body.tmpl", "body")
+
+	set, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	message, err := set.Render("booking", testEvent(`{"starts_at":"2026-11-19T12:00:00Z"}`), events.Recipient{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if message.Subject != "2026-11-19 16:00 +04:00" {
+		t.Fatalf("subject = %q, want Baku local time", message.Subject)
+	}
+}
+
 func TestRender(t *testing.T) {
 	dir := newDir(t)
 	writeTemplate(t, dir, "booking.subject.tmpl", "Booked: {{.Payload.starts_at}}")

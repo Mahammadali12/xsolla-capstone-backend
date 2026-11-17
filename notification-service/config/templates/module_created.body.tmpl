@@ -1,7 +1,7 @@
 Hi {{.Recipient.Name}},
 
 A new module "{{.Payload.title}}" is available.
-Opens: {{.Payload.opens_at}}
-Closes: {{.Payload.closes_at}}
+Opens: {{formatTime .Payload.opens_at}}
+Closes: {{formatTime .Payload.closes_at}}
 
 {{.Payload.description}}

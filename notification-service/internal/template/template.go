@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	texttemplate "text/template"
+	"time"
 
 	"xsolla-notification-service/internal/channel"
 	"xsolla-notification-service/internal/events"
@@ -50,6 +51,32 @@ type Set struct {
 	byName map[string]pair
 	layout *htmltemplate.Template // nil when no HTML templates are loaded
 	logo   bool
+}
+
+var templateFuncs = texttemplate.FuncMap{
+	"formatTime": formatTime,
+}
+
+var localTimeZone = mustLoadLocation("Asia/Baku")
+
+func mustLoadLocation(name string) *time.Location {
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		panic(err)
+	}
+	return location
+}
+
+func formatTime(value any) (string, error) {
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("timestamp must be a string")
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, text)
+	if err != nil {
+		return "", fmt.Errorf("invalid timestamp %q: %w", text, err)
+	}
+	return parsed.In(localTimeZone).Format("2006-01-02 15:04 -07:00"), nil
 }
 
 // NewSet returns an empty set. Rendering against it fails with "not found"; it
@@ -163,7 +190,7 @@ func parse(path string) (*texttemplate.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	parsed, err := texttemplate.New(filepath.Base(path)).Option("missingkey=error").Parse(string(source))
+	parsed, err := texttemplate.New(filepath.Base(path)).Funcs(templateFuncs).Option("missingkey=error").Parse(string(source))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
@@ -177,7 +204,7 @@ func parseHTML(path string) (*htmltemplate.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	parsed, err := htmltemplate.New(filepath.Base(path)).Option("missingkey=error").Parse(string(source))
+	parsed, err := htmltemplate.New(filepath.Base(path)).Funcs(templateFuncs).Option("missingkey=error").Parse(string(source))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
