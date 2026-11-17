@@ -21,6 +21,7 @@ type TeamService interface {
 	AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
+	DeleteTeam(ctx context.Context, id int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*store.Team, error)
 	CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*store.Team, error)
@@ -156,6 +157,36 @@ func (h *TeamHandlers) AddTeamStudents(w http.ResponseWriter, r *http.Request) {
 		default:
 			log.Printf("team handler: AddTeamStudents error: %v", err)
 			writeError(w, 500, "server_error", "could not update team students", nil)
+		}
+		return
+	}
+	w.WriteHeader(204)
+}
+
+// @Summary     Delete a team
+// @Description Deletes one team (admin only). Its students and its mentor stay; they are just no longer in a team.
+// @Description Past mentor reviews are kept.
+// @Tags        teams
+// @Security    BearerAuth
+// @Param       id path int true "Team ID"
+// @Success     204
+// @Failure     400 {object} handlers.ErrorResponse
+// @Failure     403 {object} handlers.ErrorResponse
+// @Failure     404 {object} handlers.ErrorResponse
+// @Router      /teams/{id} [delete]
+func (h *TeamHandlers) DeleteTeam(w http.ResponseWriter, r *http.Request) {
+	teamID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid team ID", nil)
+		return
+	}
+	if err := h.svc.DeleteTeam(r.Context(), teamID); err != nil {
+		switch {
+		case errors.Is(err, store.ErrTeamNotFound):
+			writeError(w, 404, "not_found", "team not found", nil)
+		default:
+			log.Printf("team handler: DeleteTeam error: %v", err)
+			writeError(w, 500, "server_error", "could not delete team", nil)
 		}
 		return
 	}

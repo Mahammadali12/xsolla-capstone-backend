@@ -24,6 +24,9 @@ type Submission struct {
 	GradedAt      *time.Time
 	CreatedAt     time.Time
 	Files         []File
+
+	// History is filled only for the student's own read: their earlier hand-ins of the task, newest first.
+	History []Submission
 }
 
 // SubmissionFile represents a row in submission_files with file metadata.

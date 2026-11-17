@@ -156,18 +156,27 @@ func (h *SubmissionHandlers) GetMySubmission(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, 200, dto.SubmissionResponse{
-		ID:           s.ID,
+	resp := submissionVersion(*s)
+	for _, old := range s.History {
+		resp.History = append(resp.History, submissionVersion(old))
+	}
+	writeJSON(w, 200, resp)
+}
+
+// submissionVersion is one hand-in as the student sees it.
+func submissionVersion(s store.Submission) dto.SubmissionResponse {
+	return dto.SubmissionResponse{
+		ID:            s.ID,
 		ContentItemID: s.ContentItemID,
-		StudentID:    s.StudentID,
-		TextBody:     s.TextBody,
-		SubmittedAt:  s.SubmittedAt,
-		Feedback:     feedbackString(s.Feedback),
-		GradedBy:     s.GradedBy,
-		GradedAt:     s.GradedAt,
-		CreatedAt:    s.CreatedAt,
-		Files:        dto.FileList(s.Files),
-	})
+		StudentID:     s.StudentID,
+		TextBody:      s.TextBody,
+		SubmittedAt:   s.SubmittedAt,
+		Feedback:      feedbackString(s.Feedback),
+		GradedBy:      s.GradedBy,
+		GradedAt:      s.GradedAt,
+		CreatedAt:     s.CreatedAt,
+		Files:         dto.FileList(s.Files),
+	}
 }
 
 // POST /submissions/:id/feedback — submit feedback for a submission (mentor/admin only).

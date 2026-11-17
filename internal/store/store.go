@@ -89,7 +89,7 @@ type Store interface {
 	GetSubmissionFiles(ctx context.Context, submissionID int64) ([]File, error)
 
 	// Event methods
-	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*Event, error)
+	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, createdBy int64) (*Event, error)
 	GetEventByID(ctx context.Context, id int64) (*Event, error)
 	ListEventsByRange(ctx context.Context, from time.Time, to time.Time) ([]Event, error)
 	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
@@ -103,6 +103,7 @@ type Store interface {
 	AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
+	DeleteTeam(ctx context.Context, id int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*Team, error)
 	CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*Team, error)

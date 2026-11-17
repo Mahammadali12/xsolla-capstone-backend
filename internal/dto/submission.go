@@ -20,6 +20,8 @@ type SubmissionResponse struct {
 	GradedAt     *time.Time `json:"graded_at,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	Files        []FileResponse `json:"files,omitempty"`
+	// On GET .../submissions/me: the earlier hand-ins of the same task, newest first.
+	History []SubmissionResponse `json:"history,omitempty"`
 }
 
 // FeedbackSubmissionRequest is the payload for POST /submissions/:id/feedback.

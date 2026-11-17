@@ -145,6 +145,7 @@ type Event struct {
 	ModuleID      *int64
 	GoogleEventID *string
 	CreatedAt     time.Time
+	CreatedBy     *int64 // nil for events made before it was recorded
 }
 
 // ErrEventNotFound is returned when an event does not exist or is deleted.
@@ -175,7 +176,7 @@ type MentorSlot struct {
 }
 
 // CreateEvent inserts a new event and its outbox event in one transaction.
-func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*Event, error) {
+func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, createdBy int64) (*Event, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -184,8 +185,8 @@ func (s *StoreImpl) CreateEvent(ctx context.Context, title string, kind string, 
 	q := WithTx(tx)
 
 	var e Event
-	err = q.CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.MeetingURL, &e.ModuleID, &e.GoogleEventID, &e.CreatedAt,
+	err = q.CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, createdBy).Scan(
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &e.Location, &e.Description, &e.MeetingURL, &e.ModuleID, &e.GoogleEventID, &e.CreatedAt, &e.CreatedBy,
 	)
 	if err != nil {
 		return nil, err
@@ -230,7 +231,7 @@ func (s *StoreImpl) GetEventByID(ctx context.Context, id int64) (*Event, error) 
 	var moduleID *int64
 	var googleEventID *string
 	err := s.DB().GetEventByID(ctx, id).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &meetingURL, &moduleID, &googleEventID, &e.CreatedAt,
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &meetingURL, &moduleID, &googleEventID, &e.CreatedAt, &e.CreatedBy,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -263,7 +264,7 @@ func (s *StoreImpl) ListEventsByRange(ctx context.Context, from time.Time, to ti
 		var meetingURL *string
 		var moduleID *int64
 		var googleEventID *string
-		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &meetingURL, &moduleID, &googleEventID, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &location, &description, &meetingURL, &moduleID, &googleEventID, &e.CreatedAt, &e.CreatedBy); err != nil {
 			return nil, err
 		}
 		e.Location = location
@@ -285,7 +286,7 @@ func (s *StoreImpl) UpdateEvent(ctx context.Context, id int64, title string, kin
 	var modID *int64
 	var googleEventID *string
 	err := s.DB().UpdateEvent(ctx, id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, userID, isAdmin).Scan(
-		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &meet, &modID, &googleEventID, &e.CreatedAt,
+		&e.ID, &e.Title, &e.Kind, &e.StartsAt, &e.EndsAt, &e.AllDay, &loc, &desc, &meet, &modID, &googleEventID, &e.CreatedAt, &e.CreatedBy,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

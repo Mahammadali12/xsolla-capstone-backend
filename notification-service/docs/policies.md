@@ -51,8 +51,8 @@ dead-lettered. The `email` channel currently uses a logging mock adapter.
 
 The committed file enables policies for `mentor_slot.booked`,
 `mentor_slot.canceled`, `module.created`, `content_item.uploaded`,
-`event.created`, `mentor_availability.created`, `submission.created`, and
-`enrollment.graded`.
+`event.created`, `mentor_availability.created`, `submission.created`,
+`enrollment.graded`, and `announcement.created`.
 
 No dynamic rules engine, conditions, preferences, or policy UI exists. Add
 fields only when a real requirement needs them.
