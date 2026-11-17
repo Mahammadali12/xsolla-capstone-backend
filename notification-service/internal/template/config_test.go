@@ -54,6 +54,10 @@ func TestCommittedPoliciesRender(t *testing.T) {
 		"grade":            "green",
 		"graded_by":        7,
 		"graded_by_name":   "Mentor One",
+		"message":          "No lectures on Friday.",
+		"link":             "/calendar",
+		"audience":         "all",
+		"sent_by_name":     "Admin One",
 	})
 	if err != nil {
 		t.Fatalf("encode payload: %v", err)

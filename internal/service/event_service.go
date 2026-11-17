@@ -81,6 +81,7 @@ type Event struct {
 	GoogleEventID *string
 	Attendees     []Attendee
 	CreatedAt     time.Time
+	CreatedBy     *int64
 }
 
 func eventFromStore(e store.Event) Event {
@@ -97,6 +98,7 @@ func eventFromStore(e store.Event) Event {
 		ModuleID:      e.ModuleID,
 		GoogleEventID: e.GoogleEventID,
 		CreatedAt:     e.CreatedAt,
+		CreatedBy:     e.CreatedBy,
 	}
 }
 
@@ -194,6 +196,7 @@ func eventFromStorePtr(e *store.Event) *Event {
 		ModuleID:      e.ModuleID,
 		GoogleEventID: e.GoogleEventID,
 		CreatedAt:     e.CreatedAt,
+		CreatedBy:     e.CreatedBy,
 	}
 }
 
@@ -239,7 +242,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID int64, roles []st
 		}
 	}
 
-	storeEvent, err := s.store.CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID)
+	storeEvent, err := s.store.CreateEvent(ctx, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +393,7 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, roles []st
 		return nil, err
 	}
 
-	if !auth.HasRole(roles, "admin") && existing.ModuleID != nil {
+	if !auth.HasRole(roles, "admin") && existing.ModuleID != nil && !createdByUser(existing, userID) {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, *existing.ModuleID, userID)
 		if err != nil {
 			return nil, err
@@ -425,6 +428,11 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID int64, roles []st
 	return &ev, nil
 }
 
+// createdByUser reports whether the user made the event; the creator may always change and delete it.
+func createdByUser(e *store.Event, userID int64) bool {
+	return e.CreatedBy != nil && *e.CreatedBy == userID
+}
+
 // DeleteEvent soft-deletes an event.
 // Only the creator or admin can delete.
 func (s *EventService) DeleteEvent(ctx context.Context, userID int64, roles []string, id int64) error {
@@ -438,7 +446,7 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID int64, roles []st
 		return err
 	}
 
-	if !auth.HasRole(roles, "admin") && existing.ModuleID != nil {
+	if !auth.HasRole(roles, "admin") && existing.ModuleID != nil && !createdByUser(existing, userID) {
 		teacher, err := s.store.IsUserTeacherOfModule(ctx, *existing.ModuleID, userID)
 		if err != nil {
 			return err

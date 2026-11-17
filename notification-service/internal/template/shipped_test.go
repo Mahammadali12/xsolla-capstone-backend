@@ -21,6 +21,7 @@ func TestShippedTemplatesRenderCheck(t *testing.T) {
 		"mentor_availability_created": `{"mentor_name":"Mentor One","slots":[{"starts_at":"2026-11-19T10:00:00Z","ends_at":"2026-11-19T10:30:00Z"}]}`,
 		"submission_created":          `{"student_name":"Student One","assignment_title":"Essay","module_title":"Math","submitted_at":"2026-11-19T10:00:00Z"}`,
 		"enrollment_graded":           `{"graded_by_name":"Mentor One","module_title":"Math","grade":"A"}`,
+		"announcement":                `{"sent_by_name":"Admin One","message":"No lectures on Friday.","link":"/calendar"}`,
 	}
 	for name, payload := range cases {
 		message, err := set.Render(name, events.Envelope{ID: 1, Type: "x.y", Data: []byte(payload)}, events.Recipient{ID: 2, Name: "Test", Email: "test@example.com"})

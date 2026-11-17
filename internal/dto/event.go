@@ -17,6 +17,7 @@ type EventResponse struct {
 	GoogleEventID *string    `json:"google_event_id,omitempty"`
 	Attendees     []Attendee `json:"attendees"`
 	CreatedAt     time.Time  `json:"created_at"`
+	CreatedBy     *int64     `json:"created_by,omitempty"` // who made the event (left out for older events)
 }
 
 // CreateEventRequest is the payload for POST /events.

@@ -217,13 +217,14 @@ func (s *ModuleService) GetEnrollmentsForModule(ctx context.Context, userID int6
 	if err != nil {
 		return nil, err
 	}
-	// the mentor's module feedback is for its student only
-	for i := range enrollments {
-		if enrollments[i].UserID != userID {
-			enrollments[i].GradeFeedback = nil
+	// a student reads only their own enrollment: their week grade and their mentor's feedback are for them alone
+	own := []store.Enrollment{}
+	for _, e := range enrollments {
+		if e.UserID == userID {
+			own = append(own, e)
 		}
 	}
-	return enrollments, nil
+	return own, nil
 }
 
 // UpdateEnrollmentGrade sets a student's grade for a module with the mentor's module feedback (mentor/admin only).

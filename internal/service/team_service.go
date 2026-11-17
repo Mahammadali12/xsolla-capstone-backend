@@ -297,6 +297,11 @@ func (s *TeamService) PatchTeam(ctx context.Context, id int64, name *string, men
 }
 
 // DeleteTeamStudent removes a single student from a team.
+// DeleteTeam removes one team (store.ErrTeamNotFound when there is none).
+func (s *TeamService) DeleteTeam(ctx context.Context, id int64) error {
+	return s.store.DeleteTeam(ctx, id)
+}
+
 func (s *TeamService) DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error {
 	return s.store.DeleteTeamStudent(ctx, teamID, studentID)
 }

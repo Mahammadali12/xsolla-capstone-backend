@@ -143,6 +143,7 @@ func (s *SubmissionService) GetSubmissionByID(ctx context.Context, userID int64,
 }
 
 // GetSubmissionByStudentAndAssignment returns a student's submission for an assignment.
+// The newest hand-in is returned with its files; History holds the earlier ones, newest first, each with its files.
 func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Context, studentID int64, contentItemID int64) (*store.Submission, error) {
 	sub, err := s.store.GetSubmissionByStudentAndAssignment(ctx, studentID, contentItemID)
 	if err != nil {
@@ -151,6 +152,19 @@ func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Cont
 	sub.Files, err = s.store.GetSubmissionFiles(ctx, sub.ID)
 	if err != nil {
 		return nil, err
+	}
+	all, err := s.store.GetSubmissionsByStudentAndAssignment(ctx, studentID, contentItemID)
+	if err != nil {
+		return nil, err
+	}
+	for _, old := range all {
+		if old.ID == sub.ID {
+			continue
+		}
+		if old.Files, err = s.store.GetSubmissionFiles(ctx, old.ID); err != nil {
+			return nil, err
+		}
+		sub.History = append(sub.History, old)
 	}
 	return sub, nil
 }

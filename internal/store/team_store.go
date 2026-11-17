@@ -272,6 +272,19 @@ func (s *StoreImpl) DeleteTeamStudent(ctx context.Context, teamID int64, student
 	return err
 }
 
+// DeleteTeam removes one team. Its member list goes with it; past mentor reviews keep their text (team_id becomes
+// NULL), and the students and the mentor are not touched.
+func (s *StoreImpl) DeleteTeam(ctx context.Context, id int64) error {
+	res, err := s.DB().ExecContext(ctx, `DELETE FROM teams WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrTeamNotFound
+	}
+	return nil
+}
+
 // PutTeamMentor sets or removes a team's mentor. If the mentor leads another
 // team, they are taken off it (one team per mentor).
 func (s *StoreImpl) PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error {

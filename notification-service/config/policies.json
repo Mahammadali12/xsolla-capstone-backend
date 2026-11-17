@@ -46,5 +46,11 @@
     "recipients": ["student"],
     "channels": ["in_app", "email"],
     "template": "enrollment_graded"
+  },
+  "announcement.created": {
+    "enabled": true,
+    "recipients": ["student", "mentor", "lecturer"],
+    "channels": ["in_app", "email"],
+    "template": "announcement"
   }
 }
