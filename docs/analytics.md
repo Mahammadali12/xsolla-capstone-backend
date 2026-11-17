@@ -38,7 +38,10 @@ All return the standard JSON error body (`{error,message,status,details}`) on fa
 
 ### `GET /analytics/students`
 
-`q`, `limit` (1–100, default 20), `offset`. Returns `[{id,name,email}]` for active students.
+`q`, `limit` (1–100, default 20), `offset`. Returns `[{id,name,email}]` for active students. Each student with at least one graded week also has the average of
+their week grades: `grade_average` (red 1, yellow 2, green 3, one decimal), `grade_level` (the level it rounds to;
+.5 rounds up, so 2.5 is green) and `graded_weeks`. The scale is `service.GradeScale` (`internal/service/grade_scale.go`),
+the one place to change for another scale. The admin's student list shows `grade_level`.
 
 ### `GET /analytics/students/{studentId}`
 

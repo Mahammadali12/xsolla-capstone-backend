@@ -31,6 +31,12 @@ type AnalyticsPersonResponse struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email,omitempty"`
+
+	// Students only, when at least one week is graded: the average of the week grades (red 1, yellow 2, green 3),
+	// the level it rounds to (.5 up) and how many weeks it is over.
+	GradeAverage *float64 `json:"grade_average,omitempty"`
+	GradeLevel   string   `json:"grade_level,omitempty"`
+	GradedWeeks  int      `json:"graded_weeks,omitempty"`
 }
 
 // AssignmentStatusResponse is the deadline classification of a student's assignments.

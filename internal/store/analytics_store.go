@@ -57,6 +57,11 @@ type AnalyticsPerson struct {
 	ID    int64
 	Name  string
 	Email string
+
+	// Students in the selector only: the average of their week grades (nil when no week is graded yet).
+	GradeAverage *float64
+	GradeLevel   string
+	GradedWeeks  int
 }
 
 // WeeklyStanding counts each module's enrollment grades. A nil mentorID counts every student; otherwise only the
