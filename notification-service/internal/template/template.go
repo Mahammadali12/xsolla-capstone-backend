@@ -59,10 +59,12 @@ var templateFuncs = texttemplate.FuncMap{
 
 var localTimeZone = mustLoadLocation("Asia/Baku")
 
+// mustLoadLocation is the school's zone. Baku is UTC+4 all year, so a fixed zone stands in when the system has no time
+// zone database (a small container image): the emails must never show another zone's time.
 func mustLoadLocation(name string) *time.Location {
 	location, err := time.LoadLocation(name)
 	if err != nil {
-		panic(err)
+		return time.FixedZone(name, 4*60*60)
 	}
 	return location
 }
