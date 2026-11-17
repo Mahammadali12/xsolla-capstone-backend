@@ -281,7 +281,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Active students matching q, id/name/email only.",
+                "description": "Active students matching q: id, name, email and, once a week is graded, the average of their week\ngrades (grade_average, red 1 / yellow 2 / green 3), the level it rounds to (grade_level, .5 up) and\ngraded_weeks.",
                 "produces": [
                     "application/json"
                 ],
@@ -3425,6 +3425,16 @@ const docTemplate = `{
             "properties": {
                 "email": {
                     "type": "string"
+                },
+                "grade_average": {
+                    "description": "Students only, when at least one week is graded: the average of the week grades (red 1, yellow 2, green 3),\nthe level it rounds to (.5 up) and how many weeks it is over.",
+                    "type": "number"
+                },
+                "grade_level": {
+                    "type": "string"
+                },
+                "graded_weeks": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer"
