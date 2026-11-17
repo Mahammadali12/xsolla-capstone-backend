@@ -218,21 +218,9 @@ func (s *StoreImpl) HardDeleteUser(ctx context.Context, id int64, transferTo int
 		return err
 	}
 
-	steps := []struct {
-		query string
-		args  []any
-	}{
-		{`UPDATE modules SET created_by = $2 WHERE created_by = $1`, []any{id, transferTo}},
-		{`UPDATE files SET uploaded_by = $2 WHERE uploaded_by = $1`, []any{id, transferTo}},
-		{`UPDATE content_items SET created_by = NULL WHERE created_by = $1`, []any{id}},
-		{`UPDATE submissions SET graded_by = NULL WHERE graded_by = $1`, []any{id}},
-		{`DELETE FROM mentor_slots WHERE mentor_id = $1`, []any{id}},
-		{`UPDATE mentor_slots SET booked_by = NULL, meeting_url = NULL, google_event_id = NULL WHERE booked_by = $1`, []any{id}},
-	}
-	for _, step := range steps {
-		if _, err := tx.ExecContext(ctx, step.query, step.args...); err != nil {
-			return rollback(err)
-		}
+	// the same hand-over as the bulk delete (quizzes included: a lecturer who made one could not be deleted before)
+	if err := handOverUsersData(ctx, tx, []int64{id}, transferTo); err != nil {
+		return rollback(err)
 	}
 
 	result, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
