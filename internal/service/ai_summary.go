@@ -63,7 +63,8 @@ func NewGeminiSummaryProvider(apiKey, model string, timeout time.Duration) *Gemi
 	}
 }
 
-// Summarize sends one system instruction and one data payload. It retries once on a network error, 429, or 5xx.
+// Summarize sends one system instruction and one data payload. It retries once per model and falls back
+// through the same model list used by quiz generation.
 func (g *GeminiSummaryProvider) Summarize(ctx context.Context, systemInstruction, data string) (SummaryOutput, error) {
 	if g.apiKey == "" {
 		return SummaryOutput{}, fmt.Errorf("%w: GEMINI_API_KEY is not configured", ErrSummaryProviderUnavailable)
@@ -84,50 +85,71 @@ func (g *GeminiSummaryProvider) Summarize(ctx context.Context, systemInstruction
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		text, retryable, callErr := g.call(ctx, body)
-		if callErr == nil {
-			return SummaryOutput{Text: text, Provider: summaryProviderName, Model: g.model}, nil
-		}
-		lastErr = callErr
-		if !retryable || ctx.Err() != nil {
-			break
+	for _, model := range g.orderedModels() {
+		for attempt := 0; attempt < 2; attempt++ {
+			text, statusCode, retryable, callErr := g.call(ctx, model, body)
+			if callErr == nil {
+				return SummaryOutput{Text: text, Provider: summaryProviderName, Model: model}, nil
+			}
+			lastErr = callErr
+			if statusCode == http.StatusNotFound || statusCode == http.StatusTooManyRequests || statusCode >= 500 {
+				break
+			}
+			if !retryable || ctx.Err() != nil {
+				break
+			}
 		}
 	}
 	return SummaryOutput{}, lastErr
 }
 
-// call returns the generated text and whether the failure is worth one retry. Provider bodies are never returned
+func (g *GeminiSummaryProvider) orderedModels() []string {
+	seen := make(map[string]bool)
+	models := make([]string, 0, len(geminiFallbackModels)+1)
+	if g.model != "" {
+		seen[g.model] = true
+		models = append(models, g.model)
+	}
+	for _, model := range geminiFallbackModels {
+		if !seen[model] {
+			seen[model] = true
+			models = append(models, model)
+		}
+	}
+	return models
+}
+
+// call returns the generated text, HTTP status, and whether the failure is worth one retry. Provider bodies are never returned
 // to the caller: only the status code is kept, so no feedback text or vendor detail leaks into logs.
-func (g *GeminiSummaryProvider) call(ctx context.Context, body []byte) (string, bool, error) {
-	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", strings.TrimRight(g.baseURL, "/"), g.model, g.apiKey)
+func (g *GeminiSummaryProvider) call(ctx context.Context, model string, body []byte) (string, int, bool, error) {
+	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", strings.TrimRight(g.baseURL, "/"), model, g.apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return "", false, fmt.Errorf("%w: %v", ErrSummaryProviderInvalid, err)
+		return "", 0, false, fmt.Errorf("%w: %v", ErrSummaryProviderInvalid, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := g.httpClient.Do(req)
 	if err != nil {
-		return "", true, fmt.Errorf("%w: request failed", ErrSummaryProviderUnavailable)
+		return "", 0, true, fmt.Errorf("%w: request failed", ErrSummaryProviderUnavailable)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", true, fmt.Errorf("%w: could not read the response", ErrSummaryProviderUnavailable)
+		return "", resp.StatusCode, true, fmt.Errorf("%w: could not read the response", ErrSummaryProviderUnavailable)
 	}
 
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return "", true, fmt.Errorf("%w: status %d", ErrSummaryProviderUnavailable, resp.StatusCode)
+		return "", resp.StatusCode, true, fmt.Errorf("%w: status %d", ErrSummaryProviderUnavailable, resp.StatusCode)
 	}
 
 	var parsed geminiGenerateResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", false, fmt.Errorf("%w: invalid JSON (status %d)", ErrSummaryProviderInvalid, resp.StatusCode)
+		return "", resp.StatusCode, false, fmt.Errorf("%w: invalid JSON (status %d)", ErrSummaryProviderInvalid, resp.StatusCode)
 	}
 	if resp.StatusCode >= 400 || parsed.Error != nil {
-		return "", false, fmt.Errorf("%w: status %d", ErrSummaryProviderInvalid, resp.StatusCode)
+		return "", resp.StatusCode, false, fmt.Errorf("%w: status %d", ErrSummaryProviderInvalid, resp.StatusCode)
 	}
 
 	var sb strings.Builder
@@ -138,7 +160,7 @@ func (g *GeminiSummaryProvider) call(ctx context.Context, body []byte) (string, 
 	}
 	text := strings.TrimSpace(sb.String())
 	if text == "" {
-		return "", false, fmt.Errorf("%w: empty text", ErrSummaryProviderInvalid)
+		return "", resp.StatusCode, false, fmt.Errorf("%w: empty text", ErrSummaryProviderInvalid)
 	}
-	return text, false, nil
+	return text, resp.StatusCode, false, nil
 }

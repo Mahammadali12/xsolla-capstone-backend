@@ -80,6 +80,30 @@ func TestGeminiSummaryProviderRetriesOnceOnServerError(t *testing.T) {
 	}
 }
 
+func TestGeminiSummaryProviderFallsBackToAnotherModel(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if len(paths) == 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(geminiBody("A fallback summary.")))
+	}))
+	defer srv.Close()
+
+	out, err := newTestSummaryProvider(srv.URL, time.Second).Summarize(context.Background(), "rules", "data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Text != "A fallback summary." || out.Model != "gemini-3.6-flash" {
+		t.Fatalf("output: %+v", out)
+	}
+	if len(paths) != 2 || paths[0] != "/gemini-test:generateContent" || paths[1] != "/gemini-3.6-flash:generateContent" {
+		t.Fatalf("model paths: %v", paths)
+	}
+}
+
 func TestGeminiSummaryProviderFailures(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
 		p := NewGeminiSummaryProvider("", "gemini-test", time.Second)
@@ -89,7 +113,7 @@ func TestGeminiSummaryProviderFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("client error is not retried", func(t *testing.T) {
+	t.Run("client error falls through models", func(t *testing.T) {
 		var calls atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			calls.Add(1)
@@ -101,8 +125,8 @@ func TestGeminiSummaryProviderFailures(t *testing.T) {
 		if !errors.Is(err, ErrSummaryProviderInvalid) {
 			t.Fatalf("error: %v", err)
 		}
-		if got := calls.Load(); got != 1 {
-			t.Fatalf("calls: %d", got)
+		if got := calls.Load(); got != int32(len(geminiFallbackModels)+1) {
+			t.Fatalf("calls: %d, want one call per model", got)
 		}
 	})
 
