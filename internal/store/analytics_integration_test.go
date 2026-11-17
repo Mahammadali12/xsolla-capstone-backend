@@ -130,19 +130,32 @@ func TestAnalyticsStore(t *testing.T) {
 	submit(missing, student1, now.Add(-7*24*time.Hour), true)
 	submit(missing, student1, now.Add(time.Hour), false)
 
-	status, err := st.StudentAssignmentStatus(ctx, student1, now.Add(-15*24*time.Hour), now, nil)
+	// the store gives the facts (which assignments, when work was handed in); the service works out deadline and lateness
+	items, err := st.StudentAssignmentHandIns(ctx, student1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (AssignmentStatus{OnTime: 1, Late: 1, Missing: 1, Eligible: 3}); status != want {
-		t.Errorf("assignment status = %+v, want %+v", status, want)
+	handIns := map[int64]int{}
+	for _, it := range items {
+		handIns[it.ContentItemID] = len(it.HandedInAt)
 	}
-	status, err = st.StudentAssignmentStatus(ctx, student1, now.Add(-15*24*time.Hour), now, &w1)
+	// two assignments of week 1 and the "Not enrolled" one of week 3 left out: five rows for weeks 1 and 2
+	if len(items) != 5 || handIns[onTime] != 2 || handIns[late] != 1 || handIns[missing] != 1 {
+		t.Errorf("hand-ins = %+v (by item %v), want 5 assignments of weeks 1 and 2: on time 2, late 1, missing 1 (its deleted attempt left out)", items, handIns)
+	}
+	for k := 1; k < len(items); k++ {
+		for m := 1; m < len(items[k].HandedInAt); m++ {
+			if items[k].HandedInAt[m].Before(items[k].HandedInAt[m-1]) {
+				t.Errorf("hand-ins of item %d are not oldest first", items[k].ContentItemID)
+			}
+		}
+	}
+	week1, err := st.StudentAssignmentHandIns(ctx, student1, &w1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (AssignmentStatus{OnTime: 1, Late: 1, Missing: 0, Eligible: 2}); status != want {
-		t.Errorf("week 1 assignment status = %+v, want %+v", status, want)
+	if len(week1) != 3 { // On time, Late, No deadline
+		t.Errorf("week 1 has %d assignments, want 3", len(week1))
 	}
 
 	// ---- quiz accuracy ---------------------------------------------------------------------------------------

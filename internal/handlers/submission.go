@@ -67,6 +67,8 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 		switch {
 		case errors.Is(err, store.ErrNotEnrolled):
 			writeError(w, 403, "forbidden", "not enrolled in this module", nil)
+		case errors.Is(err, service.ErrModuleNotOpen):
+			writeError(w, 403, "module_not_open", err.Error(), nil)
 		case errors.Is(err, store.ErrContentItemNotFound):
 			writeError(w, 404, "not_found", "assignment not found", nil)
 		case errors.Is(err, service.ErrInvalidSubmission):
@@ -88,6 +90,8 @@ func (h *SubmissionHandlers) CreateSubmission(w http.ResponseWriter, r *http.Req
 		GradedAt:     ci.GradedAt,
 		CreatedAt:    ci.CreatedAt,
 		Files:        dto.FileList(ci.Files),
+		DueAt:        ci.DueAt,
+		Late:         ci.Late,
 	})
 }
 
@@ -130,6 +134,8 @@ func (h *SubmissionHandlers) ListSubmissions(w http.ResponseWriter, r *http.Requ
 			GradedAt:     s.GradedAt,
 			CreatedAt:    s.CreatedAt,
 			Files:        dto.FileList(s.Files),
+			DueAt:        s.DueAt,
+			Late:         s.Late,
 		}
 	}
 	writeJSON(w, 200, resp)
@@ -176,6 +182,8 @@ func submissionVersion(s store.Submission) dto.SubmissionResponse {
 		GradedAt:      s.GradedAt,
 		CreatedAt:     s.CreatedAt,
 		Files:         dto.FileList(s.Files),
+		DueAt:         s.DueAt,
+		Late:          s.Late,
 	}
 }
 

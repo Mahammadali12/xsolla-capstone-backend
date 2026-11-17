@@ -174,6 +174,14 @@ func parseWindow(startsAt, endsAt time.Time) (time.Time, time.Time, error) {
 	if !startsAt.After(time.Now()) {
 		return time.Time{}, time.Time{}, errors.New("that time has already passed")
 	}
+	// 1:1s happen on Friday and Monday (school time): the deadlines of the week follow them (one_on_one_deadline.go)
+	day := startsAt.In(SchoolLocation)
+	if day.Weekday() != time.Friday && day.Weekday() != time.Monday {
+		return time.Time{}, time.Time{}, errors.New("1:1 times can only be set on Friday or Monday")
+	}
+	if last := endsAt.Add(-time.Nanosecond).In(SchoolLocation); last.YearDay() != day.YearDay() || last.Year() != day.Year() {
+		return time.Time{}, time.Time{}, errors.New("a 1:1 window must end on the same day it starts")
+	}
 	return startsAt, endsAt, nil
 }
 

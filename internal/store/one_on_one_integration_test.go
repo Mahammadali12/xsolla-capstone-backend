@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestListBookedSlotStarts(t *testing.T) {
+func TestListBookedSlots(t *testing.T) {
 	database := testDatabase(t)
 	st := NewStore(database)
 	ctx := context.Background()
@@ -39,11 +39,11 @@ func TestListBookedSlotStarts(t *testing.T) {
 	slot(base.Add(24*time.Hour), &student, true)    // cancelled (deleted)
 	slot(base.Add(7*24*time.Hour), &student, false) // next week: outside the window
 
-	got, err := st.ListBookedSlotStarts(ctx, student, base.Add(-10*time.Hour), base.Add(96*time.Hour))
+	got, err := st.ListBookedSlots(ctx, student, base.Add(-10*time.Hour), base.Add(96*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || !got[0].Equal(base) || !got[1].Equal(base.Add(72*time.Hour)) {
+	if len(got) != 2 || !got[0].StartsAt.Equal(base) || !got[1].StartsAt.Equal(base.Add(72*time.Hour)) || !got[0].EndsAt.Equal(base.Add(30*time.Minute)) {
 		t.Fatalf("got %v, want the Friday and Monday 1:1s in order", got)
 	}
 }

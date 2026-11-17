@@ -20,6 +20,11 @@ type SubmissionResponse struct {
 	GradedAt     *time.Time `json:"graded_at,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	Files        []FileResponse `json:"files,omitempty"`
+	// The student's deadline for the task (08:00 on the day of their 1:1) and whether this hand-in was late. On the
+	// newest hand-in, late says the task is late: any of its hand-ins came after the deadline. A late hand-in turns the
+	// week red on its own.
+	DueAt *time.Time `json:"due_at,omitempty"`
+	Late  bool       `json:"late"`
 	// On GET .../submissions/me: the earlier hand-ins of the same task, newest first.
 	History []SubmissionResponse `json:"history,omitempty"`
 }

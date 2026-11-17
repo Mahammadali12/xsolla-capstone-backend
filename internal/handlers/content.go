@@ -131,7 +131,7 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		} else if errors.Is(err, service.ErrUnsupportedContentType) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
-		} else if errors.Is(err, service.ErrAssignmentMissingDueAt) || errors.Is(err, service.ErrInvalidContentItem) {
+		} else if errors.Is(err, service.ErrInvalidContentItem) {
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		} else if errors.Is(err, store.ErrContentItemNotFound) || errors.Is(err, service.ErrParentWrongModule) {
 			writeError(w, 404, "not_found", "parent item not found", nil)

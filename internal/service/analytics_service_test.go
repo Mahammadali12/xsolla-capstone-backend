@@ -11,7 +11,7 @@ import (
 
 type fakeAnalyticsStore struct {
 	weeks    []store.ModuleStanding
-	status   store.AssignmentStatus
+	handIns  []store.AssignmentHandIns
 	quizzes  []store.ModuleQuizAccuracy
 	feedback store.MentorFeedback
 	people   []store.AnalyticsPerson
@@ -34,9 +34,13 @@ func (f *fakeAnalyticsStore) WeeklyStanding(_ context.Context, mentorID *int64, 
 	return f.weeks, f.err
 }
 
-func (f *fakeAnalyticsStore) StudentAssignmentStatus(_ context.Context, _ int64, from, cutoff time.Time, moduleID *int64) (store.AssignmentStatus, error) {
-	f.lastFrom, f.lastCutoff, f.lastModuleID = from, cutoff, moduleID
-	return f.status, f.err
+func (f *fakeAnalyticsStore) StudentAssignmentHandIns(_ context.Context, _ int64, moduleID *int64) ([]store.AssignmentHandIns, error) {
+	f.lastModuleID = moduleID
+	return f.handIns, f.err
+}
+
+func (f *fakeAnalyticsStore) ListBookedSlots(context.Context, int64, time.Time, time.Time) ([]store.BookedSlot, error) {
+	return nil, f.err
 }
 
 func (f *fakeAnalyticsStore) StudentQuizAccuracy(_ context.Context, _ int64, _, _ time.Time, moduleID *int64) ([]store.ModuleQuizAccuracy, error) {
@@ -115,7 +119,20 @@ func TestAnalyticsResolvePeriod(t *testing.T) {
 func TestAnalyticsStudentReport(t *testing.T) {
 	fs := &fakeAnalyticsStore{
 		person: &store.AnalyticsPerson{ID: 7, Name: "Student One"},
-		status: store.AssignmentStatus{OnTime: 4, Late: 1, Missing: 2, Eligible: 7},
+		// a week that opened on Monday 19 October: no 1:1 booked, so the work is due on Monday 26 October at 08:00
+		handIns: func() []store.AssignmentHandIns {
+			opens := time.Date(2026, 10, 19, 0, 0, 0, 0, SchoolLocation)
+			item := func(id int64, at ...time.Time) store.AssignmentHandIns {
+				return store.AssignmentHandIns{ContentItemID: id, ModuleID: 1, ModuleOpensAt: opens, HandedInAt: at}
+			}
+			onTime := time.Date(2026, 10, 25, 20, 0, 0, 0, SchoolLocation)
+			late := time.Date(2026, 10, 26, 10, 0, 0, 0, SchoolLocation)
+			// a change on Wednesday, after the weekend, does not make on-time work late
+			after := time.Date(2026, 10, 28, 10, 0, 0, 0, SchoolLocation)
+			return []store.AssignmentHandIns{
+				item(1, onTime), item(2, onTime), item(3, onTime, after), item(4, onTime), item(5, late), item(6), item(7),
+			}
+		}(),
 		quizzes: []store.ModuleQuizAccuracy{
 			{ModuleID: 1, ModuleTitle: "Week 1", ScoreTotal: 16, PossibleTotal: 20, AttemptCount: 2},
 			{ModuleID: 2, ModuleTitle: "Week 2", ScoreTotal: 0, PossibleTotal: 0, AttemptCount: 1},
@@ -129,7 +146,7 @@ func TestAnalyticsStudentReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Student.Name != "Student One" || report.Status.Eligible != 7 {
+	if report.Student.Name != "Student One" || report.Status != (store.AssignmentStatus{OnTime: 4, Late: 1, Missing: 2, Eligible: 7}) {
 		t.Errorf("report = %+v", report)
 	}
 	if got := report.Quizzes[0].Accuracy; got == nil || *got != 80 {
@@ -138,23 +155,32 @@ func TestAnalyticsStudentReport(t *testing.T) {
 	if got := report.Quizzes[1].Accuracy; got != nil {
 		t.Errorf("zero-total accuracy = %v, want null", got)
 	}
-	// The period ends in the past, so the cutoff is its exclusive upper bound.
-	if !fs.lastCutoff.Equal(to.AddDate(0, 0, 1)) {
-		t.Errorf("cutoff = %v, want the period end", fs.lastCutoff)
+	// The period ends in the past, so only deadlines before its end count: the Monday 26 October 08:00 deadline is
+	// outside a period that ends on Sunday 25 October.
+	early := time.Date(2026, 10, 25, 0, 0, 0, 0, SchoolLocation)
+	report, err = svc.Student(context.Background(), 7, nil, &early, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status.Eligible != 0 {
+		t.Errorf("assignments due after the period counted: %+v", report.Status)
 	}
 }
 
 func TestAnalyticsStudentCutoffIsNowForFuturePeriods(t *testing.T) {
-	fs := &fakeAnalyticsStore{person: &store.AnalyticsPerson{ID: 7, Name: "Student One"}}
+	// a week that opens in two weeks has its deadline in the future: it does not count yet
+	future := store.AssignmentHandIns{ContentItemID: 1, ModuleID: 1, ModuleOpensAt: analyticsNow().AddDate(0, 0, 14)}
+	fs := &fakeAnalyticsStore{person: &store.AnalyticsPerson{ID: 7, Name: "Student One"}, handIns: []store.AssignmentHandIns{future}}
 	svc := NewAnalyticsService(fs)
 	svc.now = analyticsNow
 
-	if _, err := svc.Student(context.Background(), 7, nil, nil, nil); err != nil {
+	report, err := svc.Student(context.Background(), 7, nil, nil, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
 	// Default to is today; midnight after it is tomorrow, so the cutoff is now.
-	if !fs.lastCutoff.Equal(analyticsNow()) {
-		t.Errorf("cutoff = %v, want now", fs.lastCutoff)
+	if report.Status.Eligible != 0 {
+		t.Errorf("a deadline in the future counted: %+v", report.Status)
 	}
 }
 

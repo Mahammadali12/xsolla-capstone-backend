@@ -27,6 +27,12 @@ type Submission struct {
 
 	// History is filled only for the student's own read: their earlier hand-ins of the task, newest first.
 	History []Submission
+
+	// DueAt and Late are worked out when the submission is read or made, not stored (see service/one_on_one_deadline.go):
+	// DueAt is the student's deadline for the task. Late says this hand-in was late; on the newest hand-in it says the
+	// task is late (any of its hand-ins was).
+	DueAt *time.Time
+	Late  bool
 }
 
 // SubmissionFile represents a row in submission_files with file metadata.

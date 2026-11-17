@@ -85,7 +85,8 @@ type MentorReport struct {
 // analyticsStore is the part of the store the analytics service needs.
 type analyticsStore interface {
 	WeeklyStanding(ctx context.Context, mentorID *int64, from, to time.Time) ([]store.ModuleStanding, error)
-	StudentAssignmentStatus(ctx context.Context, studentID int64, from, cutoff time.Time, moduleID *int64) (store.AssignmentStatus, error)
+	StudentAssignmentHandIns(ctx context.Context, studentID int64, moduleID *int64) ([]store.AssignmentHandIns, error)
+	ListBookedSlots(ctx context.Context, studentID int64, from, to time.Time) ([]store.BookedSlot, error)
 	StudentQuizAccuracy(ctx context.Context, studentID int64, from, to time.Time, moduleID *int64) ([]store.ModuleQuizAccuracy, error)
 	MentorFeedback(ctx context.Context, mentorID int64, from, to time.Time) (store.MentorFeedback, error)
 	SearchAnalyticsPeople(ctx context.Context, role, q string, limit, offset int) ([]store.AnalyticsPerson, error)
@@ -163,7 +164,7 @@ func (s *AnalyticsService) Student(ctx context.Context, studentID int64, from, t
 	if now := s.now(); now.Before(cutoff) {
 		cutoff = now
 	}
-	status, err := s.store.StudentAssignmentStatus(ctx, studentID, p.From, cutoff, moduleID)
+	status, err := s.assignmentStatus(ctx, studentID, p.From, cutoff, moduleID)
 	if err != nil {
 		return nil, err
 	}
@@ -260,4 +261,41 @@ func roundAverage(v *float64) *float64 {
 	}
 	r := math.Round(*v*100) / 100
 	return &r
+}
+
+// assignmentStatus classifies the student's assignments whose deadline (their own, following their 1:1) is in
+// [from, cutoff): on time, late (see Deadline.HandInLateness) or missing. Only hand-ins before the cutoff count.
+func (s *AnalyticsService) assignmentStatus(ctx context.Context, studentID int64, from, cutoff time.Time, moduleID *int64) (store.AssignmentStatus, error) {
+	var st store.AssignmentStatus
+	items, err := s.store.StudentAssignmentHandIns(ctx, studentID, moduleID)
+	if err != nil {
+		return st, err
+	}
+	deadlines := newWeekendDeadlines(s.store, studentID)
+	for _, it := range items {
+		d, err := deadlines.forOpening(ctx, it.ModuleID, it.ModuleOpensAt)
+		if err != nil {
+			return st, err
+		}
+		if d.DueAt.Before(from) || !d.DueAt.Before(cutoff) {
+			continue
+		}
+		st.Eligible++
+		var handIns []time.Time
+		for _, at := range it.HandedInAt {
+			if at.Before(cutoff) {
+				handIns = append(handIns, at)
+			}
+		}
+		if len(handIns) == 0 {
+			st.Missing++
+			continue
+		}
+		if _, late := d.HandInLateness(handIns); late {
+			st.Late++
+		} else {
+			st.OnTime++
+		}
+	}
+	return st, nil
 }

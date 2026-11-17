@@ -21,8 +21,6 @@ type ContentService struct {
 // ErrUnsupportedContentType is returned when an unsupported content item type is used.
 var ErrUnsupportedContentType = errors.New("unsupported content item type")
 
-// ErrAssignmentMissingDueAt is returned when an assignment is created without a due_at.
-var ErrAssignmentMissingDueAt = errors.New("assignment requires a due_at")
 
 // ErrInvalidContentItem is returned for a content item that breaks a rule; the message says which.
 var ErrInvalidContentItem = errors.New("invalid content item")
@@ -98,9 +96,7 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 	// Type-specific validation
 	switch itemType {
 	case "assignment":
-		if dueAt == nil {
-			return nil, ErrAssignmentMissingDueAt
-		}
+		// no deadline needed: a student's is worked out from their 1:1 (one_on_one_deadline.go)
 	case "link":
 		if url == nil || *url == "" {
 			return nil, invalidContent("link requires a url")

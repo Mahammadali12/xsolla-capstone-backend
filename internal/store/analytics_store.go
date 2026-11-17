@@ -106,36 +106,52 @@ func (s *StoreImpl) WeeklyStanding(ctx context.Context, mentorID *int64, from, t
 	return out, rows.Err()
 }
 
-// StudentAssignmentStatus classifies the student's assignments whose deadline is in [from, cutoff). Only
-// assignments in modules the student is enrolled in count. Compliance uses the first submission before cutoff.
-func (s *StoreImpl) StudentAssignmentStatus(ctx context.Context, studentID int64, from, cutoff time.Time, moduleID *int64) (AssignmentStatus, error) {
-	var st AssignmentStatus
-	err := s.db.QueryRowContext(ctx, `
-		WITH eligible AS (
-		    SELECT ci.id, a.due_at
-		      FROM content_items ci
-		      JOIN assignments a ON a.content_item_id = ci.id AND a.deleted_at IS NULL
-		      JOIN enrollments en ON en.module_id = ci.module_id AND en.user_id = $1
-		     WHERE ci.deleted_at IS NULL
-		       AND ci.type = 'assignment'
-		       AND a.due_at >= $2
-		       AND a.due_at < $3
-		       AND ($4::bigint IS NULL OR ci.module_id = $4)
-		), first_sub AS (
-		    SELECT content_item_id, MIN(submitted_at) AS submitted_at
-		      FROM submissions
-		     WHERE student_id = $1 AND deleted_at IS NULL AND submitted_at < $3
-		     GROUP BY content_item_id
-		)
-		SELECT COUNT(*) FILTER (WHERE fs.submitted_at <= el.due_at),
-		       COUNT(*) FILTER (WHERE fs.submitted_at > el.due_at),
-		       COUNT(*) FILTER (WHERE fs.submitted_at IS NULL),
-		       COUNT(*)
-		  FROM eligible el
-		  LEFT JOIN first_sub fs ON fs.content_item_id = el.id`,
-		studentID, from, cutoff, moduleID,
-	).Scan(&st.OnTime, &st.Late, &st.Missing, &st.Eligible)
-	return st, err
+// AssignmentHandIns is one assignment of a module the student is enrolled in, with the times they handed work in (oldest
+// first, deleted hand-ins left out). The service works out the deadline and whether each one was late.
+type AssignmentHandIns struct {
+	ContentItemID int64
+	ModuleID      int64
+	ModuleOpensAt time.Time
+	HandedInAt    []time.Time
+}
+
+// StudentAssignmentHandIns lists the assignments of the modules the student is enrolled in (of one module when moduleID
+// is set) with their hand-in times. The deadline of each is the student's own (service/one_on_one_deadline.go).
+func (s *StoreImpl) StudentAssignmentHandIns(ctx context.Context, studentID int64, moduleID *int64) ([]AssignmentHandIns, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ci.id, ci.module_id, m.opens_at, sub.submitted_at
+		  FROM content_items ci
+		  JOIN modules m ON m.id = ci.module_id AND m.deleted_at IS NULL
+		  JOIN assignments a ON a.content_item_id = ci.id AND a.deleted_at IS NULL
+		  JOIN enrollments en ON en.module_id = ci.module_id AND en.user_id = $1
+		  LEFT JOIN submissions sub ON sub.content_item_id = ci.id AND sub.student_id = $1 AND sub.deleted_at IS NULL
+		 WHERE ci.deleted_at IS NULL
+		   AND ci.type = 'assignment'
+		   AND ($2::bigint IS NULL OR ci.module_id = $2)
+		 ORDER BY ci.id, sub.submitted_at`,
+		studentID, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []AssignmentHandIns
+	for rows.Next() {
+		var item AssignmentHandIns
+		var at sql.NullTime
+		if err := rows.Scan(&item.ContentItemID, &item.ModuleID, &item.ModuleOpensAt, &at); err != nil {
+			return nil, err
+		}
+		if n := len(out); n > 0 && out[n-1].ContentItemID == item.ContentItemID {
+			item = out[n-1]
+			out = out[:n-1]
+		}
+		if at.Valid {
+			item.HandedInAt = append(item.HandedInAt, at.Time)
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
 
 // StudentQuizAccuracy sums score and total across the student's attempts per module, for modules opening in

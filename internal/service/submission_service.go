@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"sort"
+	"time"
 
 	"xsolla-capstone-api/internal/auth"
 	"xsolla-capstone-api/internal/store"
@@ -25,6 +28,29 @@ func NewSubmissionService(s store.Store) *SubmissionService {
 var ErrInvalidSubmission = errors.New("invalid submission")
 
 func invalidSubmission(msg string) error { return fmt.Errorf("%w: %s", ErrInvalidSubmission, msg) }
+
+// ErrModuleNotOpen is returned for a hand-in to a module that has not opened yet. After a module closes work is still
+// accepted (it is late when it comes after the student's deadline).
+var ErrModuleNotOpen = errors.New("this module is not open yet")
+
+// markLateness fills DueAt and Late on one student's hand-ins of one task (any order). Each hand-in says whether it was
+// late itself; the newest says whether the task is (any hand-in was late).
+func markLateness(d *Deadline, handIns []*store.Submission) {
+	if len(handIns) == 0 {
+		return
+	}
+	sort.SliceStable(handIns, func(i, j int) bool { return handIns[i].SubmittedAt.Before(handIns[j].SubmittedAt) })
+	times := make([]time.Time, len(handIns))
+	for i, h := range handIns {
+		times[i] = h.SubmittedAt
+	}
+	own, task := d.HandInLateness(times)
+	due := d.DueAt
+	for i, h := range handIns {
+		h.DueAt, h.Late = &due, own[i]
+	}
+	handIns[len(handIns)-1].Late = task
+}
 
 func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int64, courseID int64, contentItemID int64, textBody string, fileIDs []int64) (*store.Submission, error) {
 	// Verify the content item exists and is an assignment
@@ -52,6 +78,15 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 	}
 	if !enrolled {
 		return nil, store.ErrNotEnrolled
+	}
+
+	// The module must be open (work is accepted after it closes, as late work)
+	module, err := s.store.GetModuleByID(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if time.Now().Before(module.OpensAt) {
+		return nil, ErrModuleNotOpen
 	}
 
 	// Verify all file IDs belong to the student
@@ -85,6 +120,34 @@ func (s *SubmissionService) CreateSubmission(ctx context.Context, studentID int6
 	sub.Files, err = s.store.GetSubmissionFiles(ctx, sub.ID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Is this hand-in late? Then the week turns red on its own (a mentor or admin can change it afterwards).
+	deadline, err := newWeekendDeadlines(s.store, studentID).forModule(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	all, err := s.store.GetSubmissionsByStudentAndAssignment(ctx, studentID, contentItemID)
+	if err != nil {
+		return nil, err
+	}
+	handIns := make([]*store.Submission, len(all))
+	for i := range all {
+		handIns[i] = &all[i]
+	}
+	markLateness(deadline, handIns)
+	for _, h := range handIns {
+		if h.ID != sub.ID {
+			continue
+		}
+		sub.DueAt = h.DueAt
+		sub.Late = handIns[len(handIns)-1].Late
+		if sub.SubmittedAt.After(deadline.DueAt) && (len(handIns) == 1 || sub.SubmittedAt.Before(deadline.MeetingEnd)) {
+			if err := s.store.MarkEnrollmentRed(ctx, courseID, studentID); err != nil {
+				// the hand-in is saved; the week colour is not worth failing it for
+				log.Printf("submission service: could not turn week %d red for student %d: %v", courseID, studentID, err)
+			}
+		}
 	}
 
 	return sub, nil
@@ -166,7 +229,25 @@ func (s *SubmissionService) GetSubmissionByStudentAndAssignment(ctx context.Cont
 		}
 		sub.History = append(sub.History, old)
 	}
-	return sub, nil
+	return sub, s.markOwnLateness(ctx, studentID, sub)
+}
+
+// markOwnLateness fills the deadline and the late flags of a student's own newest hand-in and its history.
+func (s *SubmissionService) markOwnLateness(ctx context.Context, studentID int64, sub *store.Submission) error {
+	ci, err := s.store.GetContentItemByID(ctx, sub.ContentItemID)
+	if err != nil {
+		return err
+	}
+	deadline, err := newWeekendDeadlines(s.store, studentID).forModule(ctx, ci.ModuleID)
+	if err != nil {
+		return err
+	}
+	handIns := []*store.Submission{sub}
+	for i := range sub.History {
+		handIns = append(handIns, &sub.History[i])
+	}
+	markLateness(deadline, handIns)
+	return nil
 }
 
 // GetSubmissionsForAssignment returns the submissions for an assignment.
@@ -223,6 +304,19 @@ func (s *SubmissionService) GetSubmissionsForAssignment(ctx context.Context, use
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// Each student's deadline and late flags follow their own 1:1
+	byStudent := map[int64][]*store.Submission{}
+	for i := range submissions {
+		byStudent[submissions[i].StudentID] = append(byStudent[submissions[i].StudentID], &submissions[i])
+	}
+	for studentID, handIns := range byStudent {
+		deadline, err := newWeekendDeadlines(s.store, studentID).forModule(ctx, ci.ModuleID)
+		if err != nil {
+			return nil, err
+		}
+		markLateness(deadline, handIns)
 	}
 
 	return submissions, nil
