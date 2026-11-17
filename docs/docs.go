@@ -2447,6 +2447,97 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications/broadcast": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The admin sends a short message to everyone (students, mentors and lecturers) or to one group. It\nreaches each of them as an in-app notification (GET /notifications, type announcement.created) and\nan email. Admins are not in any audience. With nobody in the audience it is saved with 0 recipients.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Send an announcement",
+                "parameters": [
+                    {
+                        "description": "message, link and audience",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SendBroadcastRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.BroadcastResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "every problem, in details",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/broadcasts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every announcement sent, newest first (admin only).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "List announcements",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.BroadcastResponse"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/notifications/read-all": {
             "post": {
                 "security": [
@@ -2851,6 +2942,152 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/teams/me/quiz-attempts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every quiz attempt of the students in the caller's team (mentor), or of every student (admin), oldest\nfirst. A student who has not taken a quiz has no row. Anyone else gets 403.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quizzes"
+                ],
+                "summary": "My team's quiz results",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "only this module's quizzes",
+                        "name": "module_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.QuizAttemptResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/teams/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes one team (admin only). Its students and its mentor stay; they are just no longer in a team.\nPast mentor reviews are kept.",
+                "tags": [
+                    "teams"
+                ],
+                "summary": "Delete a team",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Team ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently deletes every student, mentor and lecturer at once (admin only). With role, only the\nnon-admins holding that role. Admins and the caller are never deleted. Modules, files and quizzes\nthey created are handed to the caller; their hand-ins, bookings, reviews and other personal data are\nerased. Nothing happens without confirm=true. Files stay in storage.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Delete all non-admin users",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "student, mentor or lecturer (default: all three)",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "must be true",
+                        "name": "confirm",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DeletedUsersResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3441,6 +3678,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.DeletedUsersResponse": {
+            "type": "object",
+            "properties": {
+                "by_role": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "deleted": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.EnrollRequest": {
             "type": "object",
             "properties": {
@@ -3453,6 +3704,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
+                    "type": "string"
+                },
+                "email": {
                     "type": "string"
                 },
                 "feedback": {
@@ -3473,6 +3727,16 @@ const docTemplate = `{
                 },
                 "module_id": {
                     "type": "integer"
+                },
+                "name": {
+                    "description": "Who is enrolled (on GET /modules/{id}/enrollments): an enrolled user with the lecturer role teaches the week.",
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "user_id": {
                     "type": "integer"
@@ -4065,6 +4329,35 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.QuizAttemptResponse": {
+            "type": "object",
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "quiz_id": {
+                    "type": "integer"
+                },
+                "score": {
+                    "type": "integer"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.RefreshRequest": {
             "type": "object",
             "properties": {
@@ -4369,6 +4662,34 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.BroadcastResponse": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "recipients": {
+                    "description": "how many people it was sent to",
+                    "type": "integer"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "sent_by": {
+                    "description": "the admin's name (\"\" once their account is deleted)",
+                    "type": "string"
+                }
+            }
+        },
         "handlers.ErrorDetail": {
             "type": "object",
             "properties": {
@@ -4397,6 +4718,23 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.SendBroadcastRequest": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "description": "all, students, mentors or lecturers",
+                    "type": "string"
+                },
+                "link": {
+                    "description": "an LMS page such as /calendar, or \"\"",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "1 to 500 characters",
+                    "type": "string"
                 }
             }
         },

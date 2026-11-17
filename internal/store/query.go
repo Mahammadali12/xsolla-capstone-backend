@@ -347,7 +347,9 @@ func (q *Query) DeleteEnrollment(ctx context.Context, moduleID int64, userID int
 
 func (q *Query) GetEnrollmentsForModule(ctx context.Context, moduleID int64) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, e.grade_feedback, e.graded_at, e.graded_by, u.email, u.name
+		`SELECT e.id, e.module_id, e.user_id, e.created_at, e.grade, e.grade_feedback, e.graded_at, e.graded_by, u.email, u.name,
+		        ARRAY(SELECT ur.role FROM user_roles ur WHERE ur.user_id = e.user_id
+		              AND (ur.expires_at IS NULL OR ur.expires_at > NOW()) ORDER BY ur.role)
 		 FROM enrollments e
 		 JOIN users u ON u.id = e.user_id
 		 WHERE e.module_id = $1`,
@@ -739,18 +741,18 @@ func (q *Query) GetSubmissionFiles(ctx context.Context, submissionID int64) (*sq
 
 // Event queries
 
-func (q *Query) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) *sql.Row {
+func (q *Query) CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, createdBy int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`INSERT INTO events (title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
-		title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID,
+		`INSERT INTO events (title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, created_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at, created_by`,
+		title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, createdBy,
 	)
 }
 
 func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
 	return q.DBTX.QueryRowContext(ctx,
-		`SELECT id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at
+		`SELECT id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at, created_by
 		 FROM events WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	)
@@ -758,7 +760,7 @@ func (q *Query) GetEventByID(ctx context.Context, id int64) *sql.Row {
 
 func (q *Query) ListEventsByRange(ctx context.Context, from time.Time, to time.Time) (*sql.Rows, error) {
 	return q.DBTX.QueryContext(ctx,
-		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at
+		`SELECT e.id, e.title, e.kind, e.starts_at, e.ends_at, e.all_day, e.location, e.description, e.meeting_url, e.module_id, e.google_event_id, e.created_at, e.created_by
 		 FROM events e
 		 WHERE e.deleted_at IS NULL
 		   AND e.starts_at <= $2
@@ -785,7 +787,7 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 			     meeting_url = $9,
 			     module_id = COALESCE($10, module_id)
 			 WHERE id = $1 AND deleted_at IS NULL
-			 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
+			 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at, created_by`,
 			id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID,
 		)
 	}
@@ -801,7 +803,7 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 		     meeting_url = $9,
 		     module_id = COALESCE($10, module_id)
 		 WHERE id = $1 AND deleted_at IS NULL
-		   AND module_id IN (
+		   AND (created_by = $11 OR module_id IN (
 		     SELECT m.id FROM modules m
 		     WHERE m.deleted_at IS NULL
 		       AND (
@@ -816,8 +818,8 @@ func (q *Query) UpdateEvent(ctx context.Context, id int64, title string, kind st
 		           )
 		         )
 		       )
-		   )
-		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at`,
+		   ))
+		 RETURNING id, title, kind, starts_at, ends_at, all_day, location, description, meeting_url, module_id, google_event_id, created_at, created_by`,
 		id, title, kind, startsAt, endsAt, allDay, location, description, meetingURL, moduleID, userID,
 	)
 }
@@ -831,7 +833,7 @@ func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin
 	}
 	return q.DBTX.ExecContext(ctx,
 		`UPDATE events SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
-		 AND module_id IN (
+		 AND (created_by = $2 OR module_id IN (
 		   SELECT m.id FROM modules m
 		   WHERE m.deleted_at IS NULL
 		     AND (
@@ -846,7 +848,7 @@ func (q *Query) DeleteEvent(ctx context.Context, id int64, userID int64, isAdmin
 		         )
 		       )
 		     )
-		 )`,
+		 ))`,
 		id, userID,
 	)
 }

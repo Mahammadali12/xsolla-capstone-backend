@@ -116,6 +116,7 @@ func main() {
 	eventH := handlers.NewEventHandlers(eventSvc)
 	lectureFeedbackH := handlers.NewLectureFeedbackHandlers(service.NewLectureFeedbackService(store))
 	reportH := handlers.NewReportHandlers(service.NewReportService(store))
+	broadcastH := handlers.NewBroadcastHandlers(service.NewBroadcastService(store))
 	notificationH := handlers.NewNotificationHandlers(service.NewNotificationService(notificationStore))
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
@@ -136,8 +137,20 @@ func main() {
 	authenticator := &middleware.Authenticator{Secret: cfg.JWTAccessSecret}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/signup", authH.Signup)
-	mux.HandleFunc("POST /auth/login", authH.Login)
+	// Rate limits on sign-in and sign-up (AUTH_RATE_LIMIT=off turns them off, e.g. for test scripts):
+	//   - sign-in: 20 at once per client address, then one every 3 seconds;
+	//   - wrong passwords: 5 at once per account, then one a minute, from any address;
+	//   - sign-up: 10 at once per client address, then one every 30 seconds.
+	signupHandler, loginHandler := http.Handler(http.HandlerFunc(authH.Signup)), http.Handler(http.HandlerFunc(authH.Login))
+	if cfg.AuthRateLimit {
+		loginHandler = middleware.LimitByIP(middleware.NewLimiter(20, 3*time.Second), cfg.TrustProxyHeaders, "sign-in attempts",
+			middleware.LimitFailedLogins(middleware.NewLimiter(5, time.Minute), loginHandler))
+		signupHandler = middleware.LimitByIP(middleware.NewLimiter(10, 30*time.Second), cfg.TrustProxyHeaders, "sign-ups", signupHandler)
+	} else {
+		log.Print("auth: AUTH_RATE_LIMIT=off, sign-in and sign-up are not rate limited")
+	}
+	mux.Handle("POST /auth/signup", signupHandler)
+	mux.Handle("POST /auth/login", loginHandler)
 	mux.HandleFunc("POST /auth/refresh", authH.Refresh)
 	mux.HandleFunc("POST /auth/logout", authH.Logout)
 	mux.Handle("POST /auth/password-reset", authenticator.Middleware(http.HandlerFunc(authH.PasswordReset)))
@@ -165,6 +178,8 @@ func main() {
 	mux.Handle("PATCH /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.UpdateUser), "admin"))
 	mux.Handle("PUT /users/{id}/password", authenticator.RequireRole(http.HandlerFunc(userH.UpdatePassword), "admin"))
 	mux.Handle("DELETE /users/{id}", authenticator.RequireRole(http.HandlerFunc(userH.DeleteUser), "admin"))
+	// every non-admin user at once (optionally one role), with ?confirm=true
+	mux.Handle("DELETE /users", authenticator.RequireRole(http.HandlerFunc(userH.DeleteAllUsers), "admin"))
 	mux.Handle("PUT /users/{id}/roles", authenticator.RequireRole(http.HandlerFunc(userH.ReplaceUserRoles), "admin"))
 
 	// Profile page: about me, picture, look and accessibility settings (every signed-in user)
@@ -184,12 +199,14 @@ func main() {
 	mux.Handle("POST /teams", authenticator.RequireRole(http.HandlerFunc(teamH.CreateTeam), "admin"))
 	mux.Handle("PATCH /teams/{id}", authenticator.RequireRole(http.HandlerFunc(teamH.PatchTeam), "admin"))
 	mux.Handle("POST /teams/{id}/students", authenticator.RequireRole(http.HandlerFunc(teamH.AddTeamStudents), "admin"))
+	mux.Handle("DELETE /teams/{id}", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeam), "admin"))
 	mux.Handle("DELETE /teams/{id}/students/{studentId}", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeamStudent), "admin"))
 	mux.Handle("DELETE /teams/{id}/students", authenticator.RequireRole(http.HandlerFunc(teamH.DeleteTeamStudents), "admin"))
 	mux.Handle("PUT /teams/{id}/mentor", authenticator.RequireRole(http.HandlerFunc(teamH.PutTeamMentor), "admin"))
 
 	// Team read side (student/mentor)
 	mux.Handle("GET /teams/me", authenticator.Middleware(http.HandlerFunc(teamH.GetMyTeam)))
+	mux.Handle("GET /teams/me/quiz-attempts", authenticator.Middleware(http.HandlerFunc(quizH.TeamQuizAttempts)))
 	mux.Handle("GET /mentors/me/team", authenticator.Middleware(http.HandlerFunc(teamH.GetMentorTeam)))
 
 	// Admin-only analytics (read-only reporting layer)
@@ -247,6 +264,9 @@ func main() {
 	mux.Handle("GET /notifications", authenticator.Middleware(http.HandlerFunc(notificationH.Unread)))
 	mux.Handle("POST /notifications/read-all", authenticator.Middleware(http.HandlerFunc(notificationH.MarkAllRead)))
 	mux.Handle("POST /notifications/{id}/read", authenticator.Middleware(http.HandlerFunc(notificationH.MarkRead)))
+	// Announcements: the admin sends one to everyone or to one group; it arrives as an in-app notification and an email.
+	mux.Handle("POST /notifications/broadcast", authenticator.RequireRole(http.HandlerFunc(broadcastH.Send), "admin"))
+	mux.Handle("GET /notifications/broadcasts", authenticator.RequireRole(http.HandlerFunc(broadcastH.List), "admin"))
 	mux.Handle("POST /events", authenticator.Middleware(http.HandlerFunc(eventH.CreateEvent)))
 	mux.Handle("PATCH /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.UpdateEvent)))
 	mux.Handle("DELETE /events/{id}", authenticator.Middleware(http.HandlerFunc(eventH.DeleteEvent)))

@@ -22,6 +22,12 @@ type Config struct {
 	MigrationsDir    string
 	RabbitMQURL      string
 
+	// AuthRateLimit turns the sign-in and sign-up rate limits on (default) or off ("off", e.g. for test scripts).
+	AuthRateLimit bool
+	// TrustProxyHeaders makes the rate limits read the client address from X-Real-IP / X-Forwarded-For. Turn it on
+	// only behind a proxy that sets them (the k8s ingress); otherwise every request counts as the proxy's.
+	TrustProxyHeaders bool
+
 	// NotifyDatabaseURL is the notification service's database, which holds the in-app notifications
 	// (optional: without it the /notifications routes answer 503).
 	NotifyDatabaseURL string
@@ -80,6 +86,8 @@ func Load() (*Config, error) {
 		CORSOrigin:        getenv("CORS_ORIGIN", defaults["CORS_ORIGIN"]),
 		MigrationsDir:     getenv("MIGRATIONS_DIR", defaults["MIGRATIONS_DIR"]),
 		RabbitMQURL:       getenv("RABBITMQ_URL", defaults["RABBITMQ_URL"]),
+		AuthRateLimit:     !strings.EqualFold(getenv("AUTH_RATE_LIMIT", "on"), "off"),
+		TrustProxyHeaders: strings.EqualFold(getenv("TRUST_PROXY_HEADERS", "false"), "true"),
 		NotifyDatabaseURL: getenv("NOTIFY_DATABASE_URL", ""),
 
 		// S3 object storage

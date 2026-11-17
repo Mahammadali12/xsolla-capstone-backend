@@ -53,6 +53,11 @@ type EnrollmentResponse struct {
 	// (both left out for a week graded before they were kept, and Feedback for other students' enrollments).
 	Feedback *string    `json:"feedback,omitempty"`
 	GradedAt *time.Time `json:"graded_at,omitempty"`
+
+	// Who is enrolled (on GET /modules/{id}/enrollments): an enrolled user with the lecturer role teaches the week.
+	Name  string   `json:"name,omitempty"`
+	Email string   `json:"email,omitempty"`
+	Roles []string `json:"roles,omitempty"`
 }
 
 // GradeEnrollmentRequest is the payload for PATCH /modules/:moduleId/enrollments/:userId/grade.

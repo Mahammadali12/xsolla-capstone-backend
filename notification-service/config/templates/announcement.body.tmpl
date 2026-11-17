@@ -1,0 +1,6 @@
+Hi {{.Recipient.Name}},
+
+{{.Payload.message}}
+{{if .Payload.link}}
+Open it in the LMS: {{.Payload.link}}
+{{end}}

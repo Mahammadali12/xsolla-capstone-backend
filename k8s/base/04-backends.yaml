@@ -37,8 +37,8 @@ spec:
     spec:
       containers:
         - name: lms-api
-          image: xsolla-capstone-api:dev
-          imagePullPolicy: IfNotPresent
+          image: mahammadalii12/xsolla-capstone-api:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http
@@ -193,8 +193,8 @@ spec:
     spec:
       containers:
         - name: notification-worker
-          image: xsolla-notification-worker:dev
-          imagePullPolicy: IfNotPresent
+          image: mahammadalii12/xsolla-notification-worker:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8081
               name: http
@@ -316,8 +316,8 @@ spec:
     spec:
       containers:
         - name: office-api
-          image: xsolla-office-explorer-api:dev
-          imagePullPolicy: IfNotPresent
+          image: mahammadalii12/xsolla-office-explorer-api:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http

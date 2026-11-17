@@ -330,6 +330,41 @@ func (s *UserService) DeleteUser(ctx context.Context, id, actorID int64) error {
 	return s.store.HardDeleteUser(ctx, id, actorID)
 }
 
+// ErrDeleteUsersNotConfirmed refuses a bulk delete that was not explicitly confirmed.
+var ErrDeleteUsersNotConfirmed = errors.New("confirm the bulk delete with confirm=true")
+
+// ErrDeleteUsersRole refuses a role filter other than student, mentor or lecturer.
+var ErrDeleteUsersRole = errors.New("role must be student, mentor or lecturer")
+
+// DeletedUsers is what a bulk delete removed.
+type DeletedUsers struct {
+	Deleted int
+	ByRole  map[string]int // how many held each role; a user with two roles counts under both
+}
+
+// DeleteAllUsers permanently deletes every user who is not an admin, or with role set, every non-admin who holds
+// that role. Admins (anyone holding the admin role, whatever else they hold) and the acting admin are never
+// deleted. Course content they created (modules, files, quizzes) is handed to the acting admin, as with
+// DeleteUser; their personal data is erased. Nothing happens unless confirm is true.
+func (s *UserService) DeleteAllUsers(ctx context.Context, actorID int64, role string, confirm bool) (*DeletedUsers, error) {
+	var roles []string
+	switch role {
+	case "":
+	case "student", "mentor", "lecturer":
+		roles = []string{role}
+	default:
+		return nil, ErrDeleteUsersRole
+	}
+	if !confirm {
+		return nil, ErrDeleteUsersNotConfirmed
+	}
+	n, byRole, err := s.store.DeleteNonAdminUsers(ctx, roles, actorID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	return &DeletedUsers{Deleted: n, ByRole: byRole}, nil
+}
+
 // ReplaceUserRoles replaces a user's whole role set with optional end dates.
 func (s *UserService) ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error {
 	if err := validateRoles(roles); err != nil {

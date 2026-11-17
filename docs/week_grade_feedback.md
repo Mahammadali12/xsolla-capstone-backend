@@ -42,5 +42,5 @@ The answer is the enrollment, with the two new fields:
 `GET /modules/{moduleId}/enrollments` returns `feedback` and `graded_at` on each enrollment.
 
 - Staff (admin, mentor, lecturer) see every student's feedback.
-- A student sees the feedback of **their own** enrollment only. The other students' rows come without `feedback`.
+- A student gets **only their own** enrollment (grade and feedback); other students' rows are not sent.
 - `feedback`, `graded_at` and `grade` are left out of the JSON when they are not set.

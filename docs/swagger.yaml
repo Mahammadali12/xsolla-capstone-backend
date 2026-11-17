@@ -189,6 +189,15 @@ definitions:
       title:
         type: string
     type: object
+  dto.DeletedUsersResponse:
+    properties:
+      by_role:
+        additionalProperties:
+          type: integer
+        type: object
+      deleted:
+        type: integer
+    type: object
   dto.EnrollRequest:
     properties:
       user_id:
@@ -197,6 +206,8 @@ definitions:
   dto.EnrollmentResponse:
     properties:
       created_at:
+        type: string
+      email:
         type: string
       feedback:
         description: |-
@@ -213,6 +224,14 @@ definitions:
         type: integer
       module_id:
         type: integer
+      name:
+        description: 'Who is enrolled (on GET /modules/{id}/enrollments): an enrolled
+          user with the lecturer role teaches the week.'
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
       user_id:
         type: integer
     type: object
@@ -604,6 +623,25 @@ definitions:
       score_total:
         type: integer
     type: object
+  dto.QuizAttemptResponse:
+    properties:
+      answers:
+        items:
+          type: integer
+        type: array
+      id:
+        type: integer
+      quiz_id:
+        type: integer
+      score:
+        type: integer
+      student_id:
+        type: integer
+      submitted_at:
+        type: string
+      total:
+        type: integer
+    type: object
   dto.RefreshRequest:
     properties:
       refresh_token:
@@ -804,6 +842,25 @@ definitions:
           type: string
         type: array
     type: object
+  handlers.BroadcastResponse:
+    properties:
+      audience:
+        type: string
+      id:
+        type: integer
+      link:
+        type: string
+      message:
+        type: string
+      recipients:
+        description: how many people it was sent to
+        type: integer
+      sent_at:
+        type: string
+      sent_by:
+        description: the admin's name ("" once their account is deleted)
+        type: string
+    type: object
   handlers.ErrorDetail:
     properties:
       field:
@@ -823,6 +880,18 @@ definitions:
         type: string
       status:
         type: integer
+    type: object
+  handlers.SendBroadcastRequest:
+    properties:
+      audience:
+        description: all, students, mentors or lecturers
+        type: string
+      link:
+        description: an LMS page such as /calendar, or ""
+        type: string
+      message:
+        description: 1 to 500 characters
+        type: string
     type: object
   handlers.googleUserInfo:
     properties:
@@ -2479,6 +2548,66 @@ paths:
       summary: Mark a notification read
       tags:
       - notifications
+  /notifications/broadcast:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        The admin sends a short message to everyone (students, mentors and lecturers) or to one group. It
+        reaches each of them as an in-app notification (GET /notifications, type announcement.created) and
+        an email. Admins are not in any audience. With nobody in the audience it is saved with 0 recipients.
+      parameters:
+      - description: message, link and audience
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SendBroadcastRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.BroadcastResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: every problem, in details
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send an announcement
+      tags:
+      - notifications
+  /notifications/broadcasts:
+    get:
+      description: Every announcement sent, newest first (admin only).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.BroadcastResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List announcements
+      tags:
+      - notifications
   /notifications/read-all:
     post:
       description: Marks every unread notification of the signed-in user read.
@@ -2716,6 +2845,106 @@ paths:
       summary: Report counts
       tags:
       - reports
+  /teams/{id}:
+    delete:
+      description: |-
+        Deletes one team (admin only). Its students and its mentor stay; they are just no longer in a team.
+        Past mentor reviews are kept.
+      parameters:
+      - description: Team ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a team
+      tags:
+      - teams
+  /teams/me/quiz-attempts:
+    get:
+      description: |-
+        Every quiz attempt of the students in the caller's team (mentor), or of every student (admin), oldest
+        first. A student who has not taken a quiz has no row. Anyone else gets 403.
+      parameters:
+      - description: only this module's quizzes
+        in: query
+        name: module_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.QuizAttemptResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My team's quiz results
+      tags:
+      - quizzes
+  /users:
+    delete:
+      description: |-
+        Permanently deletes every student, mentor and lecturer at once (admin only). With role, only the
+        non-admins holding that role. Admins and the caller are never deleted. Modules, files and quizzes
+        they created are handed to the caller; their hand-ins, bookings, reviews and other personal data are
+        erased. Nothing happens without confirm=true. Files stay in storage.
+      parameters:
+      - description: 'student, mentor or lecturer (default: all three)'
+        in: query
+        name: role
+        type: string
+      - description: must be true
+        in: query
+        name: confirm
+        required: true
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DeletedUsersResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all non-admin users
+      tags:
+      - users
   /users/{id}/profile:
     get:
       description: 'As the caller may see it: a "staff_only" profile comes back empty

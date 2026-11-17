@@ -21,6 +21,7 @@ type Store interface {
 	UpdateUserPassword(ctx context.Context, id int64, passwordHash string) (sql.Result, error)
 	SetUserLeftAt(ctx context.Context, id int64, deactivate bool) (sql.Result, error)
 	HardDeleteUser(ctx context.Context, id int64, transferTo int64) error
+	DeleteNonAdminUsers(ctx context.Context, roles []string, keep, transferTo int64) (int, map[string]int, error)
 	CountAdmins(ctx context.Context) (int, error)
 	DeleteUserRoles(ctx context.Context, userID int64) (sql.Result, error)
 	ReplaceUserRoles(ctx context.Context, userID int64, roles []string, expiries map[string]time.Time) error
@@ -88,7 +89,7 @@ type Store interface {
 	GetSubmissionFiles(ctx context.Context, submissionID int64) ([]File, error)
 
 	// Event methods
-	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64) (*Event, error)
+	CreateEvent(ctx context.Context, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, createdBy int64) (*Event, error)
 	GetEventByID(ctx context.Context, id int64) (*Event, error)
 	ListEventsByRange(ctx context.Context, from time.Time, to time.Time) ([]Event, error)
 	UpdateEvent(ctx context.Context, id int64, title string, kind string, startsAt time.Time, endsAt time.Time, allDay bool, location *string, description *string, meetingURL *string, moduleID *int64, userID int64, isAdmin bool) (*Event, error)
@@ -102,6 +103,7 @@ type Store interface {
 	AddTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudents(ctx context.Context, teamID int64, studentIDs []int64) error
 	DeleteTeamStudent(ctx context.Context, teamID int64, studentID int64) error
+	DeleteTeam(ctx context.Context, id int64) error
 	PutTeamMentor(ctx context.Context, teamID int64, mentorID *int64) error
 	PatchTeam(ctx context.Context, id int64, name *string, mentorID *int64) (*Team, error)
 	CreateTeam(ctx context.Context, name *string, mentorID *int64, studentIDs []int64) (*Team, error)
@@ -144,6 +146,7 @@ type Store interface {
 	UpsertQuizAttempt(ctx context.Context, quizID, studentID int64, answers []int, score, total int) (*QuizAttempt, error)
 	GetQuizAttempt(ctx context.Context, quizID, studentID int64) (*QuizAttempt, error)
 	ListQuizAttemptsForStudent(ctx context.Context, studentID int64, quizIDs []int64) (map[int64]QuizAttempt, error)
+	ListTeamQuizAttempts(ctx context.Context, mentorID, moduleID int64, everyone bool) ([]QuizAttempt, error)
 }
 
 // Store wraps the database connection and provides access to queries.

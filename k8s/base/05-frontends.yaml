@@ -37,8 +37,8 @@ spec:
     spec:
       containers:
         - name: lms-frontend
-          image: xsolla-capstone-frontend:dev
-          imagePullPolicy: IfNotPresent
+          image: mahammadalii12/xsolla-capstone-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http
@@ -107,8 +107,8 @@ spec:
     spec:
       containers:
         - name: office-frontend
-          image: xsolla-office-explorer-frontend:dev
-          imagePullPolicy: IfNotPresent
+          image: mahammadalii12/xsolla-office-explorer-frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http

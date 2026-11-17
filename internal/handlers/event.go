@@ -54,6 +54,7 @@ func eventResponse(e service.Event) dto.EventResponse {
 		GoogleEventID: e.GoogleEventID,
 		Attendees:     attendees,
 		CreatedAt:     e.CreatedAt,
+		CreatedBy:     e.CreatedBy,
 	}
 }
 

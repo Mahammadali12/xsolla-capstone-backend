@@ -109,8 +109,8 @@ func TestWeekGradeFeedbackIsForItsStudentOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := feedbackOf(list); len(got) != 1 || got[31] != "Yours" || len(list) != 3 {
-		t.Errorf("student sees %v of %d rows, want only their own feedback on all 3 rows", got, len(list))
+	if got := feedbackOf(list); len(got) != 1 || got[31] != "Yours" || len(list) != 1 || list[0].UserID != 31 {
+		t.Errorf("student sees %v in %d rows, want only their own row", got, len(list))
 	}
 
 	for _, role := range []string{"mentor", "admin", "lecturer"} {

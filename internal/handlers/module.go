@@ -405,6 +405,9 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 			CreatedAt: e.CreatedAt,
 			Feedback:  e.GradeFeedback,
 			GradedAt:  e.GradedAt,
+			Name:      e.Name,
+			Email:     e.Email,
+			Roles:     e.Roles,
 		}
 	}
 	writeJSON(w, 200, resp)
