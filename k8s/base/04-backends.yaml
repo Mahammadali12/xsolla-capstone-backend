@@ -42,13 +42,10 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          envFrom:
+            - configMapRef:
+                name: lms-api-config
           env:
-            - name: PORT
-              value: ":8080"
-            - name: CORS_ORIGIN
-              value: "http://lms.minikube.local"
-            - name: MIGRATIONS_DIR
-              value: "internal/db/migrations"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -201,13 +198,10 @@ spec:
           ports:
             - containerPort: 8081
               name: http
+          envFrom:
+            - configMapRef:
+                name: notification-worker-config
           env:
-            - name: HEALTH_ADDR
-              value: ":8081"
-            - name: POLICIES_PATH
-              value: "/app/config/policies.json"
-            - name: TEMPLATES_PATH
-              value: "/app/config/templates"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -327,11 +321,10 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          envFrom:
+            - configMapRef:
+                name: office-api-config
           env:
-            - name: HTTP_PORT
-              value: "8080"
-            - name: ALLOWED_ORIGIN
-              value: "http://office.minikube.local"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

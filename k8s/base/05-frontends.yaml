@@ -42,6 +42,9 @@ spec:
           ports:
             - containerPort: 80
               name: http
+          envFrom:
+            - configMapRef:
+                name: lms-frontend-config
           readinessProbe:
             httpGet:
               path: /
@@ -109,6 +112,9 @@ spec:
           ports:
             - containerPort: 80
               name: http
+          envFrom:
+            - configMapRef:
+                name: office-frontend-config
           readinessProbe:
             httpGet:
               path: /

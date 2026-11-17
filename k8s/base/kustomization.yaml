@@ -10,3 +10,4 @@ resources:
   - 04-backends.yaml
   - 05-frontends.yaml
   - 06-ingress.yaml
+  - 07-configmaps.yaml
