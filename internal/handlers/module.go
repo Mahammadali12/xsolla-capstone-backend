@@ -172,7 +172,16 @@ func (h *ModuleHandlers) GetModule(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   m.CreatedAt,
 		OpensAt:     m.OpensAt,
 		ClosesAt:    m.ClosesAt,
+		Lecturers:   lecturerResponses(m.Lecturers),
 	})
+}
+
+func lecturerResponses(in []store.ModuleLecturer) []dto.ModuleLecturerResponse {
+	out := make([]dto.ModuleLecturerResponse, len(in))
+	for i, l := range in {
+		out[i] = dto.ModuleLecturerResponse{ID: l.ID, Name: l.Name}
+	}
+	return out
 }
 
 // @Summary     Update module

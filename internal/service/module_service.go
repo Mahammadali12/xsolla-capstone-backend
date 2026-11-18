@@ -52,22 +52,48 @@ func (s *ModuleService) GetModuleByID(ctx context.Context, userID int64, roles [
 		return nil, err
 	}
 
-	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer") {
-		return m, nil
+	if !(auth.HasRole(roles, "admin") || auth.HasRole(roles, "mentor") || auth.HasRole(roles, "lecturer")) {
+		enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !enrolled {
+			return nil, ErrNotEnrolled
+		}
 	}
 
-	enrolled, err := s.store.IsUserEnrolled(ctx, moduleID, userID)
+	one := []store.Module{*m}
+	s.addLecturers(ctx, one)
+	return &one[0], nil
+}
+
+// GetModulesForUser lists the user's modules, each with the lecturers who teach it.
+func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
+	modules, err := s.modulesForUser(ctx, userID, roles)
 	if err != nil {
 		return nil, err
 	}
-	if !enrolled {
-		return nil, ErrNotEnrolled
-	}
-
-	return m, nil
+	s.addLecturers(ctx, modules)
+	return modules, nil
 }
 
-func (s *ModuleService) GetModulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
+// addLecturers fills Module.Lecturers: the enrolled users who have the lecturer role. Their names are not private, and
+// a student cannot read the enrollment list of a module, so the module carries them. A failed lookup leaves the list empty.
+func (s *ModuleService) addLecturers(ctx context.Context, modules []store.Module) {
+	for i := range modules {
+		enrollments, err := s.store.GetEnrollmentsForModule(ctx, modules[i].ID)
+		if err != nil {
+			continue
+		}
+		for _, e := range enrollments {
+			if auth.HasRole(e.Roles, "lecturer") {
+				modules[i].Lecturers = append(modules[i].Lecturers, store.ModuleLecturer{ID: e.UserID, Name: e.Name})
+			}
+		}
+	}
+}
+
+func (s *ModuleService) modulesForUser(ctx context.Context, userID int64, roles []string) ([]store.Module, error) {
 	if auth.HasRole(roles, "admin") || auth.HasRole(roles, "lecturer") {
 		return s.store.GetModulesForUser(ctx, userID, roles)
 	}

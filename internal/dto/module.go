@@ -28,6 +28,15 @@ type ModuleResponse struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	OpensAt     time.Time  `json:"opens_at"`
 	ClosesAt    time.Time  `json:"closes_at"`
+
+	// Lecturers who teach the week (on GET /modules and GET /modules/{id}); a student cannot read the enrollments.
+	Lecturers []ModuleLecturerResponse `json:"lecturers,omitempty"`
+}
+
+// ModuleLecturerResponse is a lecturer of a module: id and name only.
+type ModuleLecturerResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // GradeModuleRequest is the payload for PATCH /modules/:id/grade.

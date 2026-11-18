@@ -30,6 +30,15 @@ type Module struct {
 	CreatedAt   time.Time `json:"created_at"`
 	OpensAt     time.Time `json:"opens_at"`
 	ClosesAt    time.Time `json:"closes_at"`
+
+	// Lecturers teach the module; filled by the service, not by the module queries.
+	Lecturers []ModuleLecturer `json:"-"`
+}
+
+// ModuleLecturer is a lecturer of a module: only what a student may see.
+type ModuleLecturer struct {
+	ID   int64
+	Name string
 }
 
 // Enrollment represents an enrollment row with user details.
