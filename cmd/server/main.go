@@ -125,6 +125,8 @@ func main() {
 	analyticsH := handlers.NewAnalyticsHandlers(analyticsSvc)
 	analyticsSummaryH := handlers.NewAnalyticsSummaryHandlers(analyticsSummarySvc)
 	quizH := handlers.NewQuizHandlers(quizSvc)
+	// combined reads: many weeks (or tasks) in one request, with the same rules as the per-week routes
+	batchH := handlers.NewBatchHandlers(contentSvc, quizSvc, moduleSvc, submissionSvc)
 	googleCalendarH := handlers.NewGoogleCalendarHandlers(googleCalendarSvc)
 	profileH := handlers.NewProfileHandlers(profileSvc, preferencesSvc, cfg.PublicAPIURL)
 	// avatar_url on the people in user, team, event and 1:1 slot responses
@@ -291,6 +293,12 @@ func main() {
 	mux.Handle("GET /files/{id}/download", authenticator.Middleware(http.HandlerFunc(fileH.DownloadFile)))
 	mux.Handle("DELETE /files/{id}", authenticator.Middleware(http.HandlerFunc(fileH.DeleteFile)))
 	mux.Handle("GET /modules/{moduleId}/quizzes", authenticator.Middleware(http.HandlerFunc(quizH.ListQuizzes)))
+
+	// Combined reads (GET ...?module_ids=1,2,3 or ?assignment_ids=...): one request instead of one per week or task.
+	mux.Handle("GET /content-items", authenticator.Middleware(http.HandlerFunc(batchH.ContentItems)))
+	mux.Handle("GET /quizzes", authenticator.Middleware(http.HandlerFunc(batchH.Quizzes)))
+	mux.Handle("GET /enrollments", authenticator.Middleware(http.HandlerFunc(batchH.Enrollments)))
+	mux.Handle("GET /submissions/me", authenticator.Middleware(http.HandlerFunc(batchH.MySubmissions)))
 	mux.Handle("POST /modules/{moduleId}/quizzes", authenticator.Middleware(http.HandlerFunc(quizH.CreateQuiz)))
 	mux.Handle("POST /modules/{moduleId}/quizzes/ai", authenticator.Middleware(http.HandlerFunc(quizH.GenerateAIQuiz)))
 	mux.Handle("GET /quizzes/{id}", authenticator.Middleware(http.HandlerFunc(quizH.GetQuiz)))
