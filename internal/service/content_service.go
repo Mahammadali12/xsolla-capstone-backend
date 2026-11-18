@@ -66,6 +66,64 @@ func (s *ContentService) checkOwnFile(ctx context.Context, userID int64, roles [
 	return nil
 }
 
+// materialMimeTypes are the files a lecturer can add as a material: PDF, PowerPoint (.pptx), Markdown and ZIP. The
+// upload form offers the same.
+var materialMimeTypes = map[string]bool{
+	"application/pdf": true,
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
+	"text/markdown":   true,
+	"application/zip": true,
+}
+
+// checkMaterialFile refuses a material file that is not one of materialMimeTypes.
+func (s *ContentService) checkMaterialFile(ctx context.Context, fileID *int64) error {
+	if fileID == nil {
+		return nil
+	}
+	f, err := s.store.GetFileByID(ctx, *fileID)
+	if errors.Is(err, store.ErrFileNotFound) {
+		return invalidContent("file not found")
+	}
+	if err != nil {
+		return err
+	}
+	if !materialMimeTypes[f.MimeType] {
+		return invalidContent("a material must be a PDF, PPTX, Markdown (.md) or ZIP file")
+	}
+	return nil
+}
+
+// withFileInfo adds each file material's file name and type.
+func (s *ContentService) withFileInfo(ctx context.Context, items []store.ContentItem) error {
+	for i := range items {
+		if items[i].Type != "file" || items[i].FileID == nil {
+			continue
+		}
+		f, err := s.store.GetFileByID(ctx, *items[i].FileID)
+		if errors.Is(err, store.ErrFileNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		name, mime := f.OriginalName, f.MimeType
+		items[i].FileName, items[i].FileMimeType = &name, &mime
+	}
+	return nil
+}
+
+// withOneFileInfo is withFileInfo for a single item.
+func (s *ContentService) withOneFileInfo(ctx context.Context, ci *store.ContentItem) (*store.ContentItem, error) {
+	if ci == nil {
+		return nil, nil
+	}
+	items := []store.ContentItem{*ci}
+	if err := s.withFileInfo(ctx, items); err != nil {
+		return nil, err
+	}
+	return &items[0], nil
+}
+
 // NewContentService creates a ContentService backed by the given store.
 func NewContentService(s store.Store) *ContentService {
 	return &ContentService{store: s}
@@ -114,6 +172,11 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 	if err := s.checkOwnFile(ctx, userID, roles, fileID); err != nil {
 		return nil, err
 	}
+	if itemType == "file" {
+		if err := s.checkMaterialFile(ctx, fileID); err != nil {
+			return nil, err
+		}
+	}
 
 	ci, err := s.store.CreateContentItem(ctx, moduleID, parentID, itemType, title, description, position, isVisible, fileID, url)
 	if err != nil {
@@ -130,11 +193,19 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 		ci.DueAt = a.DueAt
 	}
 
-	return ci, nil
+	return s.withOneFileInfo(ctx, ci)
 }
 
-// GetContentItemByID returns a content item if the user is authorized to view it.
+// GetContentItemByID returns a content item if the user is authorized to view it, with its file's name and type.
 func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error) {
+	ci, err := s.getContentItemByID(ctx, userID, roles, itemID)
+	if err != nil {
+		return nil, err
+	}
+	return s.withOneFileInfo(ctx, ci)
+}
+
+func (s *ContentService) getContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error) {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
 	if err != nil {
 		return nil, err
@@ -173,8 +244,19 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 	return &items[0], nil
 }
 
-// GetContentItemsForModule returns the content tree for a module.
+// GetContentItemsForModule returns the content tree for a module, each file material with its file's name and type.
 func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error) {
+	items, err := s.getContentItemsForModule(ctx, userID, roles, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.withFileInfo(ctx, items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *ContentService) getContentItemsForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]store.ContentItem, error) {
 	if auth.HasRole(roles, "admin") {
 		return s.store.GetContentItemsForModule(ctx, moduleID, false)
 	}
@@ -240,7 +322,17 @@ func (s *ContentService) UpdateContentItem(ctx context.Context, userID int64, ro
 		}
 	}
 
-	return s.store.UpdateContentItem(ctx, itemID, title, description, position, isVisible, parentID, fileID, dueAt, url)
+	if ci.Type == "file" {
+		if err := s.checkMaterialFile(ctx, fileID); err != nil {
+			return nil, err
+		}
+	}
+
+	updated, err := s.store.UpdateContentItem(ctx, itemID, title, description, position, isVisible, parentID, fileID, dueAt, url)
+	if err != nil {
+		return nil, err
+	}
+	return s.withOneFileInfo(ctx, updated)
 }
 
 // DeleteContentItem soft-deletes a content item if the user is authorized.

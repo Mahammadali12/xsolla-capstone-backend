@@ -47,6 +47,10 @@ type ContentItemResponse struct {
 	// lecturer set, and due_from says why ("one_on_one" or "no_one_on_one"). Left out otherwise.
 	TaskDueAt *time.Time `json:"task_due_at,omitempty"`
 	DueFrom   string     `json:"due_from,omitempty"`
+
+	// For a file material: the uploaded file's name and type, e.g. "week1.pptx" and the PPTX type.
+	FileName     *string `json:"file_name,omitempty"`
+	FileMimeType *string `json:"file_mime_type,omitempty"`
 }
 
 // AssignmentResponse is the assignment object returned in responses.
@@ -73,4 +77,8 @@ type ContentTreeNode struct {
 	// Same as on ContentItemResponse.
 	TaskDueAt *time.Time `json:"task_due_at,omitempty"`
 	DueFrom   string     `json:"due_from,omitempty"`
+
+	// For a file material: the uploaded file's name and type, e.g. "week1.pptx" and the PPTX type.
+	FileName     *string `json:"file_name,omitempty"`
+	FileMimeType *string `json:"file_mime_type,omitempty"`
 }

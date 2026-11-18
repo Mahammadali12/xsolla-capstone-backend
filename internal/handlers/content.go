@@ -155,6 +155,8 @@ func (h *ContentHandlers) CreateContentItem(w http.ResponseWriter, r *http.Reque
 		Url:         ci.Url,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
+		FileName:     ci.FileName,
+		FileMimeType: ci.FileMimeType,
 	})
 }
 
@@ -206,6 +208,8 @@ func (h *ContentHandlers) GetContentItem(w http.ResponseWriter, r *http.Request)
 		ParentID:    ci.ParentID,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
+		FileName:     ci.FileName,
+		FileMimeType: ci.FileMimeType,
 		TaskDueAt:   ci.TaskDueAt,
 		DueFrom:     ci.DueFrom,
 	})
@@ -272,6 +276,8 @@ func (h *ContentHandlers) UpdateContentItem(w http.ResponseWriter, r *http.Reque
 		Url:         ci.Url,
 		CreatedAt:   ci.CreatedAt,
 		DueAt:       ci.DueAt,
+		FileName:     ci.FileName,
+		FileMimeType: ci.FileMimeType,
 	})
 }
 
@@ -325,6 +331,8 @@ func buildContentTree(items []store.ContentItem) []dto.ContentTreeNode {
 			FileID:      ci.FileID,
 			Url:         ci.Url,
 			DueAt:       ci.DueAt,
+			FileName:     ci.FileName,
+			FileMimeType: ci.FileMimeType,
 			TaskDueAt:   ci.TaskDueAt,
 			DueFrom:     ci.DueFrom,
 		}

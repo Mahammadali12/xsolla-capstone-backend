@@ -36,6 +36,10 @@ type ContentItem struct {
 	// the student's own and DueFrom says why (service.DueFromOneOnOne or service.DueFromNoOneOnOne).
 	TaskDueAt *time.Time
 	DueFrom   string
+
+	// For a file material: the uploaded file's name and type (from the files table), so the page shows what it is.
+	FileName     *string
+	FileMimeType *string
 }
 
 // Assignment represents an assignment extension of a content item.
