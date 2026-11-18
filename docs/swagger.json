@@ -897,6 +897,52 @@
                 }
             }
         },
+        "/content-items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What GET /modules/{moduleId}/content-items answers, for every week in module_ids at once, keyed by week\nid. A week the caller may not read is left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "content-items"
+                ],
+                "summary": "Content items of many weeks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Week ids, comma-separated (at most 200)",
+                        "name": "module_ids",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/dto.ContentTreeNode"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/content-items/{id}": {
             "get": {
                 "security": [
@@ -1051,6 +1097,52 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/enrollments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What GET /modules/{moduleId}/enrollments answers, for every week in module_ids at once, keyed by week\nid (a student gets only their own row). A week the caller may not read is left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrollments"
+                ],
+                "summary": "Enrollments of many weeks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Week ids, comma-separated (at most 200)",
+                        "name": "module_ids",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/dto.EnrollmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2621,6 +2713,52 @@
                 }
             }
         },
+        "/quizzes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What GET /modules/{moduleId}/quizzes answers, for every week in module_ids at once, keyed by week id.\nA week the caller may not read the quizzes of is left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quizzes"
+                ],
+                "summary": "Quizzes of many weeks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Week ids, comma-separated (at most 200)",
+                        "name": "module_ids",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/dto.QuizResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/reports": {
             "get": {
                 "security": [
@@ -2942,6 +3080,49 @@
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/submissions/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "What GET /modules/{moduleId}/content-items/{assignmentId}/submissions/me answers (the newest hand-in\nwith its history), for every task in assignment_ids at once, keyed by task id. A task without a\nhand-in is left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "submissions"
+                ],
+                "summary": "My hand-ins for many tasks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ids, comma-separated (at most 200)",
+                        "name": "assignment_ids",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/dto.SubmissionResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -4195,6 +4376,17 @@
                 }
             }
         },
+        "dto.ModuleLecturerResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ModuleResponse": {
             "type": "object",
             "properties": {
@@ -4215,6 +4407,13 @@
                 },
                 "id": {
                     "type": "integer"
+                },
+                "lecturers": {
+                    "description": "Lecturers who teach the week (on GET /modules and GET /modules/{id}); a student cannot read the enrollments.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ModuleLecturerResponse"
+                    }
                 },
                 "opens_at": {
                     "type": "string"
@@ -4359,6 +4558,76 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.QuizQuestionResponse": {
+            "type": "object",
+            "properties": {
+                "correct": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "prompt": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.QuizResponse": {
+            "type": "object",
+            "properties": {
+                "attempt": {
+                    "$ref": "#/definitions/dto.QuizAttemptResponse"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_at": {
+                    "type": "string"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_ai_generated": {
+                    "type": "boolean"
+                },
+                "module_id": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.QuizQuestionResponse"
+                    }
+                },
+                "source_content_item_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -4556,6 +4825,58 @@
                 },
                 "student": {
                     "$ref": "#/definitions/dto.AnalyticsPersonResponse"
+                }
+            }
+        },
+        "dto.SubmissionResponse": {
+            "type": "object",
+            "properties": {
+                "content_item_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "due_at": {
+                    "description": "The student's deadline for the task (08:00 on the day of their 1:1) and whether this hand-in was late. On the\nnewest hand-in, late says the task is late: any of its hand-ins came after the deadline. A late hand-in turns the\nweek red on its own.",
+                    "type": "string"
+                },
+                "feedback": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.FileResponse"
+                    }
+                },
+                "graded_at": {
+                    "type": "string"
+                },
+                "graded_by": {
+                    "type": "integer"
+                },
+                "history": {
+                    "description": "On GET .../submissions/me: the earlier hand-ins of the same task, newest first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubmissionResponse"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "late": {
+                    "type": "boolean"
+                },
+                "student_id": {
+                    "type": "integer"
+                },
+                "submitted_at": {
+                    "type": "string"
+                },
+                "text_body": {
+                    "type": "string"
                 }
             }
         },

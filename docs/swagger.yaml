@@ -541,6 +541,13 @@ definitions:
       team:
         $ref: '#/definitions/dto.ReviewTeam'
     type: object
+  dto.ModuleLecturerResponse:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
   dto.ModuleResponse:
     properties:
       closes_at:
@@ -555,6 +562,12 @@ definitions:
         type: string
       id:
         type: integer
+      lecturers:
+        description: Lecturers who teach the week (on GET /modules and GET /modules/{id});
+          a student cannot read the enrollments.
+        items:
+          $ref: '#/definitions/dto.ModuleLecturerResponse'
+        type: array
       opens_at:
         type: string
       title:
@@ -650,6 +663,52 @@ definitions:
         type: string
       total:
         type: integer
+    type: object
+  dto.QuizQuestionResponse:
+    properties:
+      correct:
+        type: integer
+      id:
+        type: integer
+      options:
+        items:
+          type: string
+        type: array
+      position:
+        type: integer
+      prompt:
+        type: string
+    type: object
+  dto.QuizResponse:
+    properties:
+      attempt:
+        $ref: '#/definitions/dto.QuizAttemptResponse'
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      description:
+        type: string
+      due_at:
+        type: string
+      error_message:
+        type: string
+      id:
+        type: integer
+      is_ai_generated:
+        type: boolean
+      module_id:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/dto.QuizQuestionResponse'
+        type: array
+      source_content_item_id:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
     type: object
   dto.RefreshRequest:
     properties:
@@ -778,6 +837,45 @@ definitions:
         type: array
       student:
         $ref: '#/definitions/dto.AnalyticsPersonResponse'
+    type: object
+  dto.SubmissionResponse:
+    properties:
+      content_item_id:
+        type: integer
+      created_at:
+        type: string
+      due_at:
+        description: |-
+          The student's deadline for the task (08:00 on the day of their 1:1) and whether this hand-in was late. On the
+          newest hand-in, late says the task is late: any of its hand-ins came after the deadline. A late hand-in turns the
+          week red on its own.
+        type: string
+      feedback:
+        type: string
+      files:
+        items:
+          $ref: '#/definitions/dto.FileResponse'
+        type: array
+      graded_at:
+        type: string
+      graded_by:
+        type: integer
+      history:
+        description: 'On GET .../submissions/me: the earlier hand-ins of the same
+          task, newest first.'
+        items:
+          $ref: '#/definitions/dto.SubmissionResponse'
+        type: array
+      id:
+        type: integer
+      late:
+        type: boolean
+      student_id:
+        type: integer
+      submitted_at:
+        type: string
+      text_body:
+        type: string
     type: object
   dto.TokenResponse:
     properties:
@@ -1518,6 +1616,37 @@ paths:
       summary: A profile picture
       tags:
       - profile
+  /content-items:
+    get:
+      description: |-
+        What GET /modules/{moduleId}/content-items answers, for every week in module_ids at once, keyed by week
+        id. A week the caller may not read is left out.
+      parameters:
+      - description: Week ids, comma-separated (at most 200)
+        in: query
+        name: module_ids
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/dto.ContentTreeNode'
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Content items of many weeks
+      tags:
+      - content-items
   /content-items/{id}:
     delete:
       description: Soft-delete a content item (lecturer or admin only)
@@ -1625,6 +1754,37 @@ paths:
       summary: Update content item
       tags:
       - content-items
+  /enrollments:
+    get:
+      description: |-
+        What GET /modules/{moduleId}/enrollments answers, for every week in module_ids at once, keyed by week
+        id (a student gets only their own row). A week the caller may not read is left out.
+      parameters:
+      - description: Week ids, comma-separated (at most 200)
+        in: query
+        name: module_ids
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/dto.EnrollmentResponse'
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Enrollments of many weeks
+      tags:
+      - enrollments
   /files:
     post:
       consumes:
@@ -2643,6 +2803,37 @@ paths:
       summary: Mark all notifications read
       tags:
       - notifications
+  /quizzes:
+    get:
+      description: |-
+        What GET /modules/{moduleId}/quizzes answers, for every week in module_ids at once, keyed by week id.
+        A week the caller may not read the quizzes of is left out.
+      parameters:
+      - description: Week ids, comma-separated (at most 200)
+        in: query
+        name: module_ids
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/dto.QuizResponse'
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Quizzes of many weeks
+      tags:
+      - quizzes
   /reports:
     get:
       description: Every report, newest first, with who sent it (admin only).
@@ -2857,6 +3048,36 @@ paths:
       summary: Report counts
       tags:
       - reports
+  /submissions/me:
+    get:
+      description: |-
+        What GET /modules/{moduleId}/content-items/{assignmentId}/submissions/me answers (the newest hand-in
+        with its history), for every task in assignment_ids at once, keyed by task id. A task without a
+        hand-in is left out.
+      parameters:
+      - description: Task ids, comma-separated (at most 200)
+        in: query
+        name: assignment_ids
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              $ref: '#/definitions/dto.SubmissionResponse'
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: My hand-ins for many tasks
+      tags:
+      - submissions
   /teams/{id}:
     delete:
       description: |-
