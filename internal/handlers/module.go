@@ -394,6 +394,11 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	writeJSON(w, 200, enrollmentResponses(enrollments))
+}
+
+// enrollmentResponses is the answer of GET /modules/{moduleId}/enrollments (also used by GET /enrollments).
+func enrollmentResponses(enrollments []store.Enrollment) []dto.EnrollmentResponse {
 	resp := make([]dto.EnrollmentResponse, len(enrollments))
 	for i, e := range enrollments {
 		resp[i] = dto.EnrollmentResponse{
@@ -410,7 +415,7 @@ func (h *ModuleHandlers) ListEnrollments(w http.ResponseWriter, r *http.Request)
 			Roles:     e.Roles,
 		}
 	}
-	writeJSON(w, 200, resp)
+	return resp
 }
 
 // @Summary     Grade enrollment
