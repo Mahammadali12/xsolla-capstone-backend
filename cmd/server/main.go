@@ -330,6 +330,8 @@ func cors(next http.Handler, origin string) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		// the frontend reads the server's clock from Date, so locks and deadlines do not follow the device's clock
+		w.Header().Set("Access-Control-Expose-Headers", "Date")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(204)
 			return
