@@ -121,6 +121,7 @@ func main() {
 	userH := handlers.NewUserHandlers(userSvc)
 	teamH := handlers.NewTeamHandlers(teamSvc)
 	mentorSlotH := handlers.NewMentorSlotHandlers(mentorSlotSvc)
+	discussionH := handlers.NewDiscussionHandlers(service.NewDiscussionService(store))
 	mentorReviewH := handlers.NewMentorReviewHandlers(mentorReviewSvc)
 	analyticsH := handlers.NewAnalyticsHandlers(analyticsSvc)
 	analyticsSummaryH := handlers.NewAnalyticsSummaryHandlers(analyticsSummarySvc)
@@ -279,6 +280,10 @@ func main() {
 	mux.Handle("DELETE /mentor-slots/{id}", authenticator.Middleware(http.HandlerFunc(mentorSlotH.RemoveSlot)))
 	mux.Handle("POST /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.BookSlot)))
 	mux.Handle("DELETE /mentor-slots/{id}/book", authenticator.Middleware(http.HandlerFunc(mentorSlotH.CancelBooking)))
+	// a talk a mentor sets up with students: not a 1:1, so it moves no deadline
+	mux.Handle("GET /mentor-discussions", authenticator.Middleware(http.HandlerFunc(discussionH.List)))
+	mux.Handle("POST /mentor-discussions", authenticator.Middleware(http.HandlerFunc(discussionH.Create)))
+	mux.Handle("DELETE /mentor-discussions/{id}", authenticator.Middleware(http.HandlerFunc(discussionH.Remove)))
 
 	// Weekly mentor reviews (students only; the service answers 403 to everyone else)
 	mux.Handle("GET /mentor-reviews/me", authenticator.Middleware(http.HandlerFunc(mentorReviewH.ListMine)))

@@ -130,6 +130,9 @@ type Store interface {
 	CancelMentorSlotBooking(ctx context.Context, userID int64, roles []string, slotID int64) (*MentorSlot, error)
 	MentorSlotsOverlap(ctx context.Context, mentorID int64, startsAt, endsAt time.Time) (int, error)
 	ListBookedSlots(ctx context.Context, studentID int64, from, to time.Time) ([]BookedSlot, error)
+	CreateMentorDiscussions(ctx context.Context, mentorID int64, studentIDs []int64, title, note string, startsAt, endsAt time.Time) ([]Discussion, error)
+	ListMentorDiscussions(ctx context.Context, userID int64, roles []string) ([]Discussion, error)
+	DeleteMentorDiscussion(ctx context.Context, userID int64, isAdmin bool, id int64) (bool, error)
 	MarkEnrollmentRed(ctx context.Context, moduleID, userID int64) error
 
 	// Mentor review methods
