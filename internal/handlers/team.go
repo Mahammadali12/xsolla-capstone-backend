@@ -63,14 +63,22 @@ func (h *TeamHandlers) ListTeams(w http.ResponseWriter, r *http.Request) {
 
 // PUT /teams — admin only. Replace every team in one transaction.
 func (h *TeamHandlers) ReplaceTeams(w http.ResponseWriter, r *http.Request) {
-	var req dto.PutTeamRequest
+	// "teams" must be sent: an empty or misspelt body would otherwise delete every team. {"teams": []} still removes
+	// them all on purpose (the admin's "remove teams" button sends it).
+	var req struct {
+		Teams *[]dto.TeamInput `json:"teams"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "bad_request", "invalid JSON body", nil)
 		return
 	}
+	if req.Teams == nil {
+		writeError(w, 422, "validation_failed", `"teams" is required: send {"teams": []} to remove every team`, nil)
+		return
+	}
 
-	inputs := make([]store.TeamInput, len(req.Teams))
-	for i, t := range req.Teams {
+	inputs := make([]store.TeamInput, len(*req.Teams))
+	for i, t := range *req.Teams {
 		inputs[i] = store.TeamInput{
 			MentorID:   t.MentorID,
 			StudentIDs: t.StudentIDs,

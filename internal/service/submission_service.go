@@ -428,7 +428,7 @@ func (s *SubmissionService) UpdateModuleGrade(ctx context.Context, userID int64,
 	case "red", "yellow", "green":
 		// valid
 	default:
-		return nil, errors.New("grade must be one of: red, yellow, green")
+		return nil, ErrInvalidGrade
 	}
 
 	updated, err := s.store.UpdateModuleGrade(ctx, moduleID, &grade, userID)
