@@ -61,6 +61,7 @@ func main() {
 			log.Fatalf("notify db: %v", err)
 		}
 		defer notifyDB.Close()
+		db.LimitPool(notifyDB, 5) // only the /notifications routes use it
 		if err := notifyDB.Ping(); err != nil {
 			log.Printf("notify db: not reachable yet, /notifications tries again on each request: %v", err)
 		}
