@@ -1088,12 +1088,17 @@ func (q *Query) BookMentorSlotPrecheck(ctx context.Context, studentID int64) (in
 }
 
 func (q *Query) BookMentorSlot(ctx context.Context, slotID int64, studentID int64) (*sql.Row, error) {
-	// The slot must exist, be free, and not have started.
+	// The slot must exist, belong to the student's team mentor, be free, and not have started.
+	// A slot of another mentor answers "not found", the same as the slot list, which only shows the team mentor's slots.
 	var bookedBy *int64
 	var startsAt time.Time
 	if err := q.QueryRowContext(ctx,
-		`SELECT booked_by, starts_at FROM mentor_slots WHERE id = $1 AND deleted_at IS NULL`,
-		slotID,
+		`SELECT s.booked_by, s.starts_at
+		 FROM mentor_slots s
+		 JOIN teams t ON t.mentor_id = s.mentor_id
+		 JOIN team_members tm ON tm.team_id = t.id AND tm.student_id = $2
+		 WHERE s.id = $1 AND s.deleted_at IS NULL`,
+		slotID, studentID,
 	).Scan(&bookedBy, &startsAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMentorSlotNotFound

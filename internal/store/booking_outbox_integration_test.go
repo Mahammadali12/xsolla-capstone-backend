@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -67,12 +68,58 @@ func insertTestSlot(t *testing.T, database *sql.DB, mentorID int64) int64 {
 	return id
 }
 
+// insertTestTeam puts the student in a team led by the mentor: students may only book their team mentor's slots.
+func insertTestTeam(t *testing.T, database *sql.DB, mentorID, studentID int64) {
+	t.Helper()
+	var teamID int64
+	if err := database.QueryRow(
+		`INSERT INTO teams (name, mentor_id) VALUES ($1, $2) RETURNING id`,
+		fmt.Sprintf("Test team %d", mentorID), mentorID,
+	).Scan(&teamID); err != nil {
+		t.Fatalf("insert team: %v", err)
+	}
+	if _, err := database.Exec(`INSERT INTO team_members (team_id, student_id) VALUES ($1, $2)`, teamID, studentID); err != nil {
+		t.Fatalf("insert team member: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := database.Exec(`DELETE FROM teams WHERE id = $1`, teamID); err != nil {
+			t.Logf("cleanup team %d: %v", teamID, err)
+		}
+	})
+}
+
+func TestBookMentorSlotRefusesAnotherTeamsMentor(t *testing.T) {
+	database := testDatabase(t)
+	st := NewStore(database)
+	suffix := time.Now().UnixNano()
+	mentorID := insertTestUser(t, database, fmt.Sprintf("other-mentor-%d@example.com", suffix), "Mentor One")
+	otherMentorID := insertTestUser(t, database, fmt.Sprintf("other-mentor2-%d@example.com", suffix), "Mentor Two")
+	studentID := insertTestUser(t, database, fmt.Sprintf("other-student-%d@example.com", suffix), "Student One")
+	loneID := insertTestUser(t, database, fmt.Sprintf("lone-student-%d@example.com", suffix), "Student Two")
+	insertTestTeam(t, database, otherMentorID, studentID)
+	slotID := insertTestSlot(t, database, mentorID)
+
+	for name, id := range map[string]int64{"student of another team": studentID, "student with no team": loneID} {
+		if _, err := st.BookMentorSlot(context.Background(), id, slotID); !errors.Is(err, ErrMentorSlotNotFound) {
+			t.Fatalf("%s: err = %v, want ErrMentorSlotNotFound", name, err)
+		}
+	}
+	var bookedBy *int64
+	if err := database.QueryRow(`SELECT booked_by FROM mentor_slots WHERE id = $1`, slotID).Scan(&bookedBy); err != nil {
+		t.Fatalf("read slot: %v", err)
+	}
+	if bookedBy != nil {
+		t.Fatalf("slot was booked by %d", *bookedBy)
+	}
+}
+
 func TestBookMentorSlotWritesOutboxEvent(t *testing.T) {
 	database := testDatabase(t)
 	st := NewStore(database)
 	suffix := time.Now().UnixNano()
 	mentorID := insertTestUser(t, database, fmt.Sprintf("outbox-mentor-%d@example.com", suffix), "Mentor One")
 	studentID := insertTestUser(t, database, fmt.Sprintf("outbox-student-%d@example.com", suffix), "Student One")
+	insertTestTeam(t, database, mentorID, studentID)
 	slotID := insertTestSlot(t, database, mentorID)
 
 	slot, err := st.BookMentorSlot(context.Background(), studentID, slotID)
@@ -123,6 +170,7 @@ func TestBookMentorSlotRollsBackWhenOutboxFails(t *testing.T) {
 	suffix := time.Now().UnixNano()
 	mentorID := insertTestUser(t, database, fmt.Sprintf("rollback-mentor-%d@example.com", suffix), "Mentor One")
 	studentID := insertTestUser(t, database, fmt.Sprintf("rollback-student-%d@example.com", suffix), "Student One")
+	insertTestTeam(t, database, mentorID, studentID)
 	slotID := insertTestSlot(t, database, mentorID)
 
 	if _, err := database.Exec(`ALTER TABLE outbox_events RENAME TO outbox_events_test_backup`); err != nil {
