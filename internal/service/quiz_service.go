@@ -199,6 +199,9 @@ func (s *QuizService) runAIQuizBackground(quizID int64, src QuizSource, storageK
 
 func (s *QuizService) ListQuizzesForModule(ctx context.Context, userID int64, roles []string, moduleID int64) ([]dto.QuizResponse, error) {
 	canSeeAllStatuses, isStaff, err := s.authorizeModuleRead(ctx, userID, roles, moduleID)
+	if errors.Is(err, errWeekNotOpen) {
+		return []dto.QuizResponse{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -237,6 +240,9 @@ func (s *QuizService) GetQuiz(ctx context.Context, userID int64, roles []string,
 		return nil, err
 	}
 	canSeeAllStatuses, isStaff, err := s.authorizeModuleRead(ctx, userID, roles, q.ModuleID)
+	if errors.Is(err, errWeekNotOpen) {
+		return nil, store.ErrQuizNotFound
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -401,8 +407,19 @@ func (s *QuizService) authorizeModuleRead(ctx context.Context, userID int64, rol
 	if !enrolled {
 		return false, false, store.ErrNotEnrolled
 	}
+	open, err := weekOpen(ctx, s.store, moduleID)
+	if err != nil {
+		return false, false, err
+	}
+	if !open {
+		return false, false, errWeekNotOpen
+	}
 	return false, false, nil
 }
+
+// errWeekNotOpen tells the quiz reads that a student asked about a week that has not opened: the list is empty and a
+// single quiz is not found.
+var errWeekNotOpen = errors.New("week not open yet")
 
 func validateQuestionRequests(reqs []dto.CreateQuizQuestionRequest) ([]store.QuizQuestionInput, error) {
 	if len(reqs) == 0 {

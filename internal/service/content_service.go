@@ -133,6 +133,16 @@ func (s *ContentService) CreateContentItem(ctx context.Context, userID int64, ro
 	return ci, nil
 }
 
+// weekOpen reports whether a module has opened. Students get nothing of a week before it opens: the lock must not
+// depend on the browser's clock.
+func weekOpen(ctx context.Context, st store.Store, moduleID int64) (bool, error) {
+	m, err := st.GetModuleByID(ctx, moduleID)
+	if err != nil {
+		return false, err
+	}
+	return !time.Now().Before(m.OpensAt), nil
+}
+
 // GetContentItemByID returns a content item if the user is authorized to view it.
 func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, roles []string, itemID int64) (*store.ContentItem, error) {
 	ci, err := s.store.GetContentItemByID(ctx, itemID)
@@ -162,6 +172,13 @@ func (s *ContentService) GetContentItemByID(ctx context.Context, userID int64, r
 
 	// If item is not visible, only admin can see it
 	if !ci.IsVisible && !auth.HasRole(roles, "admin") {
+		return nil, store.ErrNotEnrolled
+	}
+	open, err := weekOpen(ctx, s.store, ci.ModuleID)
+	if err != nil {
+		return nil, err
+	}
+	if !open {
 		return nil, store.ErrNotEnrolled
 	}
 
@@ -198,6 +215,13 @@ func (s *ContentService) GetContentItemsForModule(ctx context.Context, userID in
 		return s.store.GetContentItemsForModule(ctx, moduleID, true)
 	}
 
+	open, err := weekOpen(ctx, s.store, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	if !open {
+		return []store.ContentItem{}, nil
+	}
 	items, err := s.store.GetContentItemsForModule(ctx, moduleID, true)
 	if err != nil {
 		return nil, err
