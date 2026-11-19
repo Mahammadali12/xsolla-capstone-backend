@@ -22,8 +22,8 @@ type CreateAvailabilityRequest struct {
 	EndsAt   *time.Time `json:"ends_at"`
 }
 
-// DiscussionResponse is a talk a mentor set up with a student (GET /mentor-discussions). It is not a 1:1: it moves no deadline.
-// The rows made together share batch_id (the mentor sees one talk with several students).
+// DiscussionResponse is a discussion a mentor set up with a student (GET /mentor-discussions). It is not a 1:1: it moves no deadline.
+// The rows made together share batch_id (the mentor sees one discussion with several students).
 type DiscussionResponse struct {
 	ID          string    `json:"id"`
 	BatchID     string    `json:"batch_id"`

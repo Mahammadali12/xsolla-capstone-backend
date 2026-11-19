@@ -1,6 +1,6 @@
--- 031_mentor_discussions: a talk a mentor sets up with one or more students of their team (to discuss something). It is
+-- 031_mentor_discussions: a discussion a mentor sets up with one or more students of their team (to discuss something). It is
 -- NOT a 1:1: it never moves a deadline, has no booking and may be on any day. One row per invited student; the rows
--- made together share batch_id, so the mentor sees (and removes) the talk once.
+-- made together share batch_id, so the mentor sees (and removes) the discussion once.
 CREATE SEQUENCE IF NOT EXISTS mentor_discussion_batches;
 
 CREATE TABLE IF NOT EXISTS mentor_discussions (

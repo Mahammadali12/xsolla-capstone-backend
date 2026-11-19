@@ -12,13 +12,13 @@ import (
 )
 
 var (
-	// ErrOnlyMentorCanSetDiscussions is returned when someone who is not a mentor tries to set up a talk.
-	ErrOnlyMentorCanSetDiscussions = errors.New("only mentors can set up a talk with students")
-	// ErrDiscussionNotFound is returned when the talk does not exist or the caller may not remove it.
-	ErrDiscussionNotFound = errors.New("talk not found")
+	// ErrOnlyMentorCanSetDiscussions is returned when someone who is not a mentor tries to set up a discussion.
+	ErrOnlyMentorCanSetDiscussions = errors.New("only mentors can set up a discussion with students")
+	// ErrDiscussionNotFound is returned when the discussion does not exist or the caller may not remove it.
+	ErrDiscussionNotFound = errors.New("discussion not found")
 )
 
-// A talk is not a 1:1: no Friday/Monday rule, no booking, and it never moves a deadline (one_on_one_deadline.go reads
+// A discussion is not a 1:1: no Friday/Monday rule, no booking, and it never moves a deadline (one_on_one_deadline.go reads
 // only the booked 1:1 slots). It is kept short so it stays a conversation.
 const (
 	maxDiscussionTitle  = 100
@@ -27,7 +27,7 @@ const (
 	maxDiscussionLength = 4 * time.Hour
 )
 
-// DiscussionService sets up talks between a mentor and the students of their team.
+// DiscussionService sets up discussions between a mentor and the students of their team.
 type DiscussionService struct {
 	store store.Store
 }
@@ -36,12 +36,12 @@ func NewDiscussionService(s store.Store) *DiscussionService {
 	return &DiscussionService{store: s}
 }
 
-// List returns the talks the caller may see.
+// List returns the discussions the caller may see.
 func (s *DiscussionService) List(ctx context.Context, userID int64, roles []string) ([]store.Discussion, error) {
 	return s.store.ListMentorDiscussions(ctx, userID, roles)
 }
 
-// Create sets up a talk with the chosen students (all of them must be in the mentor's team) or the whole team.
+// Create sets up a discussion with the chosen students (all of them must be in the mentor's team) or the whole team.
 func (s *DiscussionService) Create(ctx context.Context, mentorID int64, roles []string, title, note string, startsAt, endsAt time.Time, studentIDs []int64, wholeTeam bool) ([]store.Discussion, error) {
 	if !auth.HasRole(roles, "mentor") {
 		return nil, ErrOnlyMentorCanSetDiscussions
@@ -63,7 +63,7 @@ func (s *DiscussionService) Create(ctx context.Context, mentorID int64, roles []
 		return nil, errors.New("end time must be after start time")
 	}
 	if length := endsAt.Sub(startsAt); length < minDiscussionLength || length > maxDiscussionLength {
-		return nil, errors.New("a talk lasts from 10 minutes to 4 hours")
+		return nil, errors.New("a discussion lasts from 10 minutes to 4 hours")
 	}
 	if !startsAt.After(time.Now()) {
 		return nil, errors.New("that time has already passed")
@@ -104,7 +104,7 @@ func (s *DiscussionService) Create(ctx context.Context, mentorID int64, roles []
 	return s.store.CreateMentorDiscussions(ctx, mentorID, ids, title, note, startsAt, endsAt)
 }
 
-// Remove cancels a talk (for every student invited to it): the mentor who set it up, or an admin.
+// Remove cancels a discussion (for every student invited to it): the mentor who set it up, or an admin.
 func (s *DiscussionService) Remove(ctx context.Context, userID int64, roles []string, id int64) error {
 	if !auth.HasRole(roles, "mentor") && !auth.HasRole(roles, "admin") {
 		return ErrOnlyMentorCanSetDiscussions

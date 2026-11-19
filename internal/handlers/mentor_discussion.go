@@ -15,7 +15,7 @@ import (
 	"xsolla-capstone-api/internal/store"
 )
 
-// DiscussionService is what the talk handlers depend on.
+// DiscussionService is what the discussion handlers depend on.
 type DiscussionService interface {
 	List(ctx context.Context, userID int64, roles []string) ([]store.Discussion, error)
 	Create(ctx context.Context, mentorID int64, roles []string, title, note string, startsAt, endsAt time.Time, studentIDs []int64, wholeTeam bool) ([]store.Discussion, error)
@@ -53,7 +53,7 @@ func (h *DiscussionHandlers) writeList(w http.ResponseWriter, r *http.Request) {
 	list, err := h.svc.List(r.Context(), middleware.CtxUserID(r.Context()), middleware.CtxRoles(r.Context()))
 	if err != nil {
 		log.Printf("discussion handler: list error: %v", err)
-		writeError(w, 500, "server_error", "could not list talks", nil)
+		writeError(w, 500, "server_error", "could not list discussions", nil)
 		return
 	}
 	writeJSON(w, 200, discussionResponses(list))
@@ -79,7 +79,7 @@ func (h *DiscussionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		req.Title, req.Note, *req.StartsAt, *req.EndsAt, req.StudentIDs, req.WholeTeam)
 	if err != nil {
 		if errors.Is(err, service.ErrOnlyMentorCanSetDiscussions) {
-			writeError(w, 403, "forbidden", "only mentors can set up a talk", nil)
+			writeError(w, 403, "forbidden", "only mentors can set up a discussion", nil)
 		} else {
 			writeError(w, 400, "bad_request", err.Error(), nil)
 		}
@@ -88,11 +88,11 @@ func (h *DiscussionHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	h.writeList(w, r)
 }
 
-// DELETE /mentor-discussions/{id}  removes the talk for every student invited to it; answers the caller's list
+// DELETE /mentor-discussions/{id}  removes the discussion for every student invited to it; answers the caller's list
 func (h *DiscussionHandlers) Remove(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, 400, "bad_request", "invalid talk ID", nil)
+		writeError(w, 400, "bad_request", "invalid discussion ID", nil)
 		return
 	}
 	err = h.svc.Remove(r.Context(), middleware.CtxUserID(r.Context()), middleware.CtxRoles(r.Context()), id)
@@ -100,11 +100,11 @@ func (h *DiscussionHandlers) Remove(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		h.writeList(w, r)
 	case errors.Is(err, service.ErrOnlyMentorCanSetDiscussions):
-		writeError(w, 403, "forbidden", "only mentors can remove a talk", nil)
+		writeError(w, 403, "forbidden", "only mentors can remove a discussion", nil)
 	case errors.Is(err, service.ErrDiscussionNotFound):
-		writeError(w, 404, "not_found", "talk not found", nil)
+		writeError(w, 404, "not_found", "discussion not found", nil)
 	default:
 		log.Printf("discussion handler: remove error: %v", err)
-		writeError(w, 500, "server_error", "could not remove the talk", nil)
+		writeError(w, 500, "server_error", "could not remove the discussion", nil)
 	}
 }

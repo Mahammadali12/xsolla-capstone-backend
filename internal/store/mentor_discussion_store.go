@@ -7,7 +7,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// Discussion is a talk a mentor set up with one student (a row per invited student, rows made together share BatchID).
+// Discussion is a discussion a mentor set up with one student (a row per invited student, rows made together share BatchID).
 // It is not a 1:1 slot, so it never moves a deadline.
 type Discussion struct {
 	ID          int64
@@ -26,7 +26,7 @@ type Discussion struct {
 const discussionColumns = `d.id, d.batch_id, d.mentor_id, COALESCE(m.name, ''), d.student_id, COALESCE(u.name, ''),
 	d.title, d.note, d.starts_at, d.ends_at, d.created_at`
 
-// CreateMentorDiscussions saves one talk for every student in one transaction and returns the new rows.
+// CreateMentorDiscussions saves one discussion for every student in one transaction and returns the new rows.
 func (s *StoreImpl) CreateMentorDiscussions(ctx context.Context, mentorID int64, studentIDs []int64, title, note string, startsAt, endsAt time.Time) ([]Discussion, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -61,7 +61,7 @@ func (s *StoreImpl) CreateMentorDiscussions(ctx context.Context, mentorID int64,
 	return out, tx.Commit()
 }
 
-// ListMentorDiscussions returns the talks the caller may see, earliest first: an admin all, a mentor their own,
+// ListMentorDiscussions returns the discussions the caller may see, earliest first: an admin all, a mentor their own,
 // a student only the ones they are invited to.
 func (s *StoreImpl) ListMentorDiscussions(ctx context.Context, userID int64, roles []string) ([]Discussion, error) {
 	where, args := `d.student_id = $1`, []any{userID}
@@ -90,7 +90,7 @@ func (s *StoreImpl) ListMentorDiscussions(ctx context.Context, userID int64, rol
 	return scanDiscussions(rows)
 }
 
-// DeleteMentorDiscussion removes a whole talk (every invited student) that the caller made, or any one for an admin.
+// DeleteMentorDiscussion removes a whole discussion (every invited student) that the caller made, or any one for an admin.
 // It reports whether anything was removed.
 func (s *StoreImpl) DeleteMentorDiscussion(ctx context.Context, userID int64, isAdmin bool, id int64) (bool, error) {
 	res, err := s.db.ExecContext(ctx,

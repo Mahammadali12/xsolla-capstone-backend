@@ -68,18 +68,18 @@ Submissions (`POST .../submissions`, `GET .../submissions`, `GET .../submissions
 The analytics `assignment_status` (`on_time_count`, `late_count`, `missing_count`) uses the same rule and the student's
 own deadline. Only assignments whose deadline falls in the period, and hand-ins before its end, count.
 
-## Talks with students (not 1:1s)
+## Discussions with students (not 1:1s)
 
-A mentor can also set up a **talk** with some or all of the students of their team, to discuss something. It is kept in its
+A mentor can also set up a **discussion** with some or all of the students of their team, to discuss something. It is kept in its
 own table (`mentor_discussions`), not in `mentor_slots`, so it **never moves a deadline**: the deadline code reads only
-booked 1:1 slots. A talk has no booking, may be on any day, and lasts from 10 minutes to 4 hours.
+booked 1:1 slots. A discussion has no booking, may be on any day, and lasts from 10 minutes to 4 hours.
 
-- `GET /mentor-discussions`: a mentor sees their own talks, a student the ones they are invited to, an admin all.
+- `GET /mentor-discussions`: a mentor sees their own discussions, a student the ones they are invited to, an admin all.
 - `POST /mentor-discussions` (mentor): `{ title, note?, starts_at, ends_at, student_ids? | whole_team? }`. The students must
   be in the mentor's team. One row is saved per student; the rows made together share `batch_id`.
 - `DELETE /mentor-discussions/{id}` (the mentor who made it, or an admin): cancels it for everyone invited.
 
-Each answer is the caller's updated list. Not done yet: notifications, e-mails and a Google Calendar invitation for a talk.
+Each answer is the caller's updated list. Not done yet: notifications, e-mails and a Google Calendar invitation for a discussion.
 
 ## Not covered
 

@@ -24,7 +24,7 @@ func (f *discussionStore) CreateMentorDiscussions(ctx context.Context, mentorID 
 
 func TestTalkWithStudents(t *testing.T) {
 	mentor := []string{"mentor"}
-	// a Wednesday: a talk may be on any day, it is not a 1:1
+	// a Wednesday: a discussion may be on any day, it is not a 1:1
 	start := time.Now().AddDate(0, 0, 3).Truncate(time.Hour)
 	end := start.Add(30 * time.Minute)
 
