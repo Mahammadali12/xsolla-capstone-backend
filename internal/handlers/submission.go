@@ -291,6 +291,8 @@ func (h *SubmissionHandlers) GradeModule(w http.ResponseWriter, r *http.Request)
 			writeError(w, 403, "forbidden", "not the teacher of this module", nil)
 		case errors.Is(err, store.ErrModuleNotFound):
 			writeError(w, 404, "not_found", "module not found", nil)
+		case errors.Is(err, service.ErrInvalidGrade):
+			writeError(w, 422, "validation_failed", err.Error(), nil)
 		default:
 			writeError(w, 500, "server_error", "could not grade module", nil)
 		}
